@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../oxidd-source"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../PhD"
+		}
+	],
+	"settings": {}
+}
