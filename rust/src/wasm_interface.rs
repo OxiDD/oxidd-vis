@@ -46,7 +46,7 @@ impl DiagramDrawerBox {
     pub fn set_step(&mut self, step: i32) -> Option<StepData> {
         self.0.set_step(step)
     }
-    pub fn set_group(&mut self, from: Vec<TargetID>, to: NodeGroupID) -> () {
+    pub fn set_group(&mut self, from: Vec<TargetID>, to: NodeGroupID) -> bool {
         self.0.set_group(from, to)
     }
     pub fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {

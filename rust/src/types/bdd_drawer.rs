@@ -12,6 +12,7 @@ use crate::traits::DiagramDrawer;
 use crate::util::free_id_manager::FreeIdManager;
 use crate::wasm_interface::NodeGroupID;
 use crate::wasm_interface::NodeID;
+use crate::wasm_interface::TargetID;
 use crate::wasm_interface::TargetIDType;
 use oxidd::bdd;
 use oxidd::util::Borrowed;
@@ -204,6 +205,11 @@ where
         return self.node_by_id.get(&id);
     }
 
+    fn remove_group(&mut self, id: NodeGroupID) {
+        self.node_by_id.remove(&id);
+        self.free_ids.make_available(id);
+    }
+
     fn remove_edges_to_set(
         edges: &mut EdgeSet<M>,
         edge_type: EdgeType<M::EdgeTag>,
@@ -283,7 +289,6 @@ where
     M::InnerNode: HasLevel,
 {
     fn render(&self, time: i64, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
-        let k = self.root.borrow();
         todo!()
     }
 
@@ -303,7 +308,11 @@ where
         &mut self,
         from: Vec<crate::wasm_interface::TargetID>,
         to: crate::wasm_interface::NodeGroupID,
-    ) -> () {
+    ) -> bool {
+        if let None = self.group_by_id.get_mut(&to) {
+            return false;
+        }
+
         for item in from {
             let from_id_type = item.0;
             let from_id = item.1;
@@ -311,60 +320,117 @@ where
                 let cur_group_id = self.get_node_group_id(from_id);
                 let cur_group = self.get_node_group(cur_group_id);
                 let contained = cur_group.nodes.remove(&from_id);
+                let from_empty = cur_group.nodes.is_empty();
 
-                if let Some(node) = self.get_node_by_id(from_id) {
-                    if let Node::Inner(inner_node) = node {
-                        let mut index = 0;
-                        for edge in inner_node.children() {
-                            let edge_type = EdgeType::new(edge.tag(), index);
-                            index += 1;
+                self.get_node_group(to).nodes.insert(from_id);
 
-                            let child_id = self.get_id_by_edge(&edge);
-                            self.add_parent(child_id, from_id, edge_type);
+                if let Some(Node::Inner(inner_node)) = self.get_node_by_id(from_id) {
+                    let mut index = 0;
+                    for edge in inner_node.children() {
+                        let edge_type = EdgeType::new(edge.tag(), index);
+                        index += 1;
 
-                            let child_group_id = self.get_node_group_id(child_id);
-                            if (contained && cur_group_id != child_group_id) {
-                                self.remove_edges(cur_group_id, child_group_id, edge_type, 1);
-                            }
-                            if (to != child_group_id) {
-                                self.add_edges(to, child_group_id, edge_type, 1);
-                            }
+                        let child_id = self.get_id_by_edge(&edge);
+                        self.add_parent(child_id, from_id, edge_type);
 
-                            // Ensure the child id is in there,
-                            if (child_group_id == 0) {
-                                let child_group = self.get_node_group(child_group_id);
-                                child_group.nodes.insert(child_id);
-                            }
+                        let child_group_id = self.get_node_group_id(child_id);
+                        if (contained && cur_group_id != child_group_id) {
+                            self.remove_edges(cur_group_id, child_group_id, edge_type, 1);
+                        }
+                        if (to != child_group_id) {
+                            self.add_edges(to, child_group_id, edge_type, 1);
                         }
 
-                        if let Some(parents) = self.get_parents(from_id) {
-                            let p = (*parents).clone();
-                            for parent_edge in p {
-                                let edge_type = parent_edge.edge_type;
-                                let edge_from = parent_edge.parent;
-
-                                if (contained && edge_from != cur_group_id) {
-                                    self.remove_edges(edge_from, cur_group_id, edge_type, 1);
-                                }
-                                if (edge_from != to) {
-                                    self.add_edges(edge_from, to, edge_type, 1);
-                                }
-                            }
+                        // Ensure the child id is in there,
+                        if (child_group_id == 0) {
+                            let child_group = self.get_node_group(child_group_id);
+                            child_group.nodes.insert(child_id);
                         }
                     }
+                }
+                if let Some(parents) = self.get_parents(from_id) {
+                    let p = (*parents).clone();
+                    for parent_edge in p {
+                        let edge_type = parent_edge.edge_type;
+                        let edge_from = parent_edge.parent;
+
+                        if (contained && edge_from != cur_group_id) {
+                            self.remove_edges(edge_from, cur_group_id, edge_type, 1);
+                        }
+                        if (edge_from != to) {
+                            self.add_edges(edge_from, to, edge_type, 1);
+                        }
+                    }
+                }
+
+                if cur_group_id != 0 && from_empty {
+                    self.remove_group(cur_group_id);
                 }
             } else if from_id == to {
                 continue;
             } else if from_id == 0 {
-                let init_nodes = &self.get_node_group(from_id).nodes;
-                let found: HashSet<&NodeID> = init_nodes.into_iter().collect();
-                let queue: LinkedList<&NodeID> = init_nodes.into_iter().collect();
+                let init_nodes = self.get_node_group(from_id).nodes.clone();
+                let mut found: HashSet<NodeID> = init_nodes.clone().into_iter().collect();
+                let mut queue: LinkedList<NodeID> = init_nodes.into_iter().collect();
 
-                // self.move_remainder_group(k, to);
-            } else if let Some(from_group) = self.group_by_id.get(&from_id) {
-                // self.move_group(from_group, id, k, to);
+                while !queue.is_empty() {
+                    let node_id = queue.pop_front().unwrap();
+                    let Some(Node::Inner(inner_node)) = self.get_node_by_id(node_id) else {
+                        continue;
+                    };
+
+                    for edge in inner_node.children() {
+                        let child_id = self.get_id_by_edge(&edge);
+                        if found.contains(&child_id) {
+                            continue;
+                        }
+
+                        found.insert(child_id);
+                        queue.push_back(child_id);
+                    }
+                }
+
+                self.set_group(
+                    found
+                        .into_iter()
+                        .map(|id| TargetID(TargetIDType::NodeID, id))
+                        .collect(),
+                    to,
+                );
+            } else if let Some(_) = self.group_by_id.get(&from_id) {
+                let from_group = self.get_node_group(from_id);
+                let out_edges = from_group.out_edges.clone();
+                let in_edges = from_group.in_edges.clone();
+                let from_nodes = from_group.nodes.clone();
+
+                for out_edge_target in out_edges.keys() {
+                    let out_types = &out_edges[out_edge_target];
+                    for out_type in out_types.keys() {
+                        let count = out_types[out_type];
+
+                        self.remove_edges(from_id, *out_edge_target, *out_type, count);
+                        self.add_edges(to, *out_edge_target, *out_type, count);
+                    }
+                }
+                for in_edge_target in in_edges.keys() {
+                    let in_types = &in_edges[in_edge_target];
+                    for in_type in in_types.keys() {
+                        let count = in_types[in_type];
+
+                        self.remove_edges(*in_edge_target, from_id, *in_type, count);
+                        self.add_edges(*in_edge_target, to, *in_type, count);
+                    }
+                }
+
+                let to_group = self.get_node_group(to);
+                to_group.nodes.extend(&from_nodes);
+                self.remove_group(from_id);
+            } else {
+                return false;
             }
         }
+
+        return true;
     }
 
     fn create_group(
