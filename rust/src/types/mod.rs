@@ -1,1 +1,1 @@
-mod bdd_drawer;
+pub mod bdd_drawer;

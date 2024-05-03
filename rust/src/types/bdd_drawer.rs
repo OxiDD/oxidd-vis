@@ -1,3 +1,4 @@
+use oxidd_core::DiagramRules;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -15,42 +16,55 @@ use crate::wasm_interface::NodeID;
 use crate::wasm_interface::TargetID;
 use crate::wasm_interface::TargetIDType;
 use oxidd::bdd;
+use oxidd::bdd::BDDFunction;
 use oxidd::util::Borrowed;
+use oxidd::BooleanFunction;
 use oxidd::Edge;
+use oxidd::Function;
 use oxidd::InnerNode;
-use oxidd::Manager;
+use oxidd::{Manager, ManagerRef};
 use oxidd_core::HasApplyCache;
 use oxidd_core::HasLevel;
 use oxidd_core::Node;
 use oxidd_core::{util::DropWith, Tag};
 use oxidd_rules_bdd::simple::BDDOp;
 use oxidd_rules_bdd::simple::BDDTerminal;
+use wasm_bindgen::prelude::*;
+use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
-pub struct BDDDiagram<'a, M>
-where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
-{
-    manager: M,
-    root: &'a Node<'a, M>,
+pub struct BDDDiagram<MR: ManagerRef, F: Function<ManagerRef = MR>> {
+    manager_ref: MR,
+    root: F,
+}
+impl<MR: ManagerRef, F: Function<ManagerRef = MR>> BDDDiagram<MR, F> {
+    pub fn new(manager_ref: MR, root: F) -> BDDDiagram<MR, F> {
+        BDDDiagram { manager_ref, root }
+    }
 }
 
-impl<'a, M> Diagram for BDDDiagram<'a, M>
-where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
-{
-    fn create_drawer(&self) -> Box<crate::traits::DiagramDrawer> {
-        todo!()
+impl<MR: ManagerRef, F: Function<ManagerRef = MR>> Diagram for BDDDiagram<MR, F> {
+    fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn crate::traits::DiagramDrawer> {
+        let context = canvas
+            .get_context("webgl2")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<WebGl2RenderingContext>()
+            .unwrap();
+
+        // self.manager_ref.with_manager_shared(|manager| {
+        //     // let p = manager;
+        //     // Box::new(BDDDiagramDrawer::new(*manager, &self.root, context));
+
+        //     // return todo!();
+        //     manager
+        // });
+
+        return todo!();
     }
 }
 
 type EdgeSet<M: Manager> = HashMap<NodeGroupID, HashMap<EdgeType<M::EdgeTag>, i32>>;
-struct NodeGroup<M>
-where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
-{
+struct NodeGroup<M: Manager> {
     nodes: HashSet<NodeID>,
     out_edges: EdgeSet<M>,
     in_edges: EdgeSet<M>,
@@ -74,19 +88,11 @@ impl<T: Tag> Hash for EdgeType<T> {
 }
 
 // #[derive(Eq, Hash, PartialEq)]
-struct NodeParentEdge<M>
-where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
-{
+struct NodeParentEdge<M: Manager> {
     parent: NodeID,
     edge_type: EdgeType<M::EdgeTag>,
 }
-impl<M> Clone for NodeParentEdge<M>
-where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
-{
+impl<M: Manager> Clone for NodeParentEdge<M> {
     fn clone(&self) -> Self {
         Self {
             parent: self.parent.clone(),
@@ -95,40 +101,77 @@ where
     }
 }
 
-impl<'a, M> Hash for NodeParentEdge<M>
-where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
-{
+impl<M: Manager> Hash for NodeParentEdge<M> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.parent.hash(state);
         self.edge_type.hash(state);
     }
 }
-impl<M> Eq for NodeParentEdge<M>
-where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
-{
-}
-impl<M> PartialEq for NodeParentEdge<M>
-where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
-{
+impl<M: Manager> Eq for NodeParentEdge<M> {}
+impl<M: Manager> PartialEq for NodeParentEdge<M> {
     fn eq(&self, other: &Self) -> bool {
         self.parent == other.parent && self.edge_type == other.edge_type
     }
 }
 
-pub struct BDDDiagramDrawer<'a, M>
+#[derive(Copy, Clone)]
+pub struct Point {
+    x: f32,
+    y: f32,
+}
+pub struct Transition<T> {
+    old_time: i32, // ms
+    duration: i32, // ms
+    old: T,
+    new: T,
+}
+impl<T: Copy> Transition<T> {
+    fn new(val: T) -> Transition<T> {
+        Transition {
+            old: val,
+            new: val,
+            old_time: 0,
+            duration: 0,
+        }
+    }
+}
+
+pub struct NodeGroupLayout<T: Tag> {
+    top_left: Transition<Point>,
+    bottom_right: Transition<Point>,
+    label: String,
+    exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
+    edges: HashMap<NodeGroupID, HashMap<EdgeType<T>, EdgeLayout>>,
+}
+pub struct EdgeLayout {
+    points: Vec<EdgePoint>,
+    to: NodeGroupID,
+}
+pub struct EdgePoint {
+    point: Transition<Point>,
+    is_jump: Transition<f32>, // Whether this point represents an edge crossing, or just a bend
+}
+
+pub struct LayerLayout {
+    start_layer: i32,
+    end_layer: i32,
+    top: Transition<f32>,
+    bottom: Transition<f32>,
+}
+
+pub struct DiagramLayout<T: Tag> {
+    groups: HashMap<NodeGroupID, NodeGroupLayout<T>>,
+    layers: HashMap<i32, Rc<LayerLayout>>,
+}
+
+pub struct BDDDiagramDrawer<M: Manager, F>
 where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
+    for<'id> F: Function<Manager<'id> = M>,
 {
-    manager: &'a M,
-    root: &'a Node<'a, M>,
-    node_by_id: HashMap<NodeID, Node<'a, M>>,
+    manager: M,
+    root: F,
+    webgl_context: WebGl2RenderingContext,
+    node_by_id: HashMap<NodeID, F>,
     // Nodes are implicitly in group 0 by default, I.e either:
     // - group_by_id[group_id_by_node[node]].nodes.contains(node)
     // - or !group_id_by_node.contains(node) && !exists g. group_by_id[g].nodes.contains(node)
@@ -137,14 +180,18 @@ where
     free_ids: FreeIdManager<usize>,
     // The known parents of a node (based on what node have been moved out of the default group)
     node_parents: HashMap<NodeID, HashSet<NodeParentEdge<M>>>,
+    layout: DiagramLayout<M::EdgeTag>,
 }
 
-impl<'a, M> BDDDiagramDrawer<'a, M>
+impl<M: Manager, F> BDDDiagramDrawer<M, F>
 where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
+    for<'id> F: Function<Manager<'id> = M>,
 {
-    pub fn new(diagram: &'a BDDDiagram<'a, M>) -> BDDDiagramDrawer<'a, M> {
+    pub fn new(
+        manager: M,
+        root: F,
+        webgl_context: WebGl2RenderingContext,
+    ) -> BDDDiagramDrawer<M, F> {
         let mut groups = HashMap::new();
         groups.insert(
             0,
@@ -155,22 +202,38 @@ where
             },
         );
         BDDDiagramDrawer {
-            manager: &diagram.manager,
-            root: diagram.root,
+            webgl_context,
+            manager: manager,
+            root: root,
             node_by_id: HashMap::new(),
             group_id_by_node: HashMap::new(),
             group_by_id: groups,
             free_ids: FreeIdManager::new(1),
             node_parents: HashMap::new(),
+            layout: DiagramLayout {
+                layers: HashMap::from([(
+                    0,
+                    Rc::new(LayerLayout {
+                        start_layer: 0,
+                        end_layer: 0,
+                        top: Transition::new(0.),
+                        bottom: Transition::new(0.),
+                    }),
+                )]),
+                groups: HashMap::from([(
+                    0,
+                    NodeGroupLayout {
+                        top_left: Transition::new(Point { x: 0., y: 0. }),
+                        bottom_right: Transition::new(Point { x: 10., y: 10. }),
+                        label: "hello".to_string(),
+                        exists: Transition::new(1.),
+                        edges: HashMap::from([]),
+                    },
+                )]),
+            },
         }
     }
-}
 
-impl<'a, M> BDDDiagramDrawer<'a, M>
-where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
-{
     fn add_parent(&mut self, node: NodeID, parent: NodeID, edge_type: EdgeType<M::EdgeTag>) {
         let parents = self
             .node_parents
@@ -182,6 +245,19 @@ where
 
     fn get_parents(&self, node: NodeID) -> Option<&HashSet<NodeParentEdge<M>>> {
         return self.node_parents.get(&node);
+    }
+
+    fn get_children(&self, node: &F) -> Vec<(M::EdgeTag, F)> {
+        let edge = node.as_edge(&self.manager);
+        let tag = edge.tag();
+        let internal_node = self.manager.get_node(edge);
+        if let Node::Inner(node) = internal_node {
+            let cofactors = M::Rules::cofactors(tag, node);
+            return Vec::from_iter(
+                cofactors.map(|f| (f.tag(), F::from_edge_ref(&self.manager, &f))),
+            );
+        }
+        return Vec::new();
     }
 
     fn get_node_group(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<M> {
@@ -196,12 +272,13 @@ where
         }
     }
 
-    fn get_id_by_edge(&mut self, edge: &M::Edge) -> NodeID {
+    fn get_id_by_node(&mut self, node: &F) -> NodeID {
+        let edge = node.as_edge(&self.manager);
         let id = edge.node_id();
-        self.node_by_id.insert(id, self.manager.get_node(edge));
+        self.node_by_id.insert(id, node.clone());
         return id;
     }
-    fn get_node_by_id(&self, id: NodeID) -> Option<&Node<'a, M>> {
+    fn get_node_by_id(&self, id: NodeID) -> Option<&F> {
         return self.node_by_id.get(&id);
     }
 
@@ -237,7 +314,7 @@ where
         count: i32,
     ) {
         let from_group = self.get_node_group(from);
-        BDDDiagramDrawer::<'a, M>::remove_edges_to_set(
+        BDDDiagramDrawer::<M, F>::remove_edges_to_set(
             &mut from_group.out_edges,
             edge_type,
             to,
@@ -245,7 +322,7 @@ where
         );
 
         let to_group = self.get_node_group(to);
-        BDDDiagramDrawer::<'a, M>::remove_edges_to_set(
+        BDDDiagramDrawer::<M, F>::remove_edges_to_set(
             &mut to_group.in_edges,
             edge_type,
             from,
@@ -272,23 +349,18 @@ where
         count: i32,
     ) {
         let from_group = self.get_node_group(from);
-        BDDDiagramDrawer::<'a, M>::add_edges_to_set(
-            &mut from_group.out_edges,
-            edge_type,
-            to,
-            count,
-        );
+        BDDDiagramDrawer::<M, F>::add_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
 
         let to_group = self.get_node_group(to);
-        BDDDiagramDrawer::<'a, M>::add_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
+        BDDDiagramDrawer::<M, F>::add_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
     }
 }
-impl<'a, M> DiagramDrawer for BDDDiagramDrawer<'a, M>
+
+impl<M: Manager, F> DiagramDrawer for BDDDiagramDrawer<M, F>
 where
-    M: Manager<Terminal = BDDTerminal> + HasApplyCache<M, Operator = BDDOp>,
-    M::InnerNode: HasLevel,
+    for<'id> F: Function<Manager<'id> = M>,
 {
-    fn render(&self, time: i64, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
+    fn render(&self, time: i32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         todo!()
     }
 
@@ -324,25 +396,25 @@ where
 
                 self.get_node_group(to).nodes.insert(from_id);
 
-                if let Some(Node::Inner(inner_node)) = self.get_node_by_id(from_id) {
+                if let Some(node) = self.get_node_by_id(from_id) {
                     let mut index = 0;
-                    for edge in inner_node.children() {
-                        let edge_type = EdgeType::new(edge.tag(), index);
+                    for (edge_tag, child) in self.get_children(node) {
+                        let edge_type = EdgeType::new(edge_tag, index);
                         index += 1;
 
-                        let child_id = self.get_id_by_edge(&edge);
+                        let child_id = self.get_id_by_node(&child);
                         self.add_parent(child_id, from_id, edge_type);
 
                         let child_group_id = self.get_node_group_id(child_id);
-                        if (contained && cur_group_id != child_group_id) {
+                        if contained && cur_group_id != child_group_id {
                             self.remove_edges(cur_group_id, child_group_id, edge_type, 1);
                         }
-                        if (to != child_group_id) {
+                        if to != child_group_id {
                             self.add_edges(to, child_group_id, edge_type, 1);
                         }
 
-                        // Ensure the child id is in there,
-                        if (child_group_id == 0) {
+                        // Ensure the child id is in there
+                        if child_group_id == 0 {
                             let child_group = self.get_node_group(child_group_id);
                             child_group.nodes.insert(child_id);
                         }
@@ -354,10 +426,10 @@ where
                         let edge_type = parent_edge.edge_type;
                         let edge_from = parent_edge.parent;
 
-                        if (contained && edge_from != cur_group_id) {
+                        if contained && edge_from != cur_group_id {
                             self.remove_edges(edge_from, cur_group_id, edge_type, 1);
                         }
-                        if (edge_from != to) {
+                        if edge_from != to {
                             self.add_edges(edge_from, to, edge_type, 1);
                         }
                     }
@@ -375,12 +447,12 @@ where
 
                 while !queue.is_empty() {
                     let node_id = queue.pop_front().unwrap();
-                    let Some(Node::Inner(inner_node)) = self.get_node_by_id(node_id) else {
+                    let Some(node) = self.get_node_by_id(node_id) else {
                         continue;
                     };
 
-                    for edge in inner_node.children() {
-                        let child_id = self.get_id_by_edge(&edge);
+                    for (_, child) in self.get_children(node) {
+                        let child_id = self.get_id_by_node(&child);
                         if found.contains(&child_id) {
                             continue;
                         }

@@ -1,19 +1,8 @@
 use std::rc::Rc;
 
 use super::traits::{Diagram, DiagramDrawer};
-use oxidd::ManagerRef;
 use wasm_bindgen::prelude::*;
-
-#[wasm_bindgen]
-pub struct VisualizationManager();
-
-#[wasm_bindgen]
-impl VisualizationManager {
-    pub fn create_diagram(&self) -> DiagramBox // And some DD type param
-    {
-        todo!();
-    }
-}
+use web_sys::HtmlCanvasElement;
 
 // pub trait VisualizationManager: ReturnWasmAbi {
 //     fn addDiagram(&self) -> &Drawable; // And some DD type param
@@ -22,11 +11,16 @@ impl VisualizationManager {
 #[wasm_bindgen]
 pub struct DiagramBox(Box<dyn Diagram>);
 
-#[wasm_bindgen]
-// Mirror Diagram trait in terms of interface, but using non-dynamic structs
 impl DiagramBox {
-    pub fn create_drawer(&self) -> DiagramDrawerBox {
-        DiagramDrawerBox(self.0.create_drawer())
+    pub fn new(diagram: Box<dyn Diagram>) -> DiagramBox {
+        DiagramBox(diagram)
+    }
+}
+// Mirror Diagram trait in terms of interface, but using non-dynamic structs
+#[wasm_bindgen()]
+impl DiagramBox {
+    pub fn create_drawer(&self, canvas: HtmlCanvasElement) -> DiagramDrawerBox {
+        DiagramDrawerBox(self.0.create_drawer(canvas))
     }
 }
 
@@ -34,7 +28,7 @@ impl DiagramBox {
 pub struct DiagramDrawerBox(Box<dyn DiagramDrawer>);
 #[wasm_bindgen]
 impl DiagramDrawerBox {
-    pub fn render(&self, time: i64, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
+    pub fn render(&self, time: i32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         self.0.render(time, selected_ids, hovered_ids);
     }
     pub fn layout(&mut self) -> () {

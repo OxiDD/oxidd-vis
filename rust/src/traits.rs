@@ -1,11 +1,12 @@
 use super::wasm_interface::{NodeGroupID, StepData, TargetID};
+use web_sys::HtmlCanvasElement;
 
 pub trait Diagram {
-    fn create_drawer(&self) -> Box<DiagramDrawer>;
+    fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramDrawer>;
 }
 
 pub trait DiagramDrawer {
-    fn render(&self, time: i64, selected_ids: &[u32], hovered_ids: &[u32]) -> ();
+    fn render(&self, time: i32, selected_ids: &[u32], hovered_ids: &[u32]) -> ();
     fn layout(&mut self) -> ();
     fn set_transform(&mut self, x: i32, y: i32, scale: f32) -> ();
     fn set_step(&mut self, step: i32) -> Option<StepData>;

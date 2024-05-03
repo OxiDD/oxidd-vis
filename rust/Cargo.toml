@@ -20,19 +20,47 @@ js-sys = "0.3.69"
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
 
-oxidd-cache = "0.6.0"
-oxidd-manager-index = "0.6.0"
-oxidd-core = "0.6.0"
-oxidd-rules-bdd = "0.6.0"
+
+[dependencies.oxidd-manager-index]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd-manager-index"
+
+[dependencies.oxidd-core]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd-core"
+
+[dependencies.oxidd-rules-bdd]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd-rules-bdd"
+
+[dependencies.oxidd-cache]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd-cache"
 
 [dependencies.oxidd]
-version = "0.6.0"
-features = ["manager-index", "bdd", "bcdd", "mtbdd", "zbdd", "multi-threading"]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd"
+features = ["manager-index", "bdd", "bcdd", "mtbdd", "zbdd"]
 default-features = false
 
 [dependencies.web-sys]
 version = "0.3.69"
-features = ["console", "Window", "Document", "Element", "HtmlElement"]
+features = [
+    "console",
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "HtmlCanvasElement",
+    "WebGl2RenderingContext",
+    "WebGlProgram",
+    "WebGlShader",
+]
 
 
 [dev-dependencies]
