@@ -1,0 +1,475 @@
+use oxidd::{util::Borrowed, Edge, InnerNode, Manager, ManagerRef};
+use oxidd::{BooleanFunction, Function};
+use oxidd_manager_index::node::fixed_arity::NodeWithLevel;
+use oxidd_rules_bdd::simple::BDDTerminal;
+
+use std::cell::RefCell;
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::convert::TryInto;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::rc::Rc;
+use std::slice::Iter;
+use std::sync::Arc;
+
+use oxidd_core::util::DropWith;
+use oxidd_core::util::{AllocResult, BorrowedEdgeIter};
+use oxidd_core::DiagramRules;
+use oxidd_core::LevelNo;
+use oxidd_core::LevelView;
+use oxidd_core::Node;
+use oxidd_core::NodeID;
+use oxidd_core::ReducedOrNew;
+use oxidd_core::WorkerManager;
+use oxidd_core::{BroadcastContext, HasLevel};
+
+use crate::util::logging::console;
+
+// #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq)]
+pub struct DummyManagerRef(Rc<RefCell<DummyManager>>);
+
+impl Hash for DummyManagerRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.borrow().hash(state);
+    }
+}
+impl<'a> From<&'a DummyManager> for DummyManagerRef {
+    fn from(value: &'a DummyManager) -> Self {
+        DummyManagerRef(Rc::new(RefCell::new(value.clone())))
+    }
+}
+impl ManagerRef for DummyManagerRef {
+    type Manager<'id> = DummyManager;
+
+    fn with_manager_shared<F, T>(&self, f: F) -> T
+    where
+        F: for<'id> FnOnce(&Self::Manager<'id>) -> T,
+    {
+        f(&self.0.borrow())
+    }
+
+    fn with_manager_exclusive<F, T>(&self, f: F) -> T
+    where
+        F: for<'id> FnOnce(&mut Self::Manager<'id>) -> T,
+    {
+        f(&mut self.0.borrow_mut())
+    }
+}
+
+#[derive(Hash, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DummyFunction(DummyEdge);
+impl DummyFunction {
+    pub fn from(manager_ref: &mut DummyManagerRef, data: &str) -> DummyFunction {
+        manager_ref.with_manager_exclusive(|manager| {
+            let mut root = Option::None;
+            let transition_texts = data.split(",");
+            let transitions = transition_texts.map(|item| item.split(">"));
+            for trans in transitions {
+                let mut prev_node = Option::None;
+                for node in trans {
+                    let node = node.trim().to_string();
+                    if root == None {
+                        root = Some(node.clone());
+                    }
+
+                    if let Some(prev) = prev_node {
+                        manager.add_edge(prev, node.clone(), manager_ref.clone());
+                    }
+                    prev_node = Some(node);
+                }
+                if let Some(prev) = prev_node {
+                    manager.add_node(prev);
+                }
+            }
+
+            DummyFunction(DummyEdge::new(Arc::new(root.unwrap()), manager_ref.clone()))
+        })
+    }
+}
+
+unsafe impl Function for DummyFunction {
+    type Manager<'id> = DummyManager;
+
+    type ManagerRef = DummyManagerRef;
+    fn from_edge<'id>(
+        manager: &Self::Manager<'id>,
+        edge: oxidd_core::function::EdgeOfFunc<'id, Self>,
+    ) -> Self {
+        DummyFunction(edge)
+    }
+
+    fn as_edge<'id>(
+        &self,
+        manager: &Self::Manager<'id>,
+    ) -> &oxidd_core::function::EdgeOfFunc<'id, Self> {
+        &self.0
+    }
+
+    fn into_edge<'id>(
+        self,
+        manager: &Self::Manager<'id>,
+    ) -> oxidd_core::function::EdgeOfFunc<'id, Self> {
+        self.0
+    }
+
+    fn manager_ref(&self) -> Self::ManagerRef {
+        todo!()
+    }
+
+    fn with_manager_shared<F, T>(&self, f: F) -> T
+    where
+        F: for<'id> FnOnce(&Self::Manager<'id>, &oxidd_core::function::EdgeOfFunc<'id, Self>) -> T,
+    {
+        self.0
+             .1
+            .with_manager_shared(|manager| f(manager, self.as_edge(manager)))
+    }
+
+    fn with_manager_exclusive<F, T>(&self, f: F) -> T
+    where
+        F: for<'id> FnOnce(
+            &mut Self::Manager<'id>,
+            &oxidd_core::function::EdgeOfFunc<'id, Self>,
+        ) -> T,
+    {
+        self.0
+             .1
+            .with_manager_exclusive(|manager| f(manager, self.as_edge(manager)))
+    }
+}
+
+/// Simple dummy edge implementation based on [`Arc`]
+///
+/// The implementation is very limited but perfectly fine to test e.g. an apply
+/// cache.
+#[derive(Clone)]
+pub struct DummyEdge(Arc<String>, DummyManagerRef);
+
+impl PartialEq for DummyEdge {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for DummyEdge {}
+impl PartialOrd for DummyEdge {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for DummyEdge {
+    fn cmp(&self, other: &Self) -> Ordering {
+        Arc::as_ptr(&self.0).cmp(&Arc::as_ptr(&other.0))
+    }
+}
+impl Hash for DummyEdge {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Arc::as_ptr(&self.0).hash(state);
+    }
+}
+
+impl Drop for DummyEdge {
+    fn drop(&mut self) {
+        eprintln!(
+            "Edges must not be dropped. Use Manager::drop_edge(). Backtrace:\n{}",
+            std::backtrace::Backtrace::capture()
+        );
+    }
+}
+
+impl DummyEdge {
+    /// Create a new `DummyEdge`
+    pub fn new(to: Arc<String>, mr: DummyManagerRef) -> Self {
+        DummyEdge(to, mr.clone())
+    }
+}
+
+impl Edge for DummyEdge {
+    type Tag = ();
+
+    fn borrowed(&self) -> Borrowed<'_, Self> {
+        let ptr = Arc::as_ptr(&self.0);
+        Borrowed::new(DummyEdge(unsafe { Arc::from_raw(ptr) }, self.1.clone()))
+    }
+    fn with_tag(&self, _tag: ()) -> Borrowed<'_, Self> {
+        let ptr = Arc::as_ptr(&self.0);
+        Borrowed::new(DummyEdge(unsafe { Arc::from_raw(ptr) }, self.1.clone()))
+    }
+    fn with_tag_owned(self, _tag: ()) -> Self {
+        self
+    }
+    fn tag(&self) -> Self::Tag {}
+
+    fn node_id(&self) -> NodeID {
+        Arc::as_ptr(&self.0) as usize
+    }
+}
+
+/// Dummy manager that does not actually manage anything. It is only useful to
+/// clone and drop edges.
+// #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct DummyManager(BTreeMap<String, DummyNode>);
+impl DummyManager {
+    pub fn new() -> DummyManager {
+        DummyManager(BTreeMap::new())
+    }
+}
+
+/// Dummy diagram rules
+pub struct DummyRules;
+impl DiagramRules<DummyEdge, DummyNode, ()> for DummyRules {
+    // type Cofactors<'a> = Iter<'a, Borrowed<'a, DummyEdge>>;
+    type Cofactors<'a> = <DummyNode as InnerNode<DummyEdge>>::ChildrenIter<'a> where DummyNode: 'a, DummyEdge: 'a;
+
+    fn reduce<M>(
+        _manager: &M,
+        level: LevelNo,
+        children: impl IntoIterator<Item = DummyEdge>,
+    ) -> ReducedOrNew<DummyEdge, DummyNode>
+    where
+        M: Manager<Edge = DummyEdge, InnerNode = DummyNode>,
+    {
+        ReducedOrNew::New(DummyNode::new(level, children), ())
+    }
+
+    fn cofactors(_tag: (), node: &DummyNode) -> Self::Cofactors<'_> {
+        node.children()
+    }
+}
+
+impl DummyManager {
+    fn add_node(&mut self, from: String) -> &mut DummyNode {
+        let count = self.0.keys().count();
+        self.0
+            .entry(from)
+            .or_insert_with(|| DummyNode::new(count.try_into().unwrap(), Vec::new()))
+    }
+    fn add_edge(&mut self, from: String, to: String, mr: DummyManagerRef) {
+        let from_children = &mut self.add_node(from).1;
+        let edge = DummyEdge::new(Arc::new(to), mr);
+        from_children.push(edge);
+    }
+}
+
+unsafe impl Manager for DummyManager {
+    type Edge = DummyEdge;
+    type EdgeTag = ();
+    type InnerNode = DummyNode;
+    type Terminal = ();
+    type TerminalRef<'a> = &'a ();
+    type TerminalIterator<'a> = std::iter::Empty<DummyEdge> where Self: 'a;
+    type Rules = DummyRules;
+    type NodeSet = HashSet<NodeID>;
+    type LevelView<'a> = DummyLevelView where Self: 'a;
+    type LevelIterator<'a> = std::iter::Empty<DummyLevelView> where Self: 'a;
+
+    fn get_node(&self, edge: &Self::Edge) -> Node<Self> {
+        let to_node = self
+            .0
+            .get(&*edge.0)
+            .expect("Edge should refer to defined node");
+        Node::Inner(to_node)
+    }
+
+    fn clone_edge(&self, edge: &Self::Edge) -> Self::Edge {
+        DummyEdge(edge.0.clone(), edge.1.clone())
+    }
+
+    fn drop_edge(&self, edge: Self::Edge) {
+        // Move the inner arc out. We need to use `std::ptr::read` since
+        // `DummyEdge` implements `Drop` (to print an error).
+        let inner = unsafe { std::ptr::read(&edge.0) };
+        std::mem::forget(edge);
+        drop(inner);
+    }
+
+    fn num_inner_nodes(&self) -> usize {
+        0
+    }
+
+    fn num_levels(&self) -> LevelNo {
+        0
+    }
+
+    fn add_level(
+        &mut self,
+        _f: impl FnOnce(LevelNo) -> Self::InnerNode,
+    ) -> AllocResult<Self::Edge> {
+        unimplemented!()
+    }
+
+    fn level(&self, _no: LevelNo) -> Self::LevelView<'_> {
+        panic!("out of range")
+    }
+
+    fn levels(&self) -> Self::LevelIterator<'_> {
+        std::iter::empty()
+    }
+
+    fn get_terminal(&self, _terminal: Self::Terminal) -> AllocResult<Self::Edge> {
+        unimplemented!()
+    }
+
+    fn num_terminals(&self) -> usize {
+        0
+    }
+
+    fn terminals(&self) -> Self::TerminalIterator<'_> {
+        std::iter::empty()
+    }
+
+    fn gc(&self) -> usize {
+        0
+    }
+
+    fn reorder<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        f(self)
+    }
+
+    fn reorder_count(&self) -> u64 {
+        0
+    }
+}
+
+/// Dummy level view (not constructible)
+pub struct DummyLevelView;
+
+unsafe impl LevelView<DummyEdge, DummyNode> for DummyLevelView {
+    type Iterator<'a> = std::iter::Empty<&'a DummyEdge>
+    where
+        Self: 'a,
+        DummyEdge: 'a;
+
+    type Taken = Self;
+
+    fn len(&self) -> usize {
+        unreachable!()
+    }
+
+    fn level_no(&self) -> LevelNo {
+        unreachable!()
+    }
+
+    fn reserve(&mut self, _additional: usize) {
+        unreachable!()
+    }
+
+    fn get(&self, _node: &DummyNode) -> Option<&DummyEdge> {
+        unreachable!()
+    }
+
+    fn insert(&mut self, _edge: DummyEdge) -> bool {
+        unreachable!()
+    }
+
+    fn get_or_insert(&mut self, _node: DummyNode) -> AllocResult<DummyEdge> {
+        unreachable!()
+    }
+
+    unsafe fn gc(&mut self) {
+        unreachable!()
+    }
+
+    unsafe fn remove(&mut self, _node: &DummyNode) -> bool {
+        unreachable!()
+    }
+
+    unsafe fn swap(&mut self, _other: &mut Self) {
+        unreachable!()
+    }
+
+    fn iter(&self) -> Self::Iterator<'_> {
+        unreachable!()
+    }
+
+    fn take(&mut self) -> Self::Taken {
+        unreachable!()
+    }
+}
+
+/// Dummy node
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+pub struct DummyNode(LevelNo, Vec<DummyEdge>);
+
+impl DropWith<DummyEdge> for DummyNode {
+    fn drop_with(self, _drop_edge: impl Fn(DummyEdge)) {
+        unimplemented!()
+    }
+}
+
+unsafe impl HasLevel for DummyNode {
+    fn level(&self) -> LevelNo {
+        self.0
+    }
+
+    unsafe fn set_level(&self, level: LevelNo) {
+        unimplemented!()
+    }
+}
+
+impl InnerNode<DummyEdge> for DummyNode {
+    const ARITY: usize = 0;
+
+    // type ChildrenIter<'a> = std::iter::Empty<Borrowed<'a, DummyEdge>>
+    // where
+    //     Self: 'a;
+    type ChildrenIter<'a> = BorrowedEdgeIter<'a, DummyEdge, Iter<'a, DummyEdge>> where Self: 'a;
+
+    fn new(level: LevelNo, children: impl IntoIterator<Item = DummyEdge>) -> Self {
+        DummyNode(level, children.into_iter().collect())
+    }
+
+    fn check_level(&self, _check: impl FnOnce(LevelNo) -> bool) -> bool {
+        true
+    }
+
+    fn children(&self) -> Self::ChildrenIter<'_> {
+        BorrowedEdgeIter::from(self.1.iter())
+    }
+
+    fn child(&self, _n: usize) -> Borrowed<DummyEdge> {
+        unimplemented!()
+    }
+
+    unsafe fn set_child(&self, _n: usize, _child: DummyEdge) -> DummyEdge {
+        unimplemented!()
+    }
+
+    fn ref_count(&self) -> usize {
+        unimplemented!()
+    }
+}
+
+/// Assert that the reference counts of edges match
+///
+/// # Example
+///
+/// ```
+/// # use oxidd_core::{Edge, Manager};
+/// # use oxidd_test_utils::assert_ref_counts;
+/// # use oxidd_test_utils::edge::{DummyEdge, DummyManager};
+/// let e1 = DummyEdge::new();
+/// let e2 = DummyManager.clone_edge(&e1);
+/// let e3 = DummyEdge::new();
+/// assert_ref_counts!(e1, e2 = 2; e3 = 1);
+/// # DummyManager.drop_edge(e1);
+/// # DummyManager.drop_edge(e2);
+/// # DummyManager.drop_edge(e3);
+/// ```
+#[macro_export]
+macro_rules! assert_ref_counts {
+    ($edge:ident = $count:literal) => {
+        assert_eq!($edge.ref_count(), $count);
+    };
+    ($edge:ident, $($edges:ident),+ = $count:literal) => {
+        assert_ref_counts!($edge = $count);
+        assert_ref_counts!($($edges),+ = $count);
+    };
+    // spell-checker:ignore edgess
+    ($($edges:ident),+ = $count:literal; $($($edgess:ident),+ = $counts:literal);+) => {
+        assert_ref_counts!($($edges),+ = $count);
+        assert_ref_counts!($($($edgess),+ = $counts);+);
+    };
+}
