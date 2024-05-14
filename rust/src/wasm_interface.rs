@@ -28,13 +28,13 @@ impl DiagramBox {
 pub struct DiagramDrawerBox(Box<dyn DiagramDrawer>);
 #[wasm_bindgen]
 impl DiagramDrawerBox {
-    pub fn render(&self, time: i32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
+    pub fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         self.0.render(time, selected_ids, hovered_ids);
     }
-    pub fn layout(&mut self) -> () {
-        self.0.layout();
+    pub fn layout(&mut self, time: u32) -> () {
+        self.0.layout(time);
     }
-    pub fn set_transform(&mut self, x: i32, y: i32, scale: f32) -> () {
+    pub fn set_transform(&mut self, x: f32, y: f32, scale: f32) -> () {
         self.0.set_transform(x, y, scale);
     }
     pub fn set_step(&mut self, step: i32) -> Option<StepData> {
@@ -76,13 +76,14 @@ impl StepGroup {
     }
 }
 
+// Argumentless structure to be compatible with JS enums
 #[wasm_bindgen]
 #[derive(Clone, Copy, PartialEq)]
 pub enum TargetIDType {
     NodeID,
     NodeGroupID,
 }
-// pub type TargetID = (TargetIDType, NodeID);
+
 #[derive(PartialEq)]
 #[wasm_bindgen]
 pub struct TargetID(pub TargetIDType, pub NodeID);

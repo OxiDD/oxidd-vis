@@ -7,8 +7,8 @@ use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryInto;
-use std::hash::Hash;
 use std::hash::Hasher;
+use std::hash::{DefaultHasher, Hash};
 use std::rc::Rc;
 use std::slice::Iter;
 use std::sync::Arc;
@@ -202,7 +202,9 @@ impl Edge for DummyEdge {
     fn tag(&self) -> Self::Tag {}
 
     fn node_id(&self) -> NodeID {
-        Arc::as_ptr(&self.0) as usize
+        let mut hasher = DefaultHasher::new();
+        self.0.hash(&mut hasher);
+        hasher.finish() as NodeID
     }
 }
 

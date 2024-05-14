@@ -39,6 +39,7 @@ use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 use super::util::drawing::drawer::Drawer;
 use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
+use super::util::drawing::layouts::transition_layout::TransitionLayout;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::edge_type::EdgeType;
@@ -66,11 +67,11 @@ where
 
 impl<
         ET: Tag + 'static,
-        T,
-        E: Edge<Tag = ET>,
-        N: InnerNode<E> + HasLevel,
-        R: DiagramRules<E, N, T>,
-        MR: ManagerRef,
+        T: 'static,
+        E: Edge<Tag = ET> + 'static,
+        N: InnerNode<E> + HasLevel + 'static,
+        R: DiagramRules<E, N, T> + 'static,
+        MR: ManagerRef + 'static,
         F: Function<ManagerRef = MR> + 'static,
     > Diagram for BDDDiagram<MR, F>
 where
@@ -93,17 +94,42 @@ where
     drawer: Drawer<T, F>,
 }
 
-impl<'a, ET: Tag, T, E: Edge<Tag = ET>, N: InnerNode<E>, R: DiagramRules<E, N, T>, F: Function>
-    BDDDiagramDrawer<ET, F>
+impl<
+        'a,
+        ET: Tag + 'static,
+        T: 'static,
+        E: Edge<Tag = ET> + 'static,
+        N: InnerNode<E> + HasLevel + 'static,
+        R: DiagramRules<E, N, T> + 'static,
+        F: Function + 'static,
+    > BDDDiagramDrawer<ET, F>
 where
     for<'id> F::Manager<'id>:
         Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
     pub fn new(root: Rc<F>, renderer: Box<dyn Renderer<ET>>) -> BDDDiagramDrawer<ET, F> {
         let group_manager = Rc::new(RefCell::new(GroupManager::new(root)));
-        BDDDiagramDrawer {
+        let mut out = BDDDiagramDrawer {
             group_manager: group_manager.clone(),
-            drawer: Drawer::new(renderer, Box::new(RandomTestLayout), group_manager),
+            drawer: Drawer::new(
+                renderer,
+                Box::new(TransitionLayout::new(Box::new(RandomTestLayout))),
+                group_manager,
+            ),
+        };
+        out.reveal_all();
+        out
+    }
+
+    pub fn reveal_all(&mut self) {
+        let nodes = {
+            let explored_group = self.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+            let groups = (*self.group_manager).borrow_mut();
+            groups.get_node_group(explored_group).nodes.clone()
+        };
+        for node_id in nodes {
+            console::log!("{node_id}");
+            self.create_group(vec![TargetID(TargetIDType::NodeID, node_id)]);
         }
     }
 }
@@ -120,7 +146,7 @@ where
     for<'id> F::Manager<'id>:
         Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
-    fn render(&self, time: i32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
+    fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         // let children = self.get_children(&self.root);
         // for (_, child) in children {
         //     let c: F = child;
@@ -131,12 +157,12 @@ where
         self.drawer.render(time, selected_ids, hovered_ids);
     }
 
-    fn layout(&mut self) -> () {
-        self.drawer.layout();
+    fn layout(&mut self, time: u32) -> () {
+        self.drawer.layout(time);
     }
 
-    fn set_transform(&mut self, x: i32, y: i32, scale: f32) -> () {
-        todo!()
+    fn set_transform(&mut self, x: f32, y: f32, scale: f32) -> () {
+        self.drawer.set_transform(x, y, scale);
     }
 
     fn set_step(&mut self, step: i32) -> Option<crate::wasm_interface::StepData> {

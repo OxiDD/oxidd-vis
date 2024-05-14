@@ -55,7 +55,8 @@ pub fn create_diagram() -> Option<DiagramBox> // And some DD type param
         >::new(
             manager_ref,
             |manager_ref| {
-                let res = DummyFunction::from(manager_ref, "a>b, b>c, a>c, a>d");
+                let res = DummyFunction::from(manager_ref, "a>b, b>c, a>c, a>d, b>d");
+                // let res = DummyFunction::from(manager_ref, "a>b");
                 res
             },
         ))))

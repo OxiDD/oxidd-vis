@@ -9,5 +9,10 @@ pub trait LayoutRules<T: Tag, F: Function>
 where
     for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
 {
-    fn layout(&mut self, groups: &GroupManager<T, F>, old: &DiagramLayout<T>) -> DiagramLayout<T>;
+    fn layout(
+        &mut self,
+        groups: &GroupManager<T, F>,
+        old: &DiagramLayout<T>,
+        time: u32,
+    ) -> DiagramLayout<T>;
 }

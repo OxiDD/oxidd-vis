@@ -6,9 +6,9 @@ pub trait Diagram {
 }
 
 pub trait DiagramDrawer {
-    fn render(&self, time: i32, selected_ids: &[u32], hovered_ids: &[u32]) -> ();
-    fn layout(&mut self) -> ();
-    fn set_transform(&mut self, x: i32, y: i32, scale: f32) -> ();
+    fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> ();
+    fn layout(&mut self, time: u32) -> ();
+    fn set_transform(&mut self, x: f32, y: f32, scale: f32) -> ();
     fn set_step(&mut self, step: i32) -> Option<StepData>;
     fn set_group(&mut self, from: Vec<TargetID>, to: NodeGroupID) -> bool;
     fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID;

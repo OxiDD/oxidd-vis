@@ -1,10 +1,17 @@
-use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    ops::Deref,
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
+use js_sys::Date;
 use oxidd::{Function, Manager};
 use oxidd_core::Tag;
 use web_sys::WebGl2RenderingContext;
 
-use crate::types::util::group_manager::GroupManager;
+use crate::{types::util::group_manager::GroupManager, util::logging::console};
 
 use super::{diagram_layout::DiagramLayout, layout_rules::LayoutRules, renderer::Renderer};
 
@@ -38,13 +45,16 @@ where
         }
     }
 
-    pub fn layout(&mut self) {
-        self.layout_rules
-            .layout(&(*self.groups.borrow()), &self.layout);
+    pub fn layout(&mut self, time: u32) {
+        self.layout = self
+            .layout_rules
+            .layout(&(*self.groups.borrow()), &self.layout, time);
+        self.renderer.update_layout(&self.layout);
     }
-
-    pub fn render(&self, time: i32, selected_ids: &[u32], hovered_ids: &[u32]) {
-        self.renderer
-            .render(&self.layout, time, selected_ids, hovered_ids);
+    pub fn set_transform(&mut self, x: f32, y: f32, scale: f32) {
+        self.renderer.set_transform(x, y, scale);
+    }
+    pub fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) {
+        self.renderer.render(time, selected_ids, hovered_ids);
     }
 }

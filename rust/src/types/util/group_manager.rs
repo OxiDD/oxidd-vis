@@ -10,7 +10,7 @@ use oxidd_core::{DiagramRules, Node, Tag};
 
 use crate::{
     types::util::edge_type::EdgeType,
-    util::free_id_manager::FreeIdManager,
+    util::{free_id_manager::FreeIdManager, logging::console},
     wasm_interface::{NodeGroupID, NodeID, TargetID, TargetIDType},
 };
 
@@ -92,8 +92,12 @@ where
         })
     }
 
-    fn get_node_group(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<ET> {
+    fn get_node_group_mut(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<ET> {
         self.group_by_id.get_mut(&group_id).unwrap()
+    }
+
+    pub fn get_node_group(&self, group_id: NodeGroupID) -> &NodeGroup<ET> {
+        self.group_by_id.get(&group_id).unwrap()
     }
 
     pub fn get_node_group_id(&self, node: NodeID) -> NodeGroupID {
@@ -105,7 +109,7 @@ where
     }
 
     fn remove_group(&mut self, id: NodeGroupID) {
-        self.node_by_id.remove(&id);
+        self.group_by_id.remove(&id);
         self.free_ids.make_available(id);
     }
 
@@ -135,10 +139,10 @@ where
         edge_type: EdgeType<ET>,
         count: i32,
     ) {
-        let from_group = self.get_node_group(from);
+        let from_group = self.get_node_group_mut(from);
         GroupManager::<ET, F>::remove_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
 
-        let to_group = self.get_node_group(to);
+        let to_group = self.get_node_group_mut(to);
         GroupManager::<ET, F>::remove_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
     }
 
@@ -160,10 +164,10 @@ where
         edge_type: EdgeType<ET>,
         count: i32,
     ) {
-        let from_group = self.get_node_group(from);
+        let from_group = self.get_node_group_mut(from);
         GroupManager::<ET, F>::add_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
 
-        let to_group = self.get_node_group(to);
+        let to_group = self.get_node_group_mut(to);
         GroupManager::<ET, F>::add_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
     }
 }
@@ -176,20 +180,19 @@ where
         Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
     pub fn new(root: Rc<F>) -> GroupManager<ET, F> {
-        let mut groups = HashMap::new();
-        groups.insert(
-            0,
-            NodeGroup {
-                nodes: HashSet::new(),
-                out_edges: HashMap::new(),
-                in_edges: HashMap::new(),
-            },
-        );
+        let root_id = root.with_manager_shared(|manager, edge| edge.node_id());
         GroupManager {
-            root: root,
-            node_by_id: HashMap::new(),
+            root: root.clone(),
+            node_by_id: HashMap::from([(root_id, (*root).clone())]),
             group_id_by_node: HashMap::new(),
-            group_by_id: groups,
+            group_by_id: HashMap::from([(
+                0,
+                NodeGroup {
+                    nodes: HashSet::from([root_id]),
+                    out_edges: HashMap::new(),
+                    in_edges: HashMap::new(),
+                },
+            )]),
             free_ids: FreeIdManager::new(1),
             node_parents: HashMap::new(),
         }
@@ -213,11 +216,11 @@ where
             let from_id = item.1;
             if from_id_type == TargetIDType::NodeID {
                 let cur_group_id = self.get_node_group_id(from_id);
-                let cur_group = self.get_node_group(cur_group_id);
+                let cur_group = self.get_node_group_mut(cur_group_id);
                 let contained = cur_group.nodes.remove(&from_id);
-                let from_empty = cur_group.nodes.is_empty();
 
-                self.get_node_group(to).nodes.insert(from_id);
+                self.group_id_by_node.insert(from_id, to);
+                self.get_node_group_mut(to).nodes.insert(from_id);
 
                 if let Some(node) = self.get_node_by_id(from_id) {
                     let mut index = 0;
@@ -238,7 +241,7 @@ where
 
                         // Ensure the child id is in there
                         if child_group_id == 0 {
-                            let child_group = self.get_node_group(child_group_id);
+                            let child_group = self.get_node_group_mut(child_group_id);
                             child_group.nodes.insert(child_id);
                         }
                     }
@@ -249,22 +252,27 @@ where
                         let edge_type = parent_edge.edge_type;
                         let edge_from = parent_edge.parent;
 
-                        if contained && edge_from != cur_group_id {
-                            self.remove_edges(edge_from, cur_group_id, edge_type, 1);
+                        let from_group = self.get_node_group_id(edge_from);
+
+                        if contained && from_group != cur_group_id {
+                            self.remove_edges(from_group, cur_group_id, edge_type, 1);
                         }
-                        if edge_from != to {
-                            self.add_edges(edge_from, to, edge_type, 1);
+                        if from_group != to {
+                            self.add_edges(from_group, to, edge_type, 1);
                         }
                     }
                 }
 
-                if cur_group_id != 0 && from_empty {
+                let cur_group = self.get_node_group_mut(cur_group_id);
+                let from_empty = cur_group.nodes.is_empty();
+                if from_empty {
                     self.remove_group(cur_group_id);
+                    console::log!("removed");
                 }
             } else if from_id == to {
                 continue;
             } else if from_id == 0 {
-                let init_nodes = self.get_node_group(from_id).nodes.clone();
+                let init_nodes = self.get_node_group_mut(from_id).nodes.clone();
                 let mut found: HashSet<NodeID> = init_nodes.clone().into_iter().collect();
                 let mut queue: LinkedList<NodeID> = init_nodes.into_iter().collect();
 
@@ -293,7 +301,7 @@ where
                     to,
                 );
             } else if let Some(_) = self.group_by_id.get(&from_id) {
-                let from_group = self.get_node_group(from_id);
+                let from_group = self.get_node_group_mut(from_id);
                 let out_edges = from_group.out_edges.clone();
                 let in_edges = from_group.in_edges.clone();
                 let from_nodes = from_group.nodes.clone();
@@ -317,8 +325,12 @@ where
                     }
                 }
 
-                let to_group = self.get_node_group(to);
+                for from_node in &from_nodes {
+                    self.group_id_by_node.insert(*from_node, to);
+                }
+                let to_group = self.get_node_group_mut(to);
                 to_group.nodes.extend(&from_nodes);
+
                 self.remove_group(from_id);
             } else {
                 return false;
