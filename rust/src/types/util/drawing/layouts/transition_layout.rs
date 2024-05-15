@@ -22,28 +22,13 @@ use crate::{
 /// A layout builder that takes another layout approach, and applies transitioning to it.
 /// This will make layout changes smoothly transition from the previous state to the new state.
 ///
-pub struct TransitionLayout<
-    ET: Tag,
-    T,
-    E: Edge<Tag = ET>,
-    N: InnerNode<E>,
-    R: DiagramRules<E, N, T>,
-    F: Function,
-> where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
-{
-    layout: Box<dyn LayoutRules<ET, F>>,
+pub struct TransitionLayout<T: Tag> {
+    layout: Box<dyn LayoutRules<T>>,
     duration: u32,
 }
 
-impl<ET: Tag, T, E: Edge<Tag = ET>, N: InnerNode<E>, R: DiagramRules<E, N, T>, F: Function>
-    TransitionLayout<ET, T, E, N, R, F>
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
-{
-    pub fn new(layout: Box<dyn LayoutRules<ET, F>>) -> TransitionLayout<ET, T, E, N, R, F> {
+impl<T: Tag> TransitionLayout<T> {
+    pub fn new(layout: Box<dyn LayoutRules<T>>) -> TransitionLayout<T> {
         TransitionLayout {
             layout,
             duration: 1000,
@@ -51,18 +36,13 @@ where
     }
 }
 
-impl<ET: Tag, T, E: Edge<Tag = ET>, N: InnerNode<E>, R: DiagramRules<E, N, T>, F: Function>
-    LayoutRules<ET, F> for TransitionLayout<ET, T, E, N, R, F>
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
-{
+impl<T: Tag> LayoutRules<T> for TransitionLayout<T> {
     fn layout(
         &mut self,
-        groups: &GroupManager<ET, F>,
-        old: &DiagramLayout<ET>,
+        groups: &GroupManager<T>,
+        old: &DiagramLayout<T>,
         time: u32,
-    ) -> DiagramLayout<ET> {
+    ) -> DiagramLayout<T> {
         let duration = self.duration;
         let old_time = time;
         let new = self.layout.layout(groups, old, time);
@@ -89,9 +69,9 @@ where
         };
 
         let map_edges = |to: &NodeGroupID,
-                         edges: &HashMap<EdgeType<ET>, EdgeLayout>,
-                         old_group: &NodeGroupLayout<ET>|
-         -> HashMap<EdgeType<ET>, EdgeLayout> {
+                         edges: &HashMap<EdgeType<T>, EdgeLayout>,
+                         old_group: &NodeGroupLayout<T>|
+         -> HashMap<EdgeType<T>, EdgeLayout> {
             edges
                 .iter()
                 .map(|(edge_type, edge)| {

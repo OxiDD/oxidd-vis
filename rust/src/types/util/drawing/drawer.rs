@@ -15,25 +15,19 @@ use crate::{types::util::group_manager::GroupManager, util::logging::console};
 
 use super::{diagram_layout::DiagramLayout, layout_rules::LayoutRules, renderer::Renderer};
 
-pub struct Drawer<T: Tag, F: Function>
-where
-    for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
-{
+pub struct Drawer<T: Tag> {
     renderer: Box<dyn Renderer<T>>,
-    layout_rules: Box<dyn LayoutRules<T, F>>,
+    layout_rules: Box<dyn LayoutRules<T>>,
     layout: DiagramLayout<T>,
-    groups: Rc<RefCell<GroupManager<T, F>>>,
+    groups: Rc<RefCell<GroupManager<T>>>,
 }
 
-impl<T: Tag, F: Function> Drawer<T, F>
-where
-    for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
-{
+impl<T: Tag> Drawer<T> {
     pub fn new(
         renderer: Box<dyn Renderer<T>>,
-        layout_rules: Box<dyn LayoutRules<T, F>>,
-        groups: Rc<RefCell<GroupManager<T, F>>>,
-    ) -> Drawer<T, F> {
+        layout_rules: Box<dyn LayoutRules<T>>,
+        groups: Rc<RefCell<GroupManager<T>>>,
+    ) -> Drawer<T> {
         Drawer {
             renderer,
             layout_rules,

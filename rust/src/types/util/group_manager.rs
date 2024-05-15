@@ -14,20 +14,18 @@ use crate::{
     wasm_interface::{NodeGroupID, NodeID, TargetID, TargetIDType},
 };
 
-pub struct GroupManager<T: Tag, F: Function>
-where
-    for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
-{
-    root: Rc<F>,
-    node_by_id: HashMap<NodeID, F>,
+use super::graph_structure::GraphStructure;
+
+pub struct GroupManager<T: Tag> {
+    // root: Rc<F>,
+    // node_by_id: HashMap<NodeID, F>,
+    graph: Box<dyn GraphStructure<T>>,
     // Nodes are implicitly in group 0 by default, I.e either:
     // - group_by_id[group_id_by_node[node]].nodes.contains(node)
     // - or !group_id_by_node.contains(node) && !exists g. group_by_id[g].nodes.contains(node)
     group_id_by_node: HashMap<NodeID, NodeGroupID>,
     group_by_id: HashMap<NodeGroupID, NodeGroup<T>>,
     free_ids: FreeIdManager<usize>,
-    // The known parents of a node (based on what node have been moved out of the default group)
-    node_parents: HashMap<NodeID, HashSet<NodeParentEdge<T>>>,
 }
 
 type EdgeSet<T: Tag> = HashMap<NodeGroupID, HashMap<EdgeType<T>, i32>>;
@@ -37,66 +35,13 @@ pub struct NodeGroup<T: Tag> {
     pub in_edges: EdgeSet<T>,
 }
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct NodeParentEdge<T: Tag> {
-    pub parent: NodeID,
-    pub edge_type: EdgeType<T>,
-}
-impl<T: Tag> Hash for NodeParentEdge<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.parent.hash(state);
-        self.edge_type.hash(state);
-    }
-}
-
 // Helper methods
-impl<ET: Tag, T, E: Edge<Tag = ET>, N: InnerNode<E>, R: DiagramRules<E, N, T>, F: Function>
-    GroupManager<ET, F>
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
-{
-    fn get_id_by_node(&mut self, node: &F) -> NodeID {
-        node.with_manager_shared(|manager, edge| {
-            let id = edge.node_id();
-            self.node_by_id.insert(id, node.clone());
-            return id;
-        })
-    }
-    fn get_node_by_id(&self, id: NodeID) -> Option<&F> {
-        return self.node_by_id.get(&id);
-    }
-
-    fn add_parent(&mut self, node: NodeID, parent: NodeID, edge_type: EdgeType<ET>) {
-        let parents = self
-            .node_parents
-            .entry(node)
-            .or_insert_with(|| HashSet::new());
-        let edge: NodeParentEdge<ET> = NodeParentEdge { parent, edge_type };
-        parents.insert(edge);
-    }
-
-    fn get_parents(&self, node: NodeID) -> Option<&HashSet<NodeParentEdge<ET>>> {
-        return self.node_parents.get(&node);
-    }
-
-    fn get_children(&self, node: &F) -> Vec<(ET, F)> {
-        node.with_manager_shared(|manager, edge| {
-            let tag = edge.tag();
-            let internal_node = manager.get_node(edge);
-            if let Node::Inner(node) = internal_node {
-                let cofactors = R::cofactors(tag, node);
-                return Vec::from_iter(cofactors.map(|f| (f.tag(), F::from_edge_ref(manager, &f))));
-            }
-            return Vec::new();
-        })
-    }
-
-    fn get_node_group_mut(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<ET> {
+impl<T: Tag> GroupManager<T> {
+    fn get_node_group_mut(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<T> {
         self.group_by_id.get_mut(&group_id).unwrap()
     }
 
-    pub fn get_node_group(&self, group_id: NodeGroupID) -> &NodeGroup<ET> {
+    pub fn get_node_group(&self, group_id: NodeGroupID) -> &NodeGroup<T> {
         self.group_by_id.get(&group_id).unwrap()
     }
 
@@ -114,8 +59,8 @@ where
     }
 
     fn remove_edges_to_set(
-        edges: &mut EdgeSet<ET>,
-        edge_type: EdgeType<ET>,
+        edges: &mut EdgeSet<T>,
+        edge_type: EdgeType<T>,
         target: NodeGroupID,
         count: i32,
     ) {
@@ -136,19 +81,19 @@ where
         &mut self,
         from: NodeGroupID,
         to: NodeGroupID,
-        edge_type: EdgeType<ET>,
+        edge_type: EdgeType<T>,
         count: i32,
     ) {
         let from_group = self.get_node_group_mut(from);
-        GroupManager::<ET, F>::remove_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
+        GroupManager::<T>::remove_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
 
         let to_group = self.get_node_group_mut(to);
-        GroupManager::<ET, F>::remove_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
+        GroupManager::<T>::remove_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
     }
 
     fn add_edges_to_set(
-        edges: &mut EdgeSet<ET>,
-        edge_type: EdgeType<ET>,
+        edges: &mut EdgeSet<T>,
+        edge_type: EdgeType<T>,
         target: NodeGroupID,
         count: i32,
     ) {
@@ -161,29 +106,23 @@ where
         &mut self,
         from: NodeGroupID,
         to: NodeGroupID,
-        edge_type: EdgeType<ET>,
+        edge_type: EdgeType<T>,
         count: i32,
     ) {
         let from_group = self.get_node_group_mut(from);
-        GroupManager::<ET, F>::add_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
+        GroupManager::<T>::add_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
 
         let to_group = self.get_node_group_mut(to);
-        GroupManager::<ET, F>::add_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
+        GroupManager::<T>::add_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
     }
 }
 
 // Main methods
-impl<ET: Tag, T, E: Edge<Tag = ET>, N: InnerNode<E>, R: DiagramRules<E, N, T>, F: Function>
-    GroupManager<ET, F>
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
-{
-    pub fn new(root: Rc<F>) -> GroupManager<ET, F> {
-        let root_id = root.with_manager_shared(|manager, edge| edge.node_id());
+impl<T: Tag> GroupManager<T> {
+    pub fn new(graph: Box<dyn GraphStructure<T>>) -> GroupManager<T> {
+        let root_id = graph.get_root();
         GroupManager {
-            root: root.clone(),
-            node_by_id: HashMap::from([(root_id, (*root).clone())]),
+            graph,
             group_id_by_node: HashMap::new(),
             group_by_id: HashMap::from([(
                 0,
@@ -194,11 +133,10 @@ where
                 },
             )]),
             free_ids: FreeIdManager::new(1),
-            node_parents: HashMap::new(),
         }
     }
 
-    pub fn get_groups(&self) -> &HashMap<NodeGroupID, NodeGroup<ET>> {
+    pub fn get_groups(&self) -> &HashMap<NodeGroupID, NodeGroup<T>> {
         &self.group_by_id
     }
 
@@ -222,44 +160,30 @@ where
                 self.group_id_by_node.insert(from_id, to);
                 self.get_node_group_mut(to).nodes.insert(from_id);
 
-                if let Some(node) = self.get_node_by_id(from_id) {
-                    let mut index = 0;
-                    for (edge_tag, child) in self.get_children(node) {
-                        let edge_type = EdgeType::new(edge_tag, index);
-                        index += 1;
+                for (edge_type, child_id) in self.graph.get_children(from_id) {
+                    let child_group_id = self.get_node_group_id(child_id);
+                    if contained && cur_group_id != child_group_id {
+                        self.remove_edges(cur_group_id, child_group_id, edge_type, 1);
+                    }
+                    if to != child_group_id {
+                        self.add_edges(to, child_group_id, edge_type, 1);
+                    }
 
-                        let child_id = self.get_id_by_node(&child);
-                        self.add_parent(child_id, from_id, edge_type);
-
-                        let child_group_id = self.get_node_group_id(child_id);
-                        if contained && cur_group_id != child_group_id {
-                            self.remove_edges(cur_group_id, child_group_id, edge_type, 1);
-                        }
-                        if to != child_group_id {
-                            self.add_edges(to, child_group_id, edge_type, 1);
-                        }
-
-                        // Ensure the child id is in there
-                        if child_group_id == 0 {
-                            let child_group = self.get_node_group_mut(child_group_id);
-                            child_group.nodes.insert(child_id);
-                        }
+                    // Ensure the child id is in there
+                    if child_group_id == 0 {
+                        let child_group = self.get_node_group_mut(child_group_id);
+                        child_group.nodes.insert(child_id);
                     }
                 }
-                if let Some(parents) = self.get_parents(from_id) {
-                    let p = (*parents).clone();
-                    for parent_edge in p {
-                        let edge_type = parent_edge.edge_type;
-                        let edge_from = parent_edge.parent;
 
-                        let from_group = self.get_node_group_id(edge_from);
+                for (edge_type, edge_from) in self.graph.get_known_parents(from_id) {
+                    let from_group = self.get_node_group_id(edge_from);
 
-                        if contained && from_group != cur_group_id {
-                            self.remove_edges(from_group, cur_group_id, edge_type, 1);
-                        }
-                        if from_group != to {
-                            self.add_edges(from_group, to, edge_type, 1);
-                        }
+                    if contained && from_group != cur_group_id {
+                        self.remove_edges(from_group, cur_group_id, edge_type, 1);
+                    }
+                    if from_group != to {
+                        self.add_edges(from_group, to, edge_type, 1);
                     }
                 }
 
@@ -278,12 +202,7 @@ where
 
                 while !queue.is_empty() {
                     let node_id = queue.pop_front().unwrap();
-                    let Some(node) = self.get_node_by_id(node_id) else {
-                        continue;
-                    };
-
-                    for (_, child) in self.get_children(node) {
-                        let child_id = self.get_id_by_node(&child);
+                    for (_, child_id) in self.graph.get_children(node_id) {
                         if found.contains(&child_id) {
                             continue;
                         }

@@ -5,13 +5,10 @@ use crate::types::util::group_manager::GroupManager;
 
 use super::diagram_layout::DiagramLayout;
 
-pub trait LayoutRules<T: Tag, F: Function>
-where
-    for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
-{
+pub trait LayoutRules<T: Tag> {
     fn layout(
         &mut self,
-        groups: &GroupManager<T, F>,
+        groups: &GroupManager<T>,
         old: &DiagramLayout<T>,
         time: u32,
     ) -> DiagramLayout<T>;

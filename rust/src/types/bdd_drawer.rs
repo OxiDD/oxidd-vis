@@ -43,6 +43,8 @@ use super::util::drawing::layouts::transition_layout::TransitionLayout;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::edge_type::EdgeType;
+use super::util::graph_structure::GraphStructure;
+use super::util::graph_structure::OxiddGraphStructure;
 use super::util::group_manager::GroupManager;
 
 pub struct BDDDiagram<MR: ManagerRef, F: Function<ManagerRef = MR> + 'static>
@@ -50,7 +52,7 @@ where
     for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
 {
     manager_ref: MR,
-    root: Rc<F>,
+    root: F,
 }
 impl<MR: ManagerRef, F: Function<ManagerRef = MR>> BDDDiagram<MR, F>
 where
@@ -59,7 +61,7 @@ where
     pub fn new(mut manager_ref: MR, root: impl Fn(&mut MR) -> F) -> BDDDiagram<MR, F> {
         // let mut manager_ref = manager_ref;
         BDDDiagram {
-            root: Rc::new(root(&mut manager_ref)),
+            root: root(&mut manager_ref),
             manager_ref,
         }
     }
@@ -80,35 +82,23 @@ where
 {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramDrawer> {
         let renderer = Box::new(WebglRenderer::from_canvas(canvas).unwrap());
-        let root_clone = (&self.root).clone();
-        let diagram = BDDDiagramDrawer::new(root_clone, renderer);
+        let graph = OxiddGraphStructure::new(self.root.clone());
+        let diagram = BDDDiagramDrawer::new(Box::new(graph), renderer);
         Box::new(diagram)
     }
 }
 
-pub struct BDDDiagramDrawer<T: Tag, F: Function>
-where
-    for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
-{
-    group_manager: Rc<RefCell<GroupManager<T, F>>>,
-    drawer: Drawer<T, F>,
+pub struct BDDDiagramDrawer<T: Tag> {
+    group_manager: Rc<RefCell<GroupManager<T>>>,
+    drawer: Drawer<T>,
 }
 
-impl<
-        'a,
-        ET: Tag + 'static,
-        T: 'static,
-        E: Edge<Tag = ET> + 'static,
-        N: InnerNode<E> + HasLevel + 'static,
-        R: DiagramRules<E, N, T> + 'static,
-        F: Function + 'static,
-    > BDDDiagramDrawer<ET, F>
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
-{
-    pub fn new(root: Rc<F>, renderer: Box<dyn Renderer<ET>>) -> BDDDiagramDrawer<ET, F> {
-        let group_manager = Rc::new(RefCell::new(GroupManager::new(root)));
+impl<T: Tag + 'static> BDDDiagramDrawer<T> {
+    pub fn new(
+        graph: Box<dyn GraphStructure<T>>,
+        renderer: Box<dyn Renderer<T>>,
+    ) -> BDDDiagramDrawer<T> {
+        let group_manager = Rc::new(RefCell::new(GroupManager::new(graph)));
         let mut out = BDDDiagramDrawer {
             group_manager: group_manager.clone(),
             drawer: Drawer::new(
@@ -128,24 +118,13 @@ where
             groups.get_node_group(explored_group).nodes.clone()
         };
         for node_id in nodes {
-            console::log!("{node_id}");
+            // console::log!("{node_id}");
             self.create_group(vec![TargetID(TargetIDType::NodeID, node_id)]);
         }
     }
 }
 
-impl<
-        ET: Tag,
-        T,
-        E: Edge<Tag = ET>,
-        N: InnerNode<E> + HasLevel,
-        R: DiagramRules<E, N, T>,
-        F: Function,
-    > DiagramDrawer for BDDDiagramDrawer<ET, F>
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
-{
+impl<T: Tag> DiagramDrawer for BDDDiagramDrawer<T> {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         // let children = self.get_children(&self.root);
         // for (_, child) in children {

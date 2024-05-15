@@ -16,18 +16,13 @@ use crate::types::util::{
 
 pub struct RandomTestLayout;
 
-impl<ET: Tag, T, E: Edge<Tag = ET>, N: InnerNode<E>, R: DiagramRules<E, N, T>, F: Function>
-    LayoutRules<ET, F> for RandomTestLayout
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
-{
+impl<T: Tag> LayoutRules<T> for RandomTestLayout {
     fn layout(
         &mut self,
-        groups: &GroupManager<ET, F>,
-        old: &DiagramLayout<ET>,
+        groups: &GroupManager<T>,
+        old: &DiagramLayout<T>,
         time: u32,
-    ) -> DiagramLayout<ET> {
+    ) -> DiagramLayout<T> {
         let groups = groups.get_groups();
         DiagramLayout {
             groups: groups
