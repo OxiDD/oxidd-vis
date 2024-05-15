@@ -33,55 +33,66 @@ impl EdgeRenderer {
                 in float endStartTime;
                 in float endDuration;
 
+                out vec2 curStart;
+                out vec2 curEnd;
+                out vec2 outPos;
+
                 uniform float width;
                 uniform mat4 transform;
                 uniform float time;
 
                 void main() {
                     float startPer = min((time - startStartTime) / startDuration, 1.0);
-                    vec2 curStart = startPer * start + (1.0 - startPer) * startOld;
+                    curStart = startPer * start + (1.0 - startPer) * startOld;
 
                     float endPer = min((time - endStartTime) / endDuration, 1.0);
-                    vec2 curEnd = endPer * end + (1.0 - endPer) * endOld;
+                    curEnd = endPer * end + (1.0 - endPer) * endOld;
 
                     vec2 delta = curEnd - curStart;
                     vec2 dir = normalize(delta);
                     vec2 dirOrth = vec2(-dir.y, dir.x);
 
                     int corner = gl_VertexID % 6; // two triangles
-                    vec2 pos = (
+                    outPos = (
                         corner == 0                  ? curStart + (-dir - dirOrth) * width
                         : corner == 1 || corner == 3 ? curStart + (-dir + dirOrth) * width
                         : corner == 2 || corner == 4 ? curEnd + (dir - dirOrth) * width
                         :                              curEnd + (dir + dirOrth) * width
                     );
-                    gl_Position = transform * vec4(pos, 0.0, 1.0);
+                    gl_Position = transform * vec4(outPos, 0.0, 1.0);
                 }
                 "##,
             r##"#version 300 es
                 precision highp float;
                 out vec4 outColor;
-                // in vec2 cornerPos;
-                // in vec2 curSize;
 
-                // float cornerSize = 0.3;
-                // float fuzziness = 0.03; // A form of anti-aliasing by making the circle border a slight gradient
+                in vec2 curStart;
+                in vec2 curEnd;
+                in vec2 outPos;
+
+                uniform float width;
+                float fuzziness = 0.02; // A form of anti-aliasing by making the circle border a slight gradient
                 
                 void main() {
                     float alpha = 1.0;
-                    // float cornerSize2 = cornerSize * cornerSize;
 
-                    // float xBoundary = curSize.x / 2.0 - cornerSize;
-                    // float yBoundary = curSize.y / 2.0 - cornerSize;
-                    // float absX = abs(cornerPos.x);
-                    // float absY = abs(cornerPos.y);
-                    // if (absX > xBoundary && absY > yBoundary) {
-                    //     float dx = xBoundary - absX;
-                    //     float dy = yBoundary - absY;
-                    //     float distance2 = dx*dx + dy*dy;
-                    //     if(distance2 >= cornerSize2)
-                    //         alpha = 1.0 - max(0.0, (sqrt(distance2) - cornerSize) / fuzziness);
-                    // }
+                    vec2 line = curEnd - curStart;
+                    vec2 point = outPos - curStart;
+                    float projPer = dot(point, normalize(line)) / length(line);
+                    bool onLine = projPer >= 0.0 && projPer <= 1.0;
+                    if(!onLine) {
+                        // Only draw half circle from one side
+                        if(projPer >= 1.0)
+                            alpha = 0.0;
+                        else {
+                            vec2 delta1 = curStart - outPos;
+                            vec2 delta2 = curEnd - outPos;
+                            float dist = sqrt(min(dot(delta1, delta1), dot(delta2, delta2)));
+    
+                            if(dist >= width - fuzziness) 
+                                alpha = 1.0 - max(0.0, (dist - width) / fuzziness);
+                        }
+                    }
 
                     outColor = vec4(1, 1, 1, alpha);
                 }
@@ -90,7 +101,7 @@ impl EdgeRenderer {
         .unwrap();
         EdgeRenderer {
             vertex_renderer,
-            width: 0.1,
+            width: 0.05,
         }
     }
 

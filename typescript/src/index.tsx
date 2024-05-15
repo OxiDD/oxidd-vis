@@ -23,7 +23,7 @@ const Test: FC = () => {
             console.log("Success??", d);
         }
     }, []);
-    // useEffect(gen, []);
+    useEffect(gen, []);
     useEffect(() => {
         const id = setInterval(() => {
             const d = drawing.current;
