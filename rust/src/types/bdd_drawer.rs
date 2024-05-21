@@ -39,6 +39,8 @@ use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 use super::util::drawing::drawer::Drawer;
 use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
+use super::util::drawing::layouts::sugiyama_layout::SugiyamaLayout;
+use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition_layout::TransitionLayout;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
@@ -46,6 +48,7 @@ use super::util::edge_type::EdgeType;
 use super::util::graph_structure::GraphStructure;
 use super::util::graph_structure::OxiddGraphStructure;
 use super::util::group_manager::GroupManager;
+use super::util::grouped_graph_structure::GroupedGraphStructure;
 
 pub struct BDDDiagram<MR: ManagerRef, F: Function<ManagerRef = MR> + 'static>
 where
@@ -103,23 +106,34 @@ impl<T: Tag + 'static> BDDDiagramDrawer<T> {
             group_manager: group_manager.clone(),
             drawer: Drawer::new(
                 renderer,
-                Box::new(TransitionLayout::new(Box::new(RandomTestLayout))),
+                // Box::new(TransitionLayout::new(Box::new(RandomTestLayout))),
+                Box::new(TransitionLayout::new(Box::new(SugiyamaLayout))),
+                // Box::new(TransitionLayout::new(Box::new(ToggleLayout::new(vec![
+                //     Box::new(RandomTestLayout),
+                //     Box::new(SugiyamaLayout),
+                // ])))),
                 group_manager,
             ),
         };
-        out.reveal_all();
+        out.reveal_all(30000);
         out
     }
 
-    pub fn reveal_all(&mut self) {
+    pub fn reveal_all(&mut self, limit: u32) {
         let nodes = {
             let explored_group = self.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
             let groups = (*self.group_manager).borrow_mut();
-            groups.get_node_group(explored_group).nodes.clone()
+            groups.get_nodes_of_group(explored_group)
         };
+        let mut count = 0;
         for node_id in nodes {
             // console::log!("{node_id}");
             self.create_group(vec![TargetID(TargetIDType::NodeID, node_id)]);
+
+            count = count + 1;
+            if limit > 0 && count >= limit {
+                break;
+            }
         }
     }
 }
@@ -170,8 +184,9 @@ impl<T: Tag> DiagramDrawer for BDDDiagramDrawer<T> {
         width: i32,
         height: i32,
     ) -> Vec<crate::wasm_interface::NodeGroupID> {
-        (*self.group_manager)
-            .borrow_mut()
-            .get_nodes(x, y, width, height)
+        todo!()
+        // (*self.group_manager)
+        //     .borrow_mut()
+        //     .get_nodes(x, y, width, height)
     }
 }

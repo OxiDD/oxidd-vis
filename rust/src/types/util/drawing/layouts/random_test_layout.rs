@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use js_sys::Math::random;
 use oxidd::{Edge, Function, InnerNode, Manager};
 use oxidd_core::{DiagramRules, Tag};
@@ -12,6 +13,7 @@ use crate::types::util::{
         layout_rules::LayoutRules,
     },
     group_manager::GroupManager,
+    grouped_graph_structure::GroupedGraphStructure,
 };
 
 pub struct RandomTestLayout;
@@ -19,23 +21,23 @@ pub struct RandomTestLayout;
 impl<T: Tag> LayoutRules<T> for RandomTestLayout {
     fn layout(
         &mut self,
-        groups: &GroupManager<T>,
+        graph: &GroupedGraphStructure<T>,
         old: &DiagramLayout<T>,
         time: u32,
     ) -> DiagramLayout<T> {
-        let groups = groups.get_groups();
+        let groups = graph.get_all_groups();
         DiagramLayout {
             groups: groups
                 .iter()
-                .map(|(&id, group)| {
-                    (id, {
+                .map(|&group_id| {
+                    (group_id, {
                         let x: f32 = (random() * 20. - 10.) as f32;
                         let y: f32 = (random() * 20. - 10.) as f32;
                         let width: f32 = (random() * 1. + 0.5) as f32;
                         let height: f32 = (random() * 1. + 0.5) as f32;
 
                         NodeGroupLayout {
-                            label: id.to_string(),
+                            label: group_id.to_string(),
                             // center_position: Transition::plain(Point { x, y }),
                             center_position: Transition {
                                 old: Point { x: 0.0, y: 0.0 },
@@ -57,15 +59,15 @@ impl<T: Tag> LayoutRules<T> for RandomTestLayout {
                                 duration: 1000,
                             },
                             exists: Transition::plain(1.),
-                            edges: group
-                                .out_edges
-                                .iter()
-                                .map(|(&to, edges)| {
+                            edges: graph
+                                .get_children(group_id)
+                                .group_by(|(_, to, _)| *to)
+                                .into_iter()
+                                .map(|(to, edges)| {
                                     (
                                         to,
                                         edges
-                                            .iter()
-                                            .map(|(&edge_type, _)| {
+                                            .map(|(edge_type, _, _)| {
                                                 (
                                                     edge_type,
                                                     EdgeLayout {

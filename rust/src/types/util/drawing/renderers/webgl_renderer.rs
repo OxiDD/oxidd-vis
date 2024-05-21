@@ -97,7 +97,7 @@ impl<T: Tag> Renderer<T> for WebglRenderer {
         );
     }
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) {
-        self.webgl_context.clear_color(0.0, 0.0, 0.0, 1.0);
+        self.webgl_context.clear_color(1.0, 1.0, 1.0, 1.0);
         self.webgl_context
             .clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
         self.node_renderer

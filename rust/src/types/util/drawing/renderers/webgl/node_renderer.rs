@@ -29,61 +29,64 @@ impl NodeRenderer {
             in float positionDuration;
 
             in vec2 size;
-                in vec2 sizeOld;
-                in float sizeStartTime;
-                in float sizeDuration;
-                
-                uniform mat4 transform;
-                uniform float time;
+            in vec2 sizeOld;
+            in float sizeStartTime;
+            in float sizeDuration;
+            
+            uniform mat4 transform;
+            uniform float time;
 
-                out vec2 cornerPos;
-                out vec2 curSize;
+            out vec2 cornerPos;
+            out vec2 curSize;
 
-                void main() {
-                    float positionPer = min((time - positionStartTime) / positionDuration, 1.0);
-                    vec2 curPosition = positionPer * position + (1.0 - positionPer) * positionOld;
+            void main() {
+                float positionPer = min((time - positionStartTime) / positionDuration, 1.0);
+                vec2 curPosition = positionPer * position + (1.0 - positionPer) * positionOld;
 
-                    float sizePer = min((time - sizeStartTime) / sizeDuration, 1.0);
-                    curSize = sizePer * size + (1.0 - sizePer) * sizeOld;
+                float sizePer = min((time - sizeStartTime) / sizeDuration, 1.0);
+                curSize = sizePer * size + (1.0 - sizePer) * sizeOld;
 
-                    int corner = gl_VertexID % 6; // two triangles
-                    cornerPos = curSize * (
-                        corner == 0  || corner == 3  ? vec2(0.5, 0.5)
-                        : corner == 1                ? vec2(0.5, -0.5)
-                        : corner == 2 || corner == 4 ? vec2(-0.5, -0.5)
-                        :                              vec2(-0.5, 0.5)
-                    );
-                    gl_Position = transform * vec4(curPosition + cornerPos, 0.0, 1.0);
+                int corner = gl_VertexID % 6; // two triangles
+                cornerPos = curSize * (
+                    corner == 0  || corner == 3  ? vec2(0.5, 0.5)
+                    : corner == 1                ? vec2(0.5, -0.5)
+                    : corner == 2 || corner == 4 ? vec2(-0.5, -0.5)
+                    :                              vec2(-0.5, 0.5)
+                );
+                gl_Position = transform * vec4(curPosition + cornerPos, 0.0, 1.0) * vec4(vec3(2.0), 1.0); // 2 to to make the default width and height of the screen 1, instead of 2
+            }
+            "##,
+        r##"#version 300 es
+            precision highp float;
+            out vec4 outColor;
+            in vec2 cornerPos;
+            in vec2 curSize;
+
+            uniform mat4 transform;
+            float cornerSize = 0.3;
+            float fuzziness = 0.003; // A form of anti-aliasing by making the circle border a slight gradient
+            
+            void main() {
+                float alpha = 1.0;
+                float cornerSize2 = cornerSize * cornerSize;
+                float scaledFuzziness = fuzziness / transform[0][0];
+
+                float xBoundary = curSize.x / 2.0 - cornerSize;
+                float yBoundary = curSize.y / 2.0 - cornerSize;
+                float absX = abs(cornerPos.x);
+                float absY = abs(cornerPos.y);
+                if (absX > xBoundary && absY > yBoundary) {
+                    float dx = xBoundary - absX;
+                    float dy = yBoundary - absY;
+                    float distance2 = dx*dx + dy*dy;
+                    if(distance2 >= cornerSize2)
+                    //     alpha = 1.0 - max(0.0, (sqrt(distance2) - cornerSize) / scaledFuzziness);
+                        alpha = 0.0;
                 }
-                "##,
-            r##"#version 300 es
-                precision highp float;
-                out vec4 outColor;
-                in vec2 cornerPos;
-                in vec2 curSize;
 
-                float cornerSize = 0.3;
-                float fuzziness = 0.03; // A form of anti-aliasing by making the circle border a slight gradient
-                
-                void main() {
-                    float alpha = 1.0;
-                    float cornerSize2 = cornerSize * cornerSize;
-
-                    float xBoundary = curSize.x / 2.0 - cornerSize;
-                    float yBoundary = curSize.y / 2.0 - cornerSize;
-                    float absX = abs(cornerPos.x);
-                    float absY = abs(cornerPos.y);
-                    if (absX > xBoundary && absY > yBoundary) {
-                        float dx = xBoundary - absX;
-                        float dy = yBoundary - absY;
-                        float distance2 = dx*dx + dy*dy;
-                        if(distance2 >= cornerSize2)
-                            alpha = 1.0 - max(0.0, (sqrt(distance2) - cornerSize) / fuzziness);
-                    }
-
-                    outColor = vec4(1, 1, 1, alpha);
-                }
-                "##,
+                outColor = vec4(0, 0, 0, alpha);
+            }
+            "##,
         )
         .unwrap();
         NodeRenderer { vertex_renderer }

@@ -1,12 +1,15 @@
 use std::{
+    cmp::Reverse,
     collections::{HashMap, HashSet, LinkedList},
     hash::Hash,
     iter::FromIterator,
     rc::Rc,
+    vec::IntoIter,
 };
 
-use oxidd::{Edge, Function, InnerNode, Manager};
+use oxidd::{Edge, Function, InnerNode, LevelNo, Manager};
 use oxidd_core::{DiagramRules, Node, Tag};
+use priority_queue::PriorityQueue;
 
 use crate::{
     types::util::edge_type::EdgeType,
@@ -14,25 +17,29 @@ use crate::{
     wasm_interface::{NodeGroupID, NodeID, TargetID, TargetIDType},
 };
 
-use super::graph_structure::GraphStructure;
+use super::{graph_structure::GraphStructure, grouped_graph_structure::GroupedGraphStructure};
 
 pub struct GroupManager<T: Tag> {
-    // root: Rc<F>,
-    // node_by_id: HashMap<NodeID, F>,
+    /// root: Rc<F>,
+    /// node_by_id: HashMap<NodeID, F>,
     graph: Box<dyn GraphStructure<T>>,
-    // Nodes are implicitly in group 0 by default, I.e either:
-    // - group_by_id[group_id_by_node[node]].nodes.contains(node)
-    // - or !group_id_by_node.contains(node) && !exists g. group_by_id[g].nodes.contains(node)
+    /// Nodes are implicitly in group 0 by default, I.e either:
+    /// - group_by_id[group_id_by_node[node]].nodes.contains(node)
+    /// - or !group_id_by_node.contains(node) && !exists g. group_by_id[g].nodes.contains(node)
     group_id_by_node: HashMap<NodeID, NodeGroupID>,
     group_by_id: HashMap<NodeGroupID, NodeGroup<T>>,
     free_ids: FreeIdManager<usize>,
+    /// The highest level found so far
+    max_level: LevelNo,
 }
 
 type EdgeSet<T: Tag> = HashMap<NodeGroupID, HashMap<EdgeType<T>, i32>>;
 pub struct NodeGroup<T: Tag> {
-    pub nodes: HashSet<NodeID>,
-    pub out_edges: EdgeSet<T>,
-    pub in_edges: EdgeSet<T>,
+    nodes: HashSet<NodeID>,
+    out_edges: EdgeSet<T>,
+    in_edges: EdgeSet<T>,
+    layer_min: PriorityQueue<NodeID, Reverse<LevelNo>>,
+    layer_max: PriorityQueue<NodeID, LevelNo>,
 }
 
 // Helper methods
@@ -41,11 +48,11 @@ impl<T: Tag> GroupManager<T> {
         self.group_by_id.get_mut(&group_id).unwrap()
     }
 
-    pub fn get_node_group(&self, group_id: NodeGroupID) -> &NodeGroup<T> {
+    fn get_node_group(&self, group_id: NodeGroupID) -> &NodeGroup<T> {
         self.group_by_id.get(&group_id).unwrap()
     }
 
-    pub fn get_node_group_id(&self, node: NodeID) -> NodeGroupID {
+    fn get_node_group_id(&self, node: NodeID) -> NodeGroupID {
         if let Some(group_id) = self.group_id_by_node.get(&node) {
             *group_id
         } else {
@@ -130,9 +137,12 @@ impl<T: Tag> GroupManager<T> {
                     nodes: HashSet::from([root_id]),
                     out_edges: HashMap::new(),
                     in_edges: HashMap::new(),
+                    layer_min: PriorityQueue::new(),
+                    layer_max: PriorityQueue::new(),
                 },
             )]),
             free_ids: FreeIdManager::new(1),
+            max_level: 0,
         }
     }
 
@@ -154,12 +164,22 @@ impl<T: Tag> GroupManager<T> {
             let from_id = item.1;
             if from_id_type == TargetIDType::NodeID {
                 let cur_group_id = self.get_node_group_id(from_id);
+                let from_level = self.graph.get_level(from_id);
+
+                // Remove from old
                 let cur_group = self.get_node_group_mut(cur_group_id);
                 let contained = cur_group.nodes.remove(&from_id);
+                cur_group.layer_min.remove(&from_id);
+                cur_group.layer_max.remove(&from_id);
 
+                // Add to new
                 self.group_id_by_node.insert(from_id, to);
-                self.get_node_group_mut(to).nodes.insert(from_id);
+                let new_group = self.get_node_group_mut(to);
+                new_group.nodes.insert(from_id);
+                new_group.layer_min.push(from_id, Reverse(from_level));
+                new_group.layer_max.push(from_id, from_level);
 
+                // Update edges
                 for (edge_type, child_id) in self.graph.get_children(from_id) {
                     let child_group_id = self.get_node_group_id(child_id);
                     if contained && cur_group_id != child_group_id {
@@ -187,6 +207,7 @@ impl<T: Tag> GroupManager<T> {
                     }
                 }
 
+                // Check if old group became empty
                 let cur_group = self.get_node_group_mut(cur_group_id);
                 let from_empty = cur_group.nodes.is_empty();
                 if from_empty {
@@ -220,10 +241,14 @@ impl<T: Tag> GroupManager<T> {
                     to,
                 );
             } else if let Some(_) = self.group_by_id.get(&from_id) {
-                let from_group = self.get_node_group_mut(from_id);
+                let from_group = &self.get_node_group(from_id);
                 let out_edges = from_group.out_edges.clone();
                 let in_edges = from_group.in_edges.clone();
                 let from_nodes = from_group.nodes.clone();
+                let layer_min: Vec<(NodeID, Reverse<LevelNo>)> =
+                    from_group.layer_min.iter().map(|(&n, &i)| (n, i)).collect();
+                let layer_max: Vec<(NodeID, LevelNo)> =
+                    from_group.layer_max.iter().map(|(&n, &i)| (n, i)).collect();
 
                 for out_edge_target in out_edges.keys() {
                     let out_types = &out_edges[out_edge_target];
@@ -249,6 +274,8 @@ impl<T: Tag> GroupManager<T> {
                 }
                 let to_group = self.get_node_group_mut(to);
                 to_group.nodes.extend(&from_nodes);
+                to_group.layer_min.extend(layer_min);
+                to_group.layer_max.extend(layer_max);
 
                 self.remove_group(from_id);
             } else {
@@ -270,19 +297,91 @@ impl<T: Tag> GroupManager<T> {
                 nodes: HashSet::new(),
                 in_edges: HashMap::new(),
                 out_edges: HashMap::new(),
+                layer_min: PriorityQueue::new(),
+                layer_max: PriorityQueue::new(),
             },
         );
         self.set_group(from, new_id);
         new_id
     }
+}
 
-    pub fn get_nodes(
-        &self,
-        x: i32,
-        y: i32,
-        width: i32,
-        height: i32,
-    ) -> Vec<crate::wasm_interface::NodeGroupID> {
-        todo!()
+impl<T: Tag> GroupedGraphStructure<T> for GroupManager<T> {
+    fn get_root(&self) -> NodeGroupID {
+        let root_node = &self.graph.get_root();
+        self.get_node_group_id(*root_node)
+    }
+
+    fn get_all_groups(&self) -> Vec<NodeGroupID> {
+        self.group_by_id.keys().into_iter().map(|&id| id).collect()
+    }
+
+    fn get_hidden(&self) -> Option<NodeGroupID> {
+        if self.group_by_id.contains_key(&0) {
+            Some(0)
+        } else {
+            None
+        }
+    }
+
+    fn get_parents(&self, group: NodeGroupID) -> IntoIter<(EdgeType<T>, NodeGroupID, i32)> {
+        if let Some(group) = self.group_by_id.get(&group) {
+            return group
+                .in_edges
+                .iter()
+                .flat_map(|(to, edges)| {
+                    edges
+                        .iter()
+                        .map(move |(edge_type, count)| (*edge_type, *to, *count))
+                })
+                .collect::<Vec<(EdgeType<T>, NodeGroupID, i32)>>()
+                .into_iter();
+        }
+        Vec::new().into_iter()
+    }
+
+    fn get_children(&self, group: NodeGroupID) -> IntoIter<(EdgeType<T>, NodeGroupID, i32)> {
+        if let Some(group) = self.group_by_id.get(&group) {
+            return group
+                .out_edges
+                .iter()
+                .flat_map(|(to, edges)| {
+                    edges
+                        .iter()
+                        .map(move |(edge_type, count)| (*edge_type, *to, *count))
+                })
+                .collect::<Vec<(EdgeType<T>, NodeGroupID, i32)>>()
+                .into_iter();
+        }
+        Vec::new().into_iter()
+    }
+
+    fn get_level_range(&self, group: NodeGroupID) -> (oxidd::LevelNo, oxidd::LevelNo) {
+        if let Some(group) = self.group_by_id.get(&group) {
+            return (
+                group
+                    .layer_min
+                    .peek()
+                    .map_or(0, |(node, Reverse(layer))| *layer),
+                group.layer_max.peek().map_or(0, |(node, layer)| *layer),
+            );
+        }
+        (0, 0)
+    }
+
+    fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID> {
+        if let Some(group) = self.group_by_id.get(&group) {
+            return group
+                .nodes
+                .iter()
+                .map(|&id| id)
+                .collect::<Vec<NodeID>>()
+                .into_iter();
+        }
+        Vec::new().into_iter()
+    }
+
+    fn get_group(&self, node: NodeID) -> NodeGroupID {
+        self.get_node_group_id(node)
     }
 }

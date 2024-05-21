@@ -13,6 +13,7 @@ use crate::{
         },
         edge_type::EdgeType,
         group_manager::GroupManager,
+        grouped_graph_structure::GroupedGraphStructure,
     },
     util::logging::console,
     wasm_interface::NodeGroupID,
@@ -39,13 +40,13 @@ impl<T: Tag> TransitionLayout<T> {
 impl<T: Tag> LayoutRules<T> for TransitionLayout<T> {
     fn layout(
         &mut self,
-        groups: &GroupManager<T>,
+        graph: &GroupedGraphStructure<T>,
         old: &DiagramLayout<T>,
         time: u32,
     ) -> DiagramLayout<T> {
         let duration = self.duration;
         let old_time = time;
-        let new = self.layout.layout(groups, old, time);
+        let new = self.layout.layout(graph, old, time);
 
         fn get_per<T>(time: u32, val: Transition<T>) -> f32 {
             f32::max(

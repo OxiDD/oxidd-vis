@@ -119,7 +119,12 @@ where
         return Vec::new();
     }
 
-    fn get_level(&mut self, node: NodeID) -> LevelNo {
-        todo!()
+    fn get_level(&mut self, node_id: NodeID) -> LevelNo {
+        if let Some(node) = self.get_node_by_id(node_id) {
+            return node.with_manager_shared(|manager, edge| {
+                manager.get_node(edge).unwrap_inner().level()
+            });
+        }
+        0
     }
 }

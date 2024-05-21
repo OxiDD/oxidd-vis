@@ -4,6 +4,12 @@ version = "0.1.0"
 authors = []
 edition = "2018"
 
+[[bin]]
+name = "convert_data"
+test = false
+bench = false
+path = "src/util/convert_file.rs"
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -13,6 +19,9 @@ default = ["console_error_panic_hook"]
 [dependencies]
 wasm-bindgen = "0.2.92"
 js-sys = "0.3.69"
+priority-queue = "2.0.2"
+itertools = "0.12.1"
+rust-sugiyama = "0.2.0"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

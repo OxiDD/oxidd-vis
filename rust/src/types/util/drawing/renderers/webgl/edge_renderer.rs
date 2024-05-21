@@ -59,7 +59,7 @@ impl EdgeRenderer {
                         : corner == 2 || corner == 4 ? curEnd + (dir - dirOrth) * width
                         :                              curEnd + (dir + dirOrth) * width
                     );
-                    gl_Position = transform * vec4(outPos, 0.0, 1.0);
+                    gl_Position = transform * vec4(outPos, 0.0, 1.0) * vec4(vec3(2.0), 1.0); // 2 to to make the default width and height of the screen 1, instead of 2
                 }
                 "##,
             r##"#version 300 es
@@ -70,11 +70,16 @@ impl EdgeRenderer {
                 in vec2 curEnd;
                 in vec2 outPos;
 
+                uniform mat4 transform;
                 uniform float width;
-                float fuzziness = 0.02; // A form of anti-aliasing by making the circle border a slight gradient
+
+                float fuzziness = 0.003; // A form of anti-aliasing by making the circle border a slight gradient
                 
                 void main() {
                     float alpha = 1.0;
+                    float scaledFuzziness = fuzziness / transform[0][0];
+                    float cor = scaledFuzziness / 2.0;
+                    float widthSquared = (width - cor)*(width - cor);
 
                     vec2 line = curEnd - curStart;
                     vec2 point = outPos - curStart;
@@ -87,14 +92,15 @@ impl EdgeRenderer {
                         else {
                             vec2 delta1 = curStart - outPos;
                             vec2 delta2 = curEnd - outPos;
-                            float dist = sqrt(min(dot(delta1, delta1), dot(delta2, delta2)));
+                            float distSquared = min(dot(delta1, delta1), dot(delta2, delta2));
     
-                            if(dist >= width - fuzziness) 
-                                alpha = 1.0 - max(0.0, (dist - width) / fuzziness);
+                            if(distSquared >= widthSquared) 
+                                // alpha = 1.0 - max(0.0, (sqrt(distSquared) - (width - cor)) / scaledFuzziness);
+                                alpha = 0.0;
                         }
                     }
 
-                    outColor = vec4(1, 1, 1, alpha);
+                    outColor = vec4(0, 0, 0, alpha);
                 }
                 "##,
         )

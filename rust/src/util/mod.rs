@@ -1,3 +1,4 @@
+pub mod convert_file;
 pub mod dummy_bdd;
 pub mod free_id_manager;
 pub mod logging;
