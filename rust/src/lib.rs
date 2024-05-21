@@ -55,8 +55,24 @@ pub fn create_diagram() -> Option<DiagramBox> // And some DD type param
         >::new(
             manager_ref,
             |manager_ref| {
-                let res = DummyFunction::from(manager_ref, "a>b, b>c, a>c, a>d, b>d");
+                // let res = DummyFunction::from(manager_ref, "a>b, b>c, a>c, a>d, b>d");
+                // let res = DummyFunction::from(manager_ref, "a>b, b>c, a>c");
                 // let res = DummyFunction::from(manager_ref, "a>b");
+                // let res =
+                //     DummyFunction::from_dddmp(manager_ref, include_str!(r"..\..\data\b01.dddmp"));
+                let res =
+                    DummyFunction::from_dddmp(manager_ref, include_str!(r"..\..\data\b02.dddmp"));
+                // let res = DummyFunction::from_dddmp(
+                //     manager_ref,
+                //     include_str!(r"..\..\data\toybox.dddmp"),
+                // );
+                // let res =
+                //     DummyFunction::from_dddmp(manager_ref, include_str!(r"..\..\data\b03.dddmp"));
+
+                // let res = DummyFunction::from_dddmp(
+                //     manager_ref,
+                //     include_str!(r"..\..\data\embtoolkit.dddmp"),
+                // );
                 res
             },
         ))))

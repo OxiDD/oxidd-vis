@@ -65,25 +65,90 @@ impl DummyFunction {
         manager_ref.with_manager_exclusive(|manager| {
             let mut root = Option::None;
             let transition_texts = data.split(",");
-            let transitions = transition_texts.map(|item| item.split(">"));
-            for trans in transitions {
+            let edges = transition_texts.flat_map(|item| {
+                let trans = item.split(">");
+                let mut out = Vec::new();
                 let mut prev_node = Option::None;
                 for node in trans {
-                    let node = node.trim().to_string();
-                    if root == None {
-                        root = Some(node.clone());
-                    }
+                    let node: NodeID = node.trim().parse().unwrap();
 
                     if let Some(prev) = prev_node {
-                        manager.add_edge(prev, node.clone(), manager_ref.clone());
+                        out.push((prev, node.clone()));
                     }
                     prev_node = Some(node);
                 }
-                if let Some(prev) = prev_node {
-                    manager.add_node(prev);
+                out
+            });
+            for (from, to) in edges.clone() {
+                if root == None {
+                    root = Some(from.clone());
+                }
+                manager.add_node(from);
+                manager.add_node(to);
+            }
+            for (from, to) in edges {
+                manager.add_edge(from, to, manager_ref.clone());
+            }
+
+            DummyFunction(DummyEdge::new(Arc::new(root.unwrap()), manager_ref.clone()))
+        })
+    }
+    pub fn from_dddmp(manager_ref: &mut DummyManagerRef, data: &str) -> DummyFunction {
+        manager_ref.with_manager_exclusive(|manager| {
+            console::log!("Started loading graph");
+            let node_text = &data[data.find(".nodes").unwrap()..data.find(".end").unwrap()];
+            let nodes_data = node_text.split("\n").filter_map(|node| {
+                let parts = node.trim().split(" ").collect::<Vec<&str>>();
+                if parts.len() == 4 {
+                    let id: NodeID = parts[0].parse().unwrap();
+                    let level = parts[1].parse();
+                    let true_b: NodeID = parts[2].parse().unwrap();
+                    let false_b: NodeID = parts[3].parse().unwrap();
+                    Some((id, level, true_b, false_b))
+                } else {
+                    None
+                }
+            });
+            let mut root = Option::None;
+            let mut max_level = 0;
+            for (_, level, _, _) in nodes_data.clone() {
+                let Ok(level) = level else { continue };
+
+                if level > max_level {
+                    max_level = level;
                 }
             }
 
+            for (id, level, _, _) in nodes_data.clone() {
+                manager.add_node_level(
+                    id.clone(),
+                    if let Ok(level) = level {
+                        level
+                    } else {
+                        max_level // Terminal nodes don't define a level, we have to assign it
+                    },
+                );
+                if level == Ok(0) {
+                    root = Some(id);
+                }
+            }
+
+            for (id, level, true_b, false_b) in nodes_data {
+                let Ok(_) = level else { continue }; // Filter out terminals
+
+                // let is_terminal = |_: NodeID| false;
+                // let is_terminal = |to: NodeID| to == 1 || to == 2;
+                let is_terminal = |to: NodeID| to == 1; // Only filter connections to false
+
+                if !is_terminal(true_b) {
+                    manager.add_edge(id.clone(), true_b, manager_ref.clone());
+                }
+                if !is_terminal(false_b) {
+                    manager.add_edge(id.clone(), false_b, manager_ref.clone());
+                }
+            }
+
+            console::log!("Loaded graph!");
             DummyFunction(DummyEdge::new(Arc::new(root.unwrap()), manager_ref.clone()))
         })
     }
@@ -145,7 +210,7 @@ unsafe impl Function for DummyFunction {
 /// The implementation is very limited but perfectly fine to test e.g. an apply
 /// cache.
 #[derive(Clone)]
-pub struct DummyEdge(Arc<String>, DummyManagerRef);
+pub struct DummyEdge(Arc<NodeID>, DummyManagerRef);
 
 impl PartialEq for DummyEdge {
     fn eq(&self, other: &Self) -> bool {
@@ -180,7 +245,7 @@ impl Drop for DummyEdge {
 
 impl DummyEdge {
     /// Create a new `DummyEdge`
-    pub fn new(to: Arc<String>, mr: DummyManagerRef) -> Self {
+    pub fn new(to: Arc<NodeID>, mr: DummyManagerRef) -> Self {
         DummyEdge(to, mr.clone())
     }
 }
@@ -202,9 +267,7 @@ impl Edge for DummyEdge {
     fn tag(&self) -> Self::Tag {}
 
     fn node_id(&self) -> NodeID {
-        let mut hasher = DefaultHasher::new();
-        self.0.hash(&mut hasher);
-        hasher.finish() as NodeID
+        *self.0
     }
 }
 
@@ -212,7 +275,7 @@ impl Edge for DummyEdge {
 /// clone and drop edges.
 // #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct DummyManager(BTreeMap<String, DummyNode>);
+pub struct DummyManager(BTreeMap<NodeID, DummyNode>);
 impl DummyManager {
     pub fn new() -> DummyManager {
         DummyManager(BTreeMap::new())
@@ -242,14 +305,17 @@ impl DiagramRules<DummyEdge, DummyNode, ()> for DummyRules {
 }
 
 impl DummyManager {
-    fn add_node(&mut self, from: String) -> &mut DummyNode {
-        let count = self.0.keys().count();
+    fn add_node_level(&mut self, from: NodeID, level: LevelNo) -> &mut DummyNode {
         self.0
             .entry(from)
-            .or_insert_with(|| DummyNode::new(count.try_into().unwrap(), Vec::new()))
+            .or_insert_with(|| DummyNode::new(level, Vec::new()))
     }
-    fn add_edge(&mut self, from: String, to: String, mr: DummyManagerRef) {
-        let from_children = &mut self.add_node(from).1;
+    fn add_node(&mut self, from: NodeID) -> &mut DummyNode {
+        let count = self.0.keys().count();
+        self.add_node_level(from, count.try_into().unwrap())
+    }
+    fn add_edge(&mut self, from: NodeID, to: NodeID, mr: DummyManagerRef) {
+        let from_children = &mut self.0.get_mut(&from).unwrap().1;
         let edge = DummyEdge::new(Arc::new(to), mr);
         from_children.push(edge);
     }
