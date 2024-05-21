@@ -1,11 +1,13 @@
 import ReactDOM from "react-dom";
 import React, {FC, useCallback, useEffect, useRef} from "react";
 import {DiagramDrawerBox, create_diagram} from "oxidd-viz-rust";
+import {useTransformCallbacks} from "./useTransformCallbacks";
 
 const Test: FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const drawing = useRef<DiagramDrawerBox | null>(null);
     const start = useRef(Date.now());
+    const computeTimeDelta = useRef(0);
     const gen = useCallback(() => {
         Error.stackTraceLimit = 30;
         const canvas = canvasRef.current;
@@ -17,29 +19,45 @@ const Test: FC = () => {
             }
 
             const d = drawing.current;
-            d?.layout(Date.now() - start.current);
-            d?.set_transform(0, 0, 0.1);
-
-            console.log("Success??", d);
+            const layoutStartTime = Date.now();
+            d?.layout(layoutStartTime - start.current);
+            computeTimeDelta.current = Date.now() - layoutStartTime;
+            console.log("layed out");
         }
     }, []);
     useEffect(gen, []);
     useEffect(() => {
-        const id = setInterval(() => {
+        let running = true;
+        function render() {
+            if (!running) return;
             const d = drawing.current;
             d?.render(
-                Date.now() - start.current,
+                Date.now() - start.current - computeTimeDelta.current,
                 new Uint32Array([]),
                 new Uint32Array([])
             );
-        }, 0);
-        return () => clearInterval(id);
+            requestAnimationFrame(render);
+        }
+        render();
+        return () => void (running = false);
     }, []);
 
+    const {handlers, transform} = useTransformCallbacks(() => ({
+        x: 0,
+        y: 0,
+        scale: 0.05,
+    }));
+    useEffect(() => {
+        const d = drawing.current;
+        if (d) {
+            d.set_transform(transform.x, transform.y, transform.scale);
+        }
+    }, [transform]);
+
     return (
-        <div onClick={gen}>
-            <canvas height="600" width="600" ref={canvasRef}></canvas>
-            Hello world
+        <div>
+            <canvas height="600" width="600" ref={canvasRef} {...handlers}></canvas>
+            <button onClick={gen}>regen</button>
         </div>
     );
 };
