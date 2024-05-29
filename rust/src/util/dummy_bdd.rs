@@ -125,7 +125,7 @@ impl DummyFunction {
                     if let Ok(level) = level {
                         level
                     } else {
-                        max_level // Terminal nodes don't define a level, we have to assign it
+                        max_level + 1 // Terminal nodes don't define a level, we have to assign it
                     },
                 );
                 if level == Ok(0) {
@@ -311,8 +311,7 @@ impl DummyManager {
             .or_insert_with(|| DummyNode::new(level, Vec::new()))
     }
     fn add_node(&mut self, from: NodeID) -> &mut DummyNode {
-        let count = self.0.keys().count();
-        self.add_node_level(from, count.try_into().unwrap())
+        self.add_node_level(from, from.try_into().unwrap())
     }
     fn add_edge(&mut self, from: NodeID, to: NodeID, mr: DummyManagerRef) {
         let from_children = &mut self.0.get_mut(&from).unwrap().1;

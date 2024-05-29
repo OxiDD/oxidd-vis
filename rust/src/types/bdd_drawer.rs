@@ -38,8 +38,12 @@ use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 use super::util::drawing::drawer::Drawer;
+use super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaOrdering;
+use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
+use super::util::drawing::layouts::layer_positionings::dummy_layer_positioning::DummyLayerPositioning;
+use super::util::drawing::layouts::layered_layout::LayeredLayout;
 use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
-use super::util::drawing::layouts::sugiyama_layout::SugiyamaLayout;
+use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition_layout::TransitionLayout;
 use super::util::drawing::renderer::Renderer;
@@ -107,7 +111,20 @@ impl<T: Tag + 'static> BDDDiagramDrawer<T> {
             drawer: Drawer::new(
                 renderer,
                 // Box::new(TransitionLayout::new(Box::new(RandomTestLayout))),
-                Box::new(TransitionLayout::new(Box::new(SugiyamaLayout))),
+                // Box::new(TransitionLayout::new(Box::new(SugiyamaLibLayout::new()))),
+                Box::new(TransitionLayout::new(Box::new(LayeredLayout::new(
+                    Box::new(SugiyamaOrdering::new(1, 1)),
+                    Box::new(BrandesKopfPositioning),
+                    // Box::new(DummyLayerPositioning),
+                )))),
+                // Box::new(TransitionLayout::new(Box::new(ToggleLayout::new(vec![
+                //     Box::new(RandomTestLayout),
+                //     Box::new(LayeredLayout::new(
+                //         Box::new(SugiyamaOrdering::new(1, 1)),
+                //         Box::new(BrandesKopfPositioning),
+                //         // Box::new(DummyLayerPositioning),
+                //     )),
+                // ])))),
                 // Box::new(TransitionLayout::new(Box::new(ToggleLayout::new(vec![
                 //     Box::new(RandomTestLayout),
                 //     Box::new(SugiyamaLayout),

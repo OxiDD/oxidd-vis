@@ -3,13 +3,15 @@ import React, {FC, useCallback, useEffect, useRef} from "react";
 import {DiagramDrawerBox, create_diagram} from "oxidd-viz-rust";
 import {useTransformCallbacks} from "./useTransformCallbacks";
 
+// Error.stackTraceLimit = 30;
+Error.stackTraceLimit = 1;
+
 const Test: FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const drawing = useRef<DiagramDrawerBox | null>(null);
     const start = useRef(Date.now());
     const computeTimeDelta = useRef(0);
     const gen = useCallback(() => {
-        Error.stackTraceLimit = 30;
         const canvas = canvasRef.current;
         if (canvas) {
             if (!drawing.current) {
@@ -45,7 +47,7 @@ const Test: FC = () => {
     const {handlers, transform} = useTransformCallbacks(() => ({
         x: 0,
         y: 0,
-        scale: 0.05,
+        scale: 0.02,
     }));
     useEffect(() => {
         const d = drawing.current;
@@ -56,7 +58,7 @@ const Test: FC = () => {
 
     return (
         <div>
-            <canvas height="600" width="600" ref={canvasRef} {...handlers}></canvas>
+            <canvas height="900" width="1400" ref={canvasRef} {...handlers}></canvas>
             <button onClick={gen}>regen</button>
         </div>
     );
