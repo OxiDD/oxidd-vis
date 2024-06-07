@@ -38,9 +38,17 @@ impl<T: Tag> NodePositioning<T> for BrandesKopfPositioning {
     ) -> (HashMap<NodeGroupID, Point>, HashMap<LevelNo, f32>) {
         let spacing = 2.0;
 
+        // Remove edges between dummy group nodes and nodes from other groups, such that node positioning will align these items
+        let edges = remove_internal_group_to_other_edges(
+            edges,
+            &owners,
+            dummy_group_start_id,
+            dummy_edge_start_id,
+        );
+
         let x_coords = balanced_layout(
             layers,
-            edges,
+            &edges,
             dummy_group_start_id,
             dummy_edge_start_id,
             owners,
@@ -71,6 +79,44 @@ impl<T: Tag> NodePositioning<T> for BrandesKopfPositioning {
                 .collect(),
         )
     }
+}
+
+fn remove_internal_group_to_other_edges(
+    edges: &EdgeMap,
+    dummy_owners: &HashMap<NodeGroupID, NodeGroupID>,
+    dummy_group_start_id: NodeGroupID,
+    dummy_edge_start_id: NodeGroupID,
+) -> EdgeMap {
+    edges
+        .iter()
+        .map(|(&node, edges)| {
+            // Is any node representing a group, except the last node representing said group
+            let is_non_end_group_node = dummy_owners.get(&node).is_some()
+                && edges
+                    .iter()
+                    .any(|to| dummy_owners.get(&node) == dummy_owners.get(to));
+
+            (
+                node,
+                if is_non_end_group_node {
+                    edges
+                        .iter()
+                        .filter(|&to| dummy_owners.get(&node) == dummy_owners.get(to))
+                        // .filter(|&to| false)
+                        .cloned()
+                        .collect()
+                } else {
+                    edges
+                        .iter()
+                        .filter(|&&to| {
+                            !is_group_dummy(to, dummy_group_start_id, dummy_edge_start_id)
+                        })
+                        .cloned()
+                        .collect()
+                },
+            )
+        })
+        .collect()
 }
 
 fn balanced_layout(
