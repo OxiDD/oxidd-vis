@@ -23,15 +23,15 @@ use super::{
 };
 
 pub struct SugiyamaLibLayout<T: Tag> {
-    layout: LayeredLayout<T>,
+    layout: LayeredLayout<T, DummyLayerOrdering, AverageGroupAlignment, SugiyamaLibPositioning>,
 }
 impl<T: Tag> SugiyamaLibLayout<T> {
     pub fn new() -> SugiyamaLibLayout<T> {
         SugiyamaLibLayout {
             layout: LayeredLayout::new(
-                Box::new(DummyLayerOrdering),
-                Box::new(AverageGroupAlignment),
-                Box::new(SugiyamaLibPositioning),
+                DummyLayerOrdering,
+                AverageGroupAlignment,
+                SugiyamaLibPositioning,
             ),
         }
     }

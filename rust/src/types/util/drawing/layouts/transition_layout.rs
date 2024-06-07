@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 use oxidd::{Edge, Function, InnerNode, Manager};
 use oxidd_core::{DiagramRules, Tag};
@@ -23,21 +23,23 @@ use crate::{
 /// A layout builder that takes another layout approach, and applies transitioning to it.
 /// This will make layout changes smoothly transition from the previous state to the new state.
 ///
-pub struct TransitionLayout<T: Tag> {
-    layout: Box<dyn LayoutRules<T>>,
+pub struct TransitionLayout<T: Tag, L: LayoutRules<T>> {
+    layout: L,
     duration: u32,
+    tag: PhantomData<T>,
 }
 
-impl<T: Tag> TransitionLayout<T> {
-    pub fn new(layout: Box<dyn LayoutRules<T>>) -> TransitionLayout<T> {
+impl<T: Tag, L: LayoutRules<T>> TransitionLayout<T, L> {
+    pub fn new(layout: L) -> TransitionLayout<T, L> {
         TransitionLayout {
             layout,
             duration: 1000,
+            tag: PhantomData,
         }
     }
 }
 
-impl<T: Tag> LayoutRules<T> for TransitionLayout<T> {
+impl<T: Tag, L: LayoutRules<T>> LayoutRules<T> for TransitionLayout<T, L> {
     fn layout(
         &mut self,
         graph: &GroupedGraphStructure<T>,

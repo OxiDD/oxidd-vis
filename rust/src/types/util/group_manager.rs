@@ -21,10 +21,10 @@ use crate::{
 
 use super::{graph_structure::GraphStructure, grouped_graph_structure::GroupedGraphStructure};
 
-pub struct GroupManager<T: Tag> {
+pub struct GroupManager<T: Tag, G: GraphStructure<T>> {
     /// root: Rc<F>,
     /// node_by_id: HashMap<NodeID, F>,
-    graph: Box<dyn GraphStructure<T>>,
+    graph: G,
     /// Nodes are implicitly in group 0 by default, I.e either:
     /// - group_by_id[group_id_by_node[node]].nodes.contains(node)
     /// - or !group_id_by_node.contains(node) && !exists g. group_by_id[g].nodes.contains(node)
@@ -61,7 +61,7 @@ impl<T: Tag> Display for NodeGroup<T> {
 }
 
 // Helper methods
-impl<T: Tag> GroupManager<T> {
+impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
     fn get_node_group_mut(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<T> {
         self.group_by_id.get_mut(&group_id).unwrap()
     }
@@ -110,10 +110,10 @@ impl<T: Tag> GroupManager<T> {
         count: i32,
     ) {
         let from_group = self.get_node_group_mut(from);
-        GroupManager::<T>::remove_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
+        GroupManager::<T, G>::remove_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
 
         let to_group = self.get_node_group_mut(to);
-        GroupManager::<T>::remove_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
+        GroupManager::<T, G>::remove_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
     }
 
     fn add_edges_to_set(
@@ -135,16 +135,16 @@ impl<T: Tag> GroupManager<T> {
         count: i32,
     ) {
         let from_group = self.get_node_group_mut(from);
-        GroupManager::<T>::add_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
+        GroupManager::<T, G>::add_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
 
         let to_group = self.get_node_group_mut(to);
-        GroupManager::<T>::add_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
+        GroupManager::<T, G>::add_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
     }
 }
 
 // Main methods
-impl<T: Tag> GroupManager<T> {
-    pub fn new(mut graph: Box<dyn GraphStructure<T>>) -> GroupManager<T> {
+impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
+    pub fn new(mut graph: G) -> GroupManager<T, G> {
         let root_id = graph.get_root();
         let root_level = graph.get_level(root_id);
         GroupManager {
@@ -374,7 +374,7 @@ impl<T: Tag> GroupManager<T> {
     }
 }
 
-impl<T: Tag> GroupedGraphStructure<T> for GroupManager<T> {
+impl<T: Tag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, G> {
     fn get_root(&self) -> NodeGroupID {
         let root_node = &self.graph.get_root();
         self.get_node_group_id(*root_node)

@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     iter::FromIterator,
+    marker::PhantomData,
 };
 
 use itertools::Itertools;
@@ -73,22 +74,27 @@ pub trait LayerGroupSorting<T: Tag> {
     ) -> Vec<Order>;
 }
 
-pub struct LayeredLayout<T: Tag> {
-    ordering: Box<dyn LayerOrdering<T>>,
-    group_aligning: Box<dyn LayerGroupSorting<T>>,
-    positioning: Box<dyn NodePositioning<T>>,
+pub struct LayeredLayout<
+    T: Tag,
+    O: LayerOrdering<T>,
+    G: LayerGroupSorting<T>,
+    P: NodePositioning<T>,
+> {
+    ordering: O,
+    group_aligning: G,
+    positioning: P,
+    tag: PhantomData<T>,
 }
 
-impl<T: Tag> LayeredLayout<T> {
-    pub fn new(
-        ordering: Box<dyn LayerOrdering<T>>,
-        group_aligning: Box<dyn LayerGroupSorting<T>>,
-        positioning: Box<dyn NodePositioning<T>>,
-    ) -> LayeredLayout<T> {
+impl<T: Tag, O: LayerOrdering<T>, G: LayerGroupSorting<T>, P: NodePositioning<T>>
+    LayeredLayout<T, O, G, P>
+{
+    pub fn new(ordering: O, group_aligning: G, positioning: P) -> LayeredLayout<T, O, G, P> {
         LayeredLayout {
             ordering,
             group_aligning,
             positioning,
+            tag: PhantomData,
         }
     }
 }
@@ -104,7 +110,9 @@ pub fn is_edge_dummy(node: NodeGroupID, dummy_edge_start_id: NodeGroupID) -> boo
     node >= dummy_edge_start_id
 }
 
-impl<T: Tag> LayoutRules<T> for LayeredLayout<T> {
+impl<T: Tag, O: LayerOrdering<T>, G: LayerGroupSorting<T>, P: NodePositioning<T>> LayoutRules<T>
+    for LayeredLayout<T, O, G, P>
+{
     fn layout(
         &mut self,
         graph: &GroupedGraphStructure<T>,

@@ -22,20 +22,20 @@ use super::{
     renderer::Renderer,
 };
 
-pub struct Drawer<T: Tag> {
-    renderer: Box<dyn Renderer<T>>,
-    layout_rules: Box<dyn LayoutRules<T>>,
+pub struct Drawer<T: Tag, R: Renderer<T>, L: LayoutRules<T>> {
+    renderer: R,
+    layout_rules: L,
     layout: DiagramLayout<T>,
     graph: Rc<RefCell<dyn GroupedGraphStructure<T>>>,
     transform: Transformation,
 }
 
-impl<T: Tag> Drawer<T> {
+impl<T: Tag, R: Renderer<T>, L: LayoutRules<T>> Drawer<T, R, L> {
     pub fn new(
-        renderer: Box<dyn Renderer<T>>,
-        layout_rules: Box<dyn LayoutRules<T>>,
+        renderer: R,
+        layout_rules: L,
         graph: Rc<RefCell<dyn GroupedGraphStructure<T>>>,
-    ) -> Drawer<T> {
+    ) -> Drawer<T, R, L> {
         Drawer {
             renderer,
             layout_rules,

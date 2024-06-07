@@ -39,6 +39,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 use super::util::drawing::drawer::Drawer;
+use super::util::drawing::layout_rules::LayoutRules;
 use super::util::drawing::layouts::layer_group_sorting::average_group_alignment::AverageGroupAlignment;
 use super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaOrdering;
 use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
@@ -90,23 +91,27 @@ where
         Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramDrawer> {
-        let renderer = Box::new(WebglRenderer::from_canvas(canvas).unwrap());
+        let renderer = WebglRenderer::from_canvas(canvas).unwrap();
+        let layout = LayeredLayout::new(
+            SugiyamaOrdering::new(1, 1),
+            AverageGroupAlignment,
+            BrandesKopfPositioning,
+        );
         let graph = OxiddGraphStructure::new(self.root.clone());
-        let diagram = BDDDiagramDrawer::new(Box::new(graph), renderer);
+        let diagram = BDDDiagramDrawer::new(graph, renderer, layout);
         Box::new(diagram)
     }
 }
 
-pub struct BDDDiagramDrawer<T: Tag> {
-    group_manager: Rc<RefCell<GroupManager<T>>>,
-    drawer: Drawer<T>,
+pub struct BDDDiagramDrawer<T: Tag, G: GraphStructure<T>, R: Renderer<T>, L: LayoutRules<T>> {
+    group_manager: Rc<RefCell<GroupManager<T, G>>>,
+    drawer: Drawer<T, R, L>,
 }
 
-impl<T: Tag + 'static> BDDDiagramDrawer<T> {
-    pub fn new(
-        graph: Box<dyn GraphStructure<T>>,
-        renderer: Box<dyn Renderer<T>>,
-    ) -> BDDDiagramDrawer<T> {
+impl<T: Tag + 'static, G: GraphStructure<T> + 'static, R: Renderer<T>, L: LayoutRules<T>>
+    BDDDiagramDrawer<T, G, R, L>
+{
+    pub fn new(graph: G, renderer: R, layout: L) -> BDDDiagramDrawer<T, G, R, L> {
         let root = graph.get_root();
         let group_manager = Rc::new(RefCell::new(GroupManager::new(graph)));
         let mut out = BDDDiagramDrawer {
@@ -120,11 +125,7 @@ impl<T: Tag + 'static> BDDDiagramDrawer<T> {
                 //     Box::new(BrandesKopfPositioning),
                 //     // Box::new(DummyLayerPositioning),
                 // )))),
-                Box::new(LayeredLayout::new(
-                    Box::new(SugiyamaOrdering::new(1, 1)),
-                    Box::new(AverageGroupAlignment),
-                    Box::new(BrandesKopfPositioning),
-                )),
+                layout,
                 // Box::new(TransitionLayout::new(Box::new(ToggleLayout::new(vec![
                 //     Box::new(RandomTestLayout),
                 //     Box::new(LayeredLayout::new(
@@ -165,7 +166,9 @@ impl<T: Tag + 'static> BDDDiagramDrawer<T> {
     }
 }
 
-impl<T: Tag> DiagramDrawer for BDDDiagramDrawer<T> {
+impl<T: Tag, G: GraphStructure<T>, R: Renderer<T>, L: LayoutRules<T>> DiagramDrawer
+    for BDDDiagramDrawer<T, G, R, L>
+{
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         // let children = self.get_children(&self.root);
         // for (_, child) in children {
