@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    ops::{Add, Sub},
     rc::Rc,
 };
 
@@ -7,6 +8,7 @@ use oxidd_core::Tag;
 
 use crate::{
     types::util::edge_type::EdgeType,
+    util::rectangle::Rectangle,
     wasm_interface::{NodeGroupID, NodeID},
 };
 
@@ -14,6 +16,26 @@ use crate::{
 pub struct Point {
     pub x: f32,
     pub y: f32,
+}
+impl Add for Point {
+    type Output = Point;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Point {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+impl Sub for Point {
+    type Output = Point;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Point {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -33,6 +55,18 @@ impl<T: Copy> Transition<T> {
         }
     }
 }
+impl<T: Add<Output = T>> Add for Transition<T> {
+    type Output = Transition<T>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Transition {
+            old_time: u32::min(rhs.old_time, self.old_time),
+            duration: u32::max(rhs.duration, self.duration),
+            old: self.old + rhs.old,
+            new: self.new + rhs.new,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct NodeGroupLayout<T: Tag> {
@@ -42,9 +76,24 @@ pub struct NodeGroupLayout<T: Tag> {
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
     pub edges: HashMap<NodeGroupID, HashMap<EdgeType<T>, EdgeLayout>>,
 }
+impl<T: Tag> NodeGroupLayout<T> {
+    // TODO: possibly consider the selection time? (animations should be quick and not have a huge effect however)
+    pub fn get_rect(&self) -> Rectangle {
+        let width = self.size.new.x;
+        let height = self.size.new.y;
+        Rectangle::new(
+            self.center_position.new.x - width / 2.0,
+            self.center_position.new.y - height / 2.0,
+            width,
+            height,
+        )
+    }
+}
 
 #[derive(Clone)]
 pub struct EdgeLayout {
+    pub start_offset: Transition<Point>,
+    pub end_offset: Transition<Point>,
     pub points: Vec<EdgePoint>,
     pub exists: Transition<f32>, // Transition for newly created edges
 }

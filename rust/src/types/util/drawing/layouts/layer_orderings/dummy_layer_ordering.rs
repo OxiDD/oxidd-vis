@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use oxidd_core::Tag;
 
 use crate::{
@@ -18,7 +20,9 @@ impl<T: Tag> LayerOrdering<T> for DummyLayerOrdering {
         graph: &dyn GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
-        dummy_start_id: NodeGroupID,
+        dummy_group_start_id: NodeGroupID,
+        dummy_edge_start_id: NodeGroupID,
+        owners: &HashMap<NodeGroupID, NodeGroupID>,
     ) -> Vec<Order> {
         layers.clone()
     }

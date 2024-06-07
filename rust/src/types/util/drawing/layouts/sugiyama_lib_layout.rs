@@ -1,3 +1,4 @@
+use oxidd::LevelNo;
 use oxidd_core::Tag;
 
 use crate::{
@@ -12,9 +13,10 @@ use crate::{
     wasm_interface::NodeGroupID,
 };
 use rust_sugiyama::from_edges;
-use std::convert::TryInto;
+use std::{collections::HashMap, convert::TryInto};
 
 use super::{
+    layer_group_sorting::average_group_alignment::AverageGroupAlignment,
     layer_orderings::dummy_layer_ordering::DummyLayerOrdering,
     layered_layout::{LayerOrdering, LayeredLayout, NodePositioning},
     util::layered::layer_orderer::{EdgeMap, Order},
@@ -28,6 +30,7 @@ impl<T: Tag> SugiyamaLibLayout<T> {
         SugiyamaLibLayout {
             layout: LayeredLayout::new(
                 Box::new(DummyLayerOrdering),
+                Box::new(AverageGroupAlignment),
                 Box::new(SugiyamaLibPositioning),
             ),
         }
@@ -51,8 +54,11 @@ impl<T: Tag> NodePositioning<T> for SugiyamaLibPositioning {
         graph: &dyn GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
-        dummy_start_id: NodeGroupID,
-    ) -> std::collections::HashMap<NodeGroupID, Point> {
+        dummy_group_start_id: NodeGroupID,
+        dummy_edge_start_id: NodeGroupID,
+        owners: &HashMap<NodeGroupID, NodeGroupID>,
+    ) -> (HashMap<NodeGroupID, Point>, HashMap<LevelNo, f32>) {
+        let spacing = 2;
         // console::log!(
         //     "{}",
         //     edges
@@ -70,7 +76,7 @@ impl<T: Tag> NodePositioning<T> for SugiyamaLibPositioning {
                 .flat_map(|(from, to_set)| to_set.iter().map(move |to| (*from as u32, *to as u32)))
                 .collect::<Vec<(u32, u32)>>()[..],
         )
-        .vertex_spacing(2)
+        .vertex_spacing(spacing)
         .transpose(true)
         .build();
 
@@ -119,22 +125,29 @@ impl<T: Tag> NodePositioning<T> for SugiyamaLibPositioning {
         let center_x = (min_x + max_x) / 2.0;
         let center_y = (min_y + max_y) / 2.0;
 
-        layouts
-            .iter()
-            .flat_map(|(nodes, _, _)| {
-                nodes
-                    .iter()
-                    .map(|(id, (x, y))| {
-                        (
-                            *id,
-                            Point {
-                                x: *x as f32 - center_x,
-                                y: *y as f32 - center_y,
-                            },
-                        )
-                    })
-                    .collect::<Vec<(NodeGroupID, Point)>>()
-            })
-            .collect()
+        (
+            layouts
+                .iter()
+                .flat_map(|(nodes, _, _)| {
+                    nodes
+                        .iter()
+                        .map(|(id, (x, y))| {
+                            (
+                                *id,
+                                Point {
+                                    x: *x as f32 - center_x,
+                                    y: *y as f32 - center_y,
+                                },
+                            )
+                        })
+                        .collect::<Vec<(NodeGroupID, Point)>>()
+                })
+                .collect(),
+            layers
+                .iter()
+                .enumerate()
+                .map(|(level, _)| (level as u32, (level * spacing) as f32))
+                .collect(),
+        )
     }
 }

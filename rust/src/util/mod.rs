@@ -2,4 +2,7 @@ pub mod convert_file;
 pub mod dummy_bdd;
 pub mod free_id_manager;
 pub mod logging;
+pub mod matrix4;
 pub mod panic_hook;
+pub mod rectangle;
+pub mod transformation;

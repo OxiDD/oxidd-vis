@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use crate::util::rectangle::Rectangle;
+
 use super::traits::{Diagram, DiagramDrawer};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
@@ -34,8 +36,8 @@ impl DiagramDrawerBox {
     pub fn layout(&mut self, time: u32) -> () {
         self.0.layout(time);
     }
-    pub fn set_transform(&mut self, x: f32, y: f32, scale: f32) -> () {
-        self.0.set_transform(x, y, scale);
+    pub fn set_transform(&mut self, width: u32, height: u32, x: f32, y: f32, scale: f32) -> () {
+        self.0.set_transform(width, height, x, y, scale);
     }
     pub fn set_step(&mut self, step: i32) -> Option<StepData> {
         self.0.set_step(step)
@@ -46,8 +48,12 @@ impl DiagramDrawerBox {
     pub fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
         self.0.create_group(from)
     }
-    pub fn get_nodes(&self, x: i32, y: i32, width: i32, height: i32) -> Vec<NodeGroupID> {
-        self.0.get_nodes(x, y, width, height)
+    /// Coordinates in screen space (-0.5 to 0.5), not in world space
+    pub fn get_nodes(&self, x: f32, y: f32, width: f32, height: f32) -> Vec<NodeGroupID> {
+        self.0.get_nodes(Rectangle::new(x, y, width, height))
+    }
+    pub fn split_edges(&mut self, group: NodeGroupID, fully: bool) {
+        self.0.split_edges(group, fully);
     }
 }
 

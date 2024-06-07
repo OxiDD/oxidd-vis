@@ -136,6 +136,18 @@ impl<T: Tag> LayoutRules<T> for TransitionLayout<T> {
                             return (
                                 *edge_type,
                                 EdgeLayout {
+                                    start_offset: Transition {
+                                        duration,
+                                        old_time,
+                                        old: get_current_point(old_edge.start_offset),
+                                        new: edge.start_offset.new,
+                                    },
+                                    end_offset: Transition {
+                                        duration,
+                                        old_time,
+                                        old: get_current_point(old_edge.end_offset),
+                                        new: edge.end_offset.new,
+                                    },
                                     points: new_points,
                                     exists: edge.exists,
                                 },
@@ -143,25 +155,30 @@ impl<T: Tag> LayoutRules<T> for TransitionLayout<T> {
                         }
                     }
 
-                    (*edge_type, {
+                    // else:
+                    let points = edge
+                        .points
+                        .iter()
+                        .filter(|_| false)
+                        .map(|point| EdgePoint {
+                            point: Transition {
+                                duration,
+                                old_time,
+                                old: get_current_point(old_group.center_position),
+                                new: point.point.new,
+                            },
+                            exists: point.exists,
+                        })
+                        .collect();
+                    (
+                        *edge_type,
                         EdgeLayout {
-                            points: edge
-                                .points
-                                .iter()
-                                .filter(|_| false)
-                                .map(|point| EdgePoint {
-                                    point: Transition {
-                                        duration,
-                                        old_time,
-                                        old: get_current_point(old_group.center_position),
-                                        new: point.point.new,
-                                    },
-                                    exists: point.exists,
-                                })
-                                .collect(),
+                            start_offset: edge.start_offset,
+                            end_offset: edge.end_offset,
+                            points: points,
                             exists: edge.exists,
-                        }
-                    })
+                        },
+                    )
                 })
                 .collect()
         };
@@ -183,7 +200,7 @@ impl<T: Tag> LayoutRules<T> for TransitionLayout<T> {
                                 },
                                 size: Transition {
                                     old_time,
-                                    duration: duration * 2,
+                                    duration: duration,
                                     old: get_current_point(old_group.size),
                                     new: group.size.new,
                                 },

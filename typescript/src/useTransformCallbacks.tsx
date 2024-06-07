@@ -16,8 +16,8 @@ export function useTransformCallbacks(init: () => ITransform): {
         const elX = e.pageX - bound.x;
         const elY = e.pageY - bound.y;
         return {
-            x: elX / bound.width - 0.5,
-            y: -(elY / bound.height - 0.5),
+            x: elX - 0.5 * bound.width,
+            y: -(elY - 0.5 * bound.height),
         };
     };
     const setScale = (newScale: number, target: IPoint) => {
@@ -44,15 +44,12 @@ export function useTransformCallbacks(init: () => ITransform): {
                 }, 100).cancel;
             }, []),
             onMouseDown: useCallback(e => {
-                const target = e.target as HTMLCanvasElement;
                 // We register listeners on the window, such that dragging works even when leaving the canvas
                 const moveListener = (e: MouseEvent) => {
                     if ((e.buttons & 1) != 0) {
-                        const width = target.width;
-                        const height = target.height;
                         setTransform(({x, y, scale}) => ({
-                            x: x + e.movementX / width / scale,
-                            y: y - e.movementY / height / scale,
+                            x: x + e.movementX / scale,
+                            y: y - e.movementY / scale,
                             scale,
                         }));
                     }

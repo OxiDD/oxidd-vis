@@ -5,19 +5,21 @@ use web_sys::{
     WebGlVertexArrayObject,
 };
 
-use crate::types::util::drawing::{
-    diagram_layout::{DiagramLayout, Point},
-    renderer::Renderer,
-    renderers::webgl::{
-        setup::{compile_shader, link_program},
-        vertex_renderer::VertexRenderer,
+use crate::{
+    types::util::drawing::{
+        diagram_layout::{DiagramLayout, Point},
+        renderer::Renderer,
+        renderers::webgl::{
+            setup::{compile_shader, link_program},
+            vertex_renderer::VertexRenderer,
+        },
     },
+    util::transformation::Transformation,
 };
 
 use super::webgl::{
     edge_renderer::{Edge, EdgeRenderer},
     node_renderer::{Node, NodeRenderer},
-    transformation::Transformation,
 };
 
 /// A simple renderer that uses webgl to draw nodes and edges
@@ -52,13 +54,8 @@ impl WebglRenderer {
 }
 
 impl<T: Tag> Renderer<T> for WebglRenderer {
-    fn set_transform(&mut self, x: f32, y: f32, scale: f32) {
-        let matrix = (Transformation {
-            scale,
-            position: Point { x, y },
-            angle: 0.0,
-        })
-        .get_matrix();
+    fn set_transform(&mut self, transform: Transformation) {
+        let matrix = transform.get_matrix();
         self.node_renderer
             .set_transform(&self.webgl_context, &matrix);
         self.edge_renderer
@@ -87,9 +84,10 @@ impl<T: Tag> Renderer<T> for WebglRenderer {
                     let start = group.center_position;
                     group.edges.iter().flat_map(move |(to_id, edges)| {
                         edges.iter().map(move |(edge_type, edge)| Edge {
-                            start,
+                            start: start + edge.start_offset,
                             points: edge.points.iter().map(|point| point.point).collect(),
-                            end: layout.groups.get(to_id).unwrap().center_position,
+                            end: layout.groups.get(to_id).unwrap().center_position
+                                + edge.end_offset,
                         })
                     })
                 })

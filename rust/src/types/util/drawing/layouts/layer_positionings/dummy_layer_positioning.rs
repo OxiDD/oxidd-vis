@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use oxidd::LevelNo;
 use oxidd_core::Tag;
 
 use crate::{
@@ -24,22 +25,32 @@ impl<T: Tag> NodePositioning<T> for DummyLayerPositioning {
         graph: &dyn GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
-        dummy_start_id: NodeGroupID,
-    ) -> HashMap<NodeGroupID, Point> {
-        layers
-            .iter()
-            .enumerate()
-            .flat_map(|(layer_index, layer)| {
-                layer.iter().map(move |(&node, &node_index)| {
-                    (
-                        node,
-                        Point {
-                            x: (node_index as f32) * 2.,
-                            y: -(layer_index as f32) * 2.,
-                        },
-                    )
+        dummy_group_start_id: NodeGroupID,
+        dummy_edge_start_id: NodeGroupID,
+        owners: &HashMap<NodeGroupID, NodeGroupID>,
+    ) -> (HashMap<NodeGroupID, Point>, HashMap<LevelNo, f32>) {
+        let spacing = 2.;
+        (
+            layers
+                .iter()
+                .enumerate()
+                .flat_map(|(layer_index, layer)| {
+                    layer.iter().map(move |(&node, &node_index)| {
+                        (
+                            node,
+                            Point {
+                                x: (node_index as f32) * spacing,
+                                y: -(layer_index as f32) * spacing,
+                            },
+                        )
+                    })
                 })
-            })
-            .collect()
+                .collect(),
+            layers
+                .iter()
+                .enumerate()
+                .map(|(level, _)| (level as u32, level as f32 * spacing))
+                .collect(),
+        )
     }
 }

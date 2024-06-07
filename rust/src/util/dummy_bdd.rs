@@ -471,7 +471,7 @@ unsafe impl HasLevel for DummyNode {
         self.0
     }
 
-    unsafe fn set_level(&self, level: LevelNo) {
+    unsafe fn set_level(&self, _level: LevelNo) {
         unimplemented!()
     }
 }

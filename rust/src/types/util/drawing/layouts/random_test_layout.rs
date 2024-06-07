@@ -71,6 +71,14 @@ impl<T: Tag> LayoutRules<T> for RandomTestLayout {
                                                 (
                                                     edge_type,
                                                     EdgeLayout {
+                                                        start_offset: Transition::plain(Point {
+                                                            x: 0.,
+                                                            y: 0.,
+                                                        }),
+                                                        end_offset: Transition::plain(Point {
+                                                            x: 0.,
+                                                            y: 0.,
+                                                        }),
                                                         points: (vec![
                                                             0;
                                                             (random() * 3.0) as usize

@@ -18,6 +18,8 @@ impl Display for Matrix4 {
     }
 }
 
+type Vec3 = (f32, f32, f32);
+type Vec4 = (f32, f32, f32, f32);
 impl Matrix4 {
     pub fn identity() {
         Matrix4([
@@ -26,6 +28,18 @@ impl Matrix4 {
             0.0, 0.0, 1.0, 0.0, //
             0.0, 0.0, 0.0, 1.0,
         ]);
+    }
+    pub fn mul_vec3(&self, (v0, v1, v2): Vec3) -> Vec3 {
+        let (o0, o1, o2, o3) = self.mul_vec((v0, v1, v2, 1.0));
+        (o0 / o3, o1 / o3, o2 / o3)
+    }
+    pub fn mul_vec(&self, vec: Vec4) -> Vec4 {
+        (
+            self.0[0] * vec.0 + self.0[1] * vec.1 + self.0[2] * vec.2 + self.0[3] * vec.3,
+            self.0[4] * vec.0 + self.0[5] * vec.1 + self.0[6] * vec.2 + self.0[7] * vec.3,
+            self.0[8] * vec.0 + self.0[9] * vec.1 + self.0[10] * vec.2 + self.0[11] * vec.3,
+            self.0[12] * vec.0 + self.0[13] * vec.1 + self.0[14] * vec.2 + self.0[15] * vec.3,
+        )
     }
     pub fn mul(&self, other: &Matrix4) -> Matrix4 {
         Matrix4([

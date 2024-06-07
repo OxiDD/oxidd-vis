@@ -2,10 +2,10 @@ use web_sys::WebGl2RenderingContext;
 
 use crate::{
     types::util::drawing::diagram_layout::{Point, Transition},
-    util::logging::console,
+    util::{logging::console, matrix4::Matrix4},
 };
 
-use super::{matrix4::Matrix4, vertex_renderer::VertexRenderer};
+use super::vertex_renderer::VertexRenderer;
 
 pub struct EdgeRenderer {
     vertex_renderer: VertexRenderer,

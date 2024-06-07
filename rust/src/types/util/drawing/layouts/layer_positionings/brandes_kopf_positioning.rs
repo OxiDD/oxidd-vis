@@ -3,6 +3,7 @@ use std::{
     iter::FromIterator,
 };
 
+use oxidd::LevelNo;
 use oxidd_core::Tag;
 
 use crate::{
@@ -10,7 +11,7 @@ use crate::{
         drawing::{
             diagram_layout::Point,
             layouts::{
-                layered_layout::NodePositioning,
+                layered_layout::{is_edge_dummy, is_group_dummy, NodePositioning},
                 util::layered::layer_orderer::{
                     get_edge_index_sequence, get_ordered_edge_map, get_sequence, swap_edges,
                     EdgeMap, Order, OrderedEdgeMap,
@@ -31,35 +32,53 @@ impl<T: Tag> NodePositioning<T> for BrandesKopfPositioning {
         graph: &dyn GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
-        dummy_start_id: NodeGroupID,
-    ) -> HashMap<NodeGroupID, Point> {
+        dummy_group_start_id: NodeGroupID,
+        dummy_edge_start_id: NodeGroupID,
+        owners: &HashMap<NodeGroupID, NodeGroupID>,
+    ) -> (HashMap<NodeGroupID, Point>, HashMap<LevelNo, f32>) {
         let spacing = 2.0;
 
-        let x_coords = balanced_layout(layers, edges, dummy_start_id, spacing);
-        layers
-            .iter()
-            .enumerate()
-            .flat_map(|(index, layer)| {
-                let y_coord = -(index as f32 * spacing);
-                let x_coords = &x_coords; // create a new ref that can be moved
-                layer.keys().map(move |node| {
-                    (
-                        *node,
-                        Point {
-                            x: x_coords[node],
-                            y: y_coord,
-                        },
-                    )
+        let x_coords = balanced_layout(
+            layers,
+            edges,
+            dummy_group_start_id,
+            dummy_edge_start_id,
+            owners,
+            spacing,
+        );
+        (
+            layers
+                .iter()
+                .enumerate()
+                .flat_map(|(index, layer)| {
+                    let y_coord = -(index as f32 * spacing);
+                    let x_coords = &x_coords; // create a new ref that can be moved
+                    layer.keys().map(move |node| {
+                        (
+                            *node,
+                            Point {
+                                x: x_coords[node],
+                                y: y_coord,
+                            },
+                        )
+                    })
                 })
-            })
-            .collect()
+                .collect(),
+            layers
+                .iter()
+                .enumerate()
+                .map(|(level, _)| (level as u32, level as f32 * spacing))
+                .collect(),
+        )
     }
 }
 
 fn balanced_layout(
     layers: &Vec<Order>,
     edges: &EdgeMap,
-    dummy_start_id: NodeGroupID,
+    dummy_group_start_id: NodeGroupID,
+    dummy_edge_start_id: NodeGroupID,
+    owners: &HashMap<NodeGroupID, NodeGroupID>,
     spacing: f32,
 ) -> HashMap<NodeGroupID, f32> {
     let up_edges = swap_edges(edges);
@@ -77,20 +96,26 @@ fn balanced_layout(
     let left_down_layout = shift_layout(&compact_horizontally(
         layers,
         &left_up_edges,
-        dummy_start_id,
+        dummy_group_start_id,
+        dummy_edge_start_id,
+        owners,
         spacing,
     ));
     let left_up_layout = shift_layout(&compact_horizontally(
         &up_layers,
         &left_down_edges,
-        dummy_start_id,
+        dummy_group_start_id,
+        dummy_edge_start_id,
+        owners,
         spacing,
     ));
 
     let right_down_layout = shift_layout(&compact_horizontally(
         &right_layers,
         &right_up_edges,
-        dummy_start_id,
+        dummy_group_start_id,
+        dummy_edge_start_id,
+        owners,
         spacing,
     ))
     .iter()
@@ -99,7 +124,9 @@ fn balanced_layout(
     let right_up_layout = shift_layout(&compact_horizontally(
         &right_up_layers,
         &right_down_edges,
-        dummy_start_id,
+        dummy_group_start_id,
+        dummy_edge_start_id,
+        owners,
         spacing,
     ))
     .iter()
@@ -148,14 +175,23 @@ fn get_reverse_layers(layers: &Vec<Order>) -> Vec<Order> {
 fn compact_horizontally(
     layers: &Vec<Order>,
     reverse_edges: &OrderedEdgeMap,
-    dummy_start_id: NodeGroupID,
+    dummy_group_start_id: NodeGroupID,
+    dummy_edge_start_id: NodeGroupID,
+    owners: &HashMap<NodeGroupID, NodeGroupID>,
     spacing: f32,
 ) -> HashMap<NodeGroupID, f32> {
     let layer_seqs = layers
         .iter()
         .map(|layer| get_sequence(layer))
         .collect::<Vec<Vec<NodeGroupID>>>();
-    let alignment = align_vertical(layers, &layer_seqs, reverse_edges, dummy_start_id);
+    let alignment = align_vertical(
+        layers,
+        &layer_seqs,
+        reverse_edges,
+        dummy_group_start_id,
+        dummy_edge_start_id,
+        owners,
+    );
 
     let all_nodes = layers.iter().flat_map(|layer| layer.keys());
     let pred = HashMap::from_iter(layer_seqs.iter().flat_map(|layer| {
@@ -239,9 +275,18 @@ fn align_vertical(
     layers: &Vec<Order>,
     layer_seqs: &Vec<Vec<NodeGroupID>>,
     reverse_edges: &OrderedEdgeMap,
-    dummy_start_id: NodeGroupID,
+    dummy_group_start_id: NodeGroupID,
+    dummy_edge_start_id: NodeGroupID,
+    owners: &HashMap<NodeGroupID, NodeGroupID>,
 ) -> VerticalAlignment {
-    let conflicts = get_type1_conflicts(layers, &layer_seqs, reverse_edges, dummy_start_id);
+    let conflicts = get_type1_conflicts(
+        layers,
+        &layer_seqs,
+        reverse_edges,
+        dummy_group_start_id,
+        dummy_edge_start_id,
+        owners,
+    );
     let mut root = HashMap::from_iter(
         layers
             .iter()
@@ -288,10 +333,12 @@ fn get_type1_conflicts(
     layers: &Vec<Order>,
     layer_seqs: &Vec<Vec<NodeGroupID>>,
     reverse_edges: &OrderedEdgeMap,
-    dummy_start_id: NodeGroupID,
+    dummy_group_start_id: NodeGroupID,
+    dummy_edge_start_id: NodeGroupID,
+    owners: &HashMap<NodeGroupID, NodeGroupID>,
 ) -> HashSet<(NodeGroupID, NodeGroupID)> {
     let mut conflicts = HashSet::new();
-    for i in 1..layer_seqs.len() - 2 {
+    for i in 1..usize::max(layer_seqs.len(), 2) - 2 {
         let mut k0 = 0; // Previous inner segment (start) at layer i
         let mut l = 0; // Previous considered node at layer i+1
 
@@ -302,16 +349,24 @@ fn get_type1_conflicts(
         for l1 in 0..layer_len {
             // Currently considered node at layer i+1
             let node = layer_seq[l1];
-            let incident_inner_segment = node >= dummy_start_id
-                && reverse_edges
-                    .get(&node)
-                    .map(|tos| tos.iter().find(|&&to| to >= dummy_start_id).is_some())
-                    .unwrap_or(false);
+
+            let incident_inner_segment = is_edge_dummy(node, dummy_edge_start_id)
+                && reverse_edges.get(&node).map_or(false, |tos| {
+                    tos.iter()
+                        .find(|&&to| is_edge_dummy(to, dummy_edge_start_id))
+                        .is_some()
+                });
+            let incident_group_segment = owners.contains_key(&node)
+                && reverse_edges.get(&node).map_or(false, |tos| {
+                    tos.iter()
+                        .find(|&to| owners.get(&node) == owners.get(to))
+                        .is_some()
+                });
             let last = l1 == layer_len - 1;
-            if last || incident_inner_segment {
+            if last || incident_inner_segment || incident_group_segment {
                 let inner_edge_node = node;
                 let mut k1 = prev_layer_seq.len() - 1; // Currently considered inner segment at layer i (or the default last node place holder to correctly finish processing the previous inner segment)
-                if incident_inner_segment {
+                if incident_inner_segment || incident_group_segment {
                     let upper_neighbors = reverse_edges.get(&inner_edge_node).unwrap();
                     assert!(upper_neighbors.len() == 1); // Otherwise it's not an inner edge
                     k1 = *prev_layer

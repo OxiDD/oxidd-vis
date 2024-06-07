@@ -1,12 +1,14 @@
 use std::{
     cmp::Reverse,
     collections::{HashMap, HashSet, LinkedList},
+    fmt::Display,
     hash::Hash,
     iter::FromIterator,
     rc::Rc,
     vec::IntoIter,
 };
 
+use itertools::Itertools;
 use oxidd::{Edge, Function, InnerNode, LevelNo, Manager};
 use oxidd_core::{DiagramRules, Node, Tag};
 use priority_queue::PriorityQueue;
@@ -40,6 +42,22 @@ pub struct NodeGroup<T: Tag> {
     in_edges: EdgeSet<T>,
     layer_min: PriorityQueue<NodeID, Reverse<LevelNo>>,
     layer_max: PriorityQueue<NodeID, LevelNo>,
+}
+impl<T: Tag> Display for NodeGroup<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let min = self
+            .layer_min
+            .peek()
+            .map_or(0, |(node, Reverse(layer))| *layer);
+        let max = self.layer_max.peek().map_or(0, |(node, layer)| *layer);
+        write!(
+            f,
+            "group(nodes: [{}], levels: ({}, {})",
+            self.nodes.iter().join(", "),
+            min,
+            max
+        )
+    }
 }
 
 // Helper methods
@@ -126,8 +144,9 @@ impl<T: Tag> GroupManager<T> {
 
 // Main methods
 impl<T: Tag> GroupManager<T> {
-    pub fn new(graph: Box<dyn GraphStructure<T>>) -> GroupManager<T> {
+    pub fn new(mut graph: Box<dyn GraphStructure<T>>) -> GroupManager<T> {
         let root_id = graph.get_root();
+        let root_level = graph.get_level(root_id);
         GroupManager {
             graph,
             group_id_by_node: HashMap::new(),
@@ -137,8 +156,16 @@ impl<T: Tag> GroupManager<T> {
                     nodes: HashSet::from([root_id]),
                     out_edges: HashMap::new(),
                     in_edges: HashMap::new(),
-                    layer_min: PriorityQueue::new(),
-                    layer_max: PriorityQueue::new(),
+                    layer_min: {
+                        let mut q = PriorityQueue::new();
+                        q.push(root_id, Reverse(root_level));
+                        q
+                    },
+                    layer_max: {
+                        let mut q = PriorityQueue::new();
+                        q.push(root_id, root_level);
+                        q
+                    },
                 },
             )]),
             free_ids: FreeIdManager::new(1),
@@ -191,8 +218,12 @@ impl<T: Tag> GroupManager<T> {
 
                     // Ensure the child id is in there
                     if child_group_id == 0 {
+                        let child_level = self.graph.get_level(child_id);
                         let child_group = self.get_node_group_mut(child_group_id);
-                        child_group.nodes.insert(child_id);
+                        if child_group.nodes.insert(child_id) {
+                            child_group.layer_min.push(child_id, Reverse(child_level));
+                            child_group.layer_max.push(child_id, child_level);
+                        }
                     }
                 }
 
@@ -304,6 +335,43 @@ impl<T: Tag> GroupManager<T> {
         self.set_group(from, new_id);
         new_id
     }
+
+    pub fn split_edges(&mut self, group_id: NodeGroupID, fully: bool) {
+        // TODO: rethink this enture approach, one nodeID can end up in multiple splits atm
+        let group_nodes = &self.get_node_group(group_id).nodes.clone();
+        let mut splits: HashMap<(EdgeType<T>, NodeGroupID), HashSet<NodeID>> = HashMap::new();
+        for &node in group_nodes {
+            let children = &self.graph.get_children(node);
+            for (edge_type, to) in children {
+                let to_group = self.get_group(*to);
+                splits
+                    .entry((*edge_type, to_group))
+                    .or_insert_with(|| HashSet::new())
+                    .insert(*to);
+            }
+        }
+
+        for ((_, group_id), nodes) in splits {
+            let already_group = self.get_nodes_of_group(group_id).eq(nodes.clone());
+            if already_group {
+                continue;
+            }
+
+            if fully {
+                for node in nodes {
+                    self.create_group(vec![TargetID(TargetIDType::NodeID, node)]);
+                }
+            } else {
+                console::log!("{}", nodes.iter().join(", "));
+                self.create_group(
+                    nodes
+                        .iter()
+                        .map(|&node| TargetID(TargetIDType::NodeID, node))
+                        .collect(),
+                );
+            }
+        }
+    }
 }
 
 impl<T: Tag> GroupedGraphStructure<T> for GroupManager<T> {
@@ -356,17 +424,19 @@ impl<T: Tag> GroupedGraphStructure<T> for GroupManager<T> {
         Vec::new().into_iter()
     }
 
-    fn get_level_range(&self, group: NodeGroupID) -> (oxidd::LevelNo, oxidd::LevelNo) {
-        if let Some(group) = self.group_by_id.get(&group) {
-            return (
-                group
+    fn get_level_range(&self, group_id: NodeGroupID) -> (oxidd::LevelNo, oxidd::LevelNo) {
+        self.group_by_id.get(&group_id).map_or_else(
+            || (0, 0),
+            |group| {
+                let min = group
                     .layer_min
                     .peek()
-                    .map_or(0, |(node, Reverse(layer))| *layer),
-                group.layer_max.peek().map_or(0, |(node, layer)| *layer),
-            );
-        }
-        (0, 0)
+                    .map_or(0, |(node, Reverse(layer))| *layer);
+                let max = group.layer_max.peek().map_or(0, |(node, layer)| *layer);
+                console::log!("{} {}", group_id, group);
+                (min, max)
+            },
+        )
     }
 
     fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID> {

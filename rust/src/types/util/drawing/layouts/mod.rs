@@ -1,3 +1,4 @@
+pub mod layer_group_sorting;
 pub mod layer_orderings;
 pub mod layer_positionings;
 pub mod layered_layout;

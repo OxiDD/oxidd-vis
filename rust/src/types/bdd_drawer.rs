@@ -16,6 +16,7 @@ use crate::traits::Diagram;
 use crate::traits::DiagramDrawer;
 use crate::util::free_id_manager::FreeIdManager;
 use crate::util::logging::console;
+use crate::util::rectangle::Rectangle;
 use crate::wasm_interface::NodeGroupID;
 use crate::wasm_interface::NodeID;
 use crate::wasm_interface::TargetID;
@@ -38,6 +39,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 use super::util::drawing::drawer::Drawer;
+use super::util::drawing::layouts::layer_group_sorting::average_group_alignment::AverageGroupAlignment;
 use super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaOrdering;
 use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
 use super::util::drawing::layouts::layer_positionings::dummy_layer_positioning::DummyLayerPositioning;
@@ -105,6 +107,7 @@ impl<T: Tag + 'static> BDDDiagramDrawer<T> {
         graph: Box<dyn GraphStructure<T>>,
         renderer: Box<dyn Renderer<T>>,
     ) -> BDDDiagramDrawer<T> {
+        let root = graph.get_root();
         let group_manager = Rc::new(RefCell::new(GroupManager::new(graph)));
         let mut out = BDDDiagramDrawer {
             group_manager: group_manager.clone(),
@@ -112,11 +115,16 @@ impl<T: Tag + 'static> BDDDiagramDrawer<T> {
                 renderer,
                 // Box::new(TransitionLayout::new(Box::new(RandomTestLayout))),
                 // Box::new(TransitionLayout::new(Box::new(SugiyamaLibLayout::new()))),
-                Box::new(TransitionLayout::new(Box::new(LayeredLayout::new(
+                // Box::new(TransitionLayout::new(Box::new(LayeredLayout::new(
+                //     Box::new(SugiyamaOrdering::new(1, 1)),
+                //     Box::new(BrandesKopfPositioning),
+                //     // Box::new(DummyLayerPositioning),
+                // )))),
+                Box::new(LayeredLayout::new(
                     Box::new(SugiyamaOrdering::new(1, 1)),
+                    Box::new(AverageGroupAlignment),
                     Box::new(BrandesKopfPositioning),
-                    // Box::new(DummyLayerPositioning),
-                )))),
+                )),
                 // Box::new(TransitionLayout::new(Box::new(ToggleLayout::new(vec![
                 //     Box::new(RandomTestLayout),
                 //     Box::new(LayeredLayout::new(
@@ -132,7 +140,9 @@ impl<T: Tag + 'static> BDDDiagramDrawer<T> {
                 group_manager,
             ),
         };
-        out.reveal_all(30000);
+        out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
+        out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+        // out.reveal_all(30000);
         out
     }
 
@@ -171,8 +181,8 @@ impl<T: Tag> DiagramDrawer for BDDDiagramDrawer<T> {
         self.drawer.layout(time);
     }
 
-    fn set_transform(&mut self, x: f32, y: f32, scale: f32) -> () {
-        self.drawer.set_transform(x, y, scale);
+    fn set_transform(&mut self, width: u32, height: u32, x: f32, y: f32, scale: f32) -> () {
+        self.drawer.set_transform(width, height, x, y, scale);
     }
 
     fn set_step(&mut self, step: i32) -> Option<crate::wasm_interface::StepData> {
@@ -194,16 +204,11 @@ impl<T: Tag> DiagramDrawer for BDDDiagramDrawer<T> {
         (*self.group_manager).borrow_mut().create_group(from)
     }
 
-    fn get_nodes(
-        &self,
-        x: i32,
-        y: i32,
-        width: i32,
-        height: i32,
-    ) -> Vec<crate::wasm_interface::NodeGroupID> {
-        todo!()
-        // (*self.group_manager)
-        //     .borrow_mut()
-        //     .get_nodes(x, y, width, height)
+    fn split_edges(&mut self, group: NodeGroupID, fully: bool) {
+        (*self.group_manager).borrow_mut().split_edges(group, fully);
+    }
+
+    fn get_nodes(&self, area: Rectangle) -> Vec<crate::wasm_interface::NodeGroupID> {
+        self.drawer.get_nodes(area)
     }
 }

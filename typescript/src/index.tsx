@@ -2,6 +2,7 @@ import ReactDOM from "react-dom";
 import React, {FC, useCallback, useEffect, useRef} from "react";
 import {DiagramDrawerBox, create_diagram} from "oxidd-viz-rust";
 import {useTransformCallbacks} from "./useTransformCallbacks";
+import {useNodeSelection} from "./useNodeSelection";
 
 // Error.stackTraceLimit = 30;
 Error.stackTraceLimit = 1;
@@ -28,6 +29,37 @@ const Test: FC = () => {
         }
     }, []);
     useEffect(gen, []);
+
+    const {
+        handlers: {onMouseDown: tOnMouseDown, onWheel},
+        transform,
+    } = useTransformCallbacks(() => ({
+        x: 0,
+        y: 0,
+        scale: 20,
+    }));
+    const {onMouseDown, onContextMenu, selection} = useNodeSelection(
+        drawing,
+        tOnMouseDown
+    );
+    const reveal = useCallback(() => {
+        for (let group of selection) {
+            drawing.current?.split_edges(group, false);
+        }
+        gen();
+    }, [selection]);
+    useEffect(() => {
+        reveal();
+    }, [selection]);
+
+    useEffect(() => {
+        const d = drawing.current;
+        const c = canvasRef.current;
+        if (d && c) {
+            d.set_transform(c.width, c.height, transform.x, transform.y, transform.scale);
+        }
+    }, [transform]);
+
     useEffect(() => {
         let running = true;
         function render() {
@@ -35,31 +67,26 @@ const Test: FC = () => {
             const d = drawing.current;
             d?.render(
                 Date.now() - start.current - computeTimeDelta.current,
-                new Uint32Array([]),
+                selection,
                 new Uint32Array([])
             );
             requestAnimationFrame(render);
         }
         render();
         return () => void (running = false);
-    }, []);
-
-    const {handlers, transform} = useTransformCallbacks(() => ({
-        x: 0,
-        y: 0,
-        scale: 0.02,
-    }));
-    useEffect(() => {
-        const d = drawing.current;
-        if (d) {
-            d.set_transform(transform.x, transform.y, transform.scale);
-        }
-    }, [transform]);
+    }, [selection]);
 
     return (
         <div>
-            <canvas height="900" width="1400" ref={canvasRef} {...handlers}></canvas>
+            <canvas
+                height="900"
+                width="700"
+                ref={canvasRef}
+                onWheel={onWheel}
+                onContextMenu={onContextMenu}
+                onMouseDown={onMouseDown}></canvas>
             <button onClick={gen}>regen</button>
+            <button onClick={reveal}>reveal</button>
         </div>
     );
 };
