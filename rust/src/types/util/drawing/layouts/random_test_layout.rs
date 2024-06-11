@@ -59,6 +59,7 @@ impl<T: Tag> LayoutRules<T> for RandomTestLayout {
                                 duration: 1000,
                             },
                             exists: Transition::plain(1.),
+                            nodes: graph.get_nodes_of_group(group_id).collect(),
                             edges: graph
                                 .get_children(group_id)
                                 .into_iter()

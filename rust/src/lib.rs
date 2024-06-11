@@ -61,15 +61,15 @@ pub fn create_diagram() -> Option<DiagramBox> // And some DD type param
                 //     "0>1, 1>2, 0>2, 0>3, 1>3, 4>5, 1>4, 3>4, 1>5, 0>5",
                 // );
                 // let res = DummyFunction::from(manager_ref, "0>1, 1>2, 0>2, 0>3, 1>3, 1>4, 3>4");
-                // let res = DummyFunction::from(
-                //     manager_ref,
-                //     "0>1, 1>2, 2>3, 3>4, 0>4, 4>5, 5>6, 6>7, 4>7, 7>8, 8>9, 9>10, 10>11, 8>11",
-                // );
+                let res = DummyFunction::from(
+                    manager_ref,
+                    "0>1, 1>2, 2>3, 3>4, 0>4, 4>5, 5>6, 6>7, 4>7, 7>8, 8>9, 9>10, 10>11, 8>11",
+                );
                 // let res = DummyFunction::from(manager_ref, "0>1, 1>2, 2>3, 0>3");
                 // let res =
                 //     DummyFunction::from_dddmp(manager_ref, include_str!(r"..\..\data\b02.dddmp"));
-                let res =
-                    DummyFunction::from_dddmp(manager_ref, include_str!(r"..\..\data\b01.dddmp"));
+                // let res =
+                //     DummyFunction::from_dddmp(manager_ref, include_str!(r"..\..\data\b01.dddmp"));
                 // let res = DummyFunction::from_dddmp(
                 //     manager_ref,
                 //     include_str!(r"..\..\data\toybox.dddmp"),

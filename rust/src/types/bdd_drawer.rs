@@ -122,6 +122,7 @@ where
             BrandesKopfPositioning,
             0.3,
         );
+        let layout = TransitionLayout::new(layout);
         let graph = OxiddGraphStructure::new(self.root.clone());
         let diagram = BDDDiagramDrawer::new(graph, renderer, layout);
         Box::new(diagram)

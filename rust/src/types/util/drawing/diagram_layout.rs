@@ -73,7 +73,7 @@ impl<T: Add<Output = T>> Add for Transition<T> {
 
     fn add(self, rhs: Self) -> Self::Output {
         Transition {
-            old_time: u32::min(rhs.old_time, self.old_time),
+            old_time: u32::max(rhs.old_time, self.old_time),
             duration: u32::max(rhs.duration, self.duration),
             old: self.old + rhs.old,
             new: self.new + rhs.new,
@@ -88,6 +88,7 @@ pub struct NodeGroupLayout<T: Tag> {
     pub label: String,
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
     pub edges: HashMap<EdgeData<T>, EdgeLayout>,
+    pub nodes: HashSet<NodeID>,
 }
 impl<T: Tag> NodeGroupLayout<T> {
     // TODO: possibly consider the selection time? (animations should be quick and not have a huge effect however)
