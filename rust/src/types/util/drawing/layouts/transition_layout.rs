@@ -146,6 +146,12 @@ impl<T: Tag, L: LayoutRules<T>> LayoutRules<T> for TransitionLayout<T, L> {
                     },
                     points: new_points,
                     exists: edge.exists,
+                    curve_offset: Transition {
+                        duration,
+                        old_time,
+                        old: get_current_float(old_edge.curve_offset),
+                        new: edge.curve_offset.new,
+                    },
                 }
             } else {
                 let points = edge
@@ -167,6 +173,7 @@ impl<T: Tag, L: LayoutRules<T>> LayoutRules<T> for TransitionLayout<T, L> {
                     end_offset: edge.end_offset,
                     points: points,
                     exists: edge.exists,
+                    curve_offset: edge.curve_offset,
                 }
             }
         };

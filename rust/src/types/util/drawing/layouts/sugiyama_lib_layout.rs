@@ -26,12 +26,13 @@ pub struct SugiyamaLibLayout<T: Tag> {
     layout: LayeredLayout<T, DummyLayerOrdering, AverageGroupAlignment, SugiyamaLibPositioning>,
 }
 impl<T: Tag> SugiyamaLibLayout<T> {
-    pub fn new() -> SugiyamaLibLayout<T> {
+    pub fn new(max_curve_offset: f32) -> SugiyamaLibLayout<T> {
         SugiyamaLibLayout {
             layout: LayeredLayout::new(
                 DummyLayerOrdering,
                 AverageGroupAlignment,
                 SugiyamaLibPositioning,
+                max_curve_offset,
             ),
         }
     }

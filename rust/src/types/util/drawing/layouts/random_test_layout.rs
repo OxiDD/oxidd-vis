@@ -83,6 +83,7 @@ impl<T: Tag> LayoutRules<T> for RandomTestLayout {
                                                 })
                                                 .collect(),
                                             exists: Transition::plain(1.),
+                                            curve_offset: Transition::plain(0.),
                                         }
                                     })
                                 })

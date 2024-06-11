@@ -113,6 +113,7 @@ impl<T: Tag> Renderer<T> for WebglRenderer<T> {
                         end: layout.groups.get(&edge_data.to).unwrap().center_position
                             + edge.end_offset,
                         edge_type: *edge_type_ids.get(&edge_data.edge_type).unwrap(),
+                        shift: edge.curve_offset,
                     })
                 })
                 .collect(),

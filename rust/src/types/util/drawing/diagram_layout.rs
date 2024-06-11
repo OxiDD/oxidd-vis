@@ -18,6 +18,13 @@ pub struct Point {
     pub x: f32,
     pub y: f32,
 }
+impl Point {
+    fn distance(&self, other: &Point) -> f32 {
+        let dx = other.x - self.x;
+        let dy = other.y - self.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+}
 impl Add for Point {
     type Output = Point;
 
@@ -102,6 +109,7 @@ pub struct EdgeLayout {
     pub end_offset: Transition<Point>,
     pub points: Vec<EdgePoint>,
     pub exists: Transition<f32>, // Transition for newly created edges
+    pub curve_offset: Transition<f32>, // If no bendpoints are used, this curve offset can be used for curving the edge
 }
 
 #[derive(Copy, Clone)]

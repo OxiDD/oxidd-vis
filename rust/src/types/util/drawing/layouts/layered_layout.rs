@@ -84,17 +84,24 @@ pub struct LayeredLayout<
     ordering: O,
     group_aligning: G,
     positioning: P,
+    max_curve_offset: f32,
     tag: PhantomData<T>,
 }
 
 impl<T: Tag, O: LayerOrdering<T>, G: LayerGroupSorting<T>, P: NodePositioning<T>>
     LayeredLayout<T, O, G, P>
 {
-    pub fn new(ordering: O, group_aligning: G, positioning: P) -> LayeredLayout<T, O, G, P> {
+    pub fn new(
+        ordering: O,
+        group_aligning: G,
+        positioning: P,
+        max_curve_offset: f32,
+    ) -> LayeredLayout<T, O, G, P> {
         LayeredLayout {
             ordering,
             group_aligning,
             positioning,
+            max_curve_offset,
             tag: PhantomData,
         }
     }
@@ -177,6 +184,7 @@ impl<T: Tag, O: LayerOrdering<T>, G: LayerGroupSorting<T>, P: NodePositioning<T>
 
         format_layout(
             graph,
+            self.max_curve_offset,
             node_positions,
             layer_positions,
             edge_bend_nodes,
@@ -306,6 +314,7 @@ fn add_edges_with_dummies<T: Tag>(
 
 fn format_layout<T: Tag>(
     graph: &dyn GroupedGraphStructure<T>,
+    max_curve_offset: f32,
     node_positions: HashMap<usize, Point>,
     layer_positions: HashMap<LevelNo, f32>,
     edge_bend_nodes: HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>>,
@@ -359,18 +368,43 @@ fn format_layout<T: Tag>(
                         edges: graph
                             .get_children(group_id)
                             .into_iter()
-                            .map(|edge_data| {
-                                (
-                                    edge_data.drop_count(),
-                                    format_edge(
-                                        &edge_data,
-                                        group_id,
-                                        &node_positions,
-                                        &centered_node_positions,
-                                        &edge_bend_nodes,
-                                        &edge_connection_nodes,
-                                    ),
-                                )
+                            .group_by(
+                                |&EdgeCountData {
+                                     to,
+                                     from_level,
+                                     to_level,
+                                     edge_type,
+                                     count,
+                                 }| (to, from_level, to_level),
+                            )
+                            .into_iter()
+                            .flat_map(|(group, edge_datas)| {
+                                let edge_datas = edge_datas.collect_vec();
+                                let len = edge_datas.len();
+                                edge_datas
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(index, edge_data)| {
+                                        (
+                                            edge_data.drop_count(),
+                                            format_edge(
+                                                &edge_data,
+                                                if len > 1 {
+                                                    ((index as f32 / (len - 1) as f32) - 0.5)
+                                                        * 2.0
+                                                        * max_curve_offset
+                                                } else {
+                                                    0.
+                                                },
+                                                group_id,
+                                                &node_positions,
+                                                &centered_node_positions,
+                                                &edge_bend_nodes,
+                                                &edge_connection_nodes,
+                                            ),
+                                        )
+                                    })
+                                    .collect_vec()
                             })
                             .collect(),
                     },
@@ -382,6 +416,7 @@ fn format_layout<T: Tag>(
 
 fn format_edge<T: Tag>(
     edge: &EdgeCountData<T>,
+    curve_offset: f32,
     group_id: NodeGroupID,
     node_positions: &HashMap<usize, Point>,
     centered_node_positions: &HashMap<usize, Point>,
@@ -453,5 +488,6 @@ fn format_edge<T: Tag>(
             },
         ),
         exists: Transition::plain(1.),
+        curve_offset: Transition::plain(curve_offset),
     }
 }

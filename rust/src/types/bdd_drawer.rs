@@ -120,6 +120,7 @@ where
             SugiyamaOrdering::new(1, 1),
             AverageGroupAlignment,
             BrandesKopfPositioning,
+            0.3,
         );
         let graph = OxiddGraphStructure::new(self.root.clone());
         let diagram = BDDDiagramDrawer::new(graph, renderer, layout);
