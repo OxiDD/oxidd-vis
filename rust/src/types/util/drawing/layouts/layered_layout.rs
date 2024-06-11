@@ -18,7 +18,8 @@ use crate::{
             layout_rules::LayoutRules,
         },
         edge_type::EdgeType,
-        grouped_graph_structure::GroupedGraphStructure,
+        group_manager::EdgeData,
+        grouped_graph_structure::{EdgeCountData, GroupedGraphStructure},
     },
     util::logging::console,
     wasm_interface::NodeGroupID,
@@ -247,40 +248,26 @@ fn add_edges_with_dummies<T: Tag>(
     group_layers: &HashMap<NodeGroupID, HashMap<u32, usize>>,
     next_free_id: &mut NodeGroupID,
 ) -> (
-    HashMap<(NodeGroupID, EdgeType<T>, NodeGroupID), Vec<NodeGroupID>>,
-    HashMap<(NodeGroupID, EdgeType<T>, NodeGroupID), (NodeGroupID, NodeGroupID)>,
+    HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>>,
+    HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)>,
 ) {
-    let mut edge_bend_nodes: HashMap<(NodeGroupID, EdgeType<T>, NodeGroupID), Vec<NodeGroupID>> =
+    let mut edge_bend_nodes: HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>> = HashMap::new();
+    let mut edge_connection_nodes: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)> =
         HashMap::new();
-    let mut edge_connection_nodes: HashMap<
-        (NodeGroupID, EdgeType<T>, NodeGroupID),
-        (NodeGroupID, NodeGroupID),
-    > = HashMap::new();
 
     console::log!("---------------");
     for group in graph.get_all_groups() {
-        let (parent_start_level, parent_end_level) = graph.get_level_range(group);
+        // let (parent_start_level, parent_end_level) = graph.get_level_range(group);
 
-        for (edge_type, to_group, _) in graph.get_children(group) {
-            let (start_level, end_level) = graph.get_level_range(to_group);
-
-            // Stylistic choice for how edges should span between two groups that cross multiple layers
-            // TODO: make these layers based on the actual node layer that the edge is coming from
-            let (edge_start_level, edge_end_level) = if parent_end_level < start_level {
-                console::log!("> 0 {} {}", parent_end_level, start_level);
-                (parent_end_level, start_level)
-            } else if parent_start_level < start_level {
-                console::log!("> 1 {} {}", start_level - 1, start_level);
-                (start_level - 1, start_level)
-            } else if parent_end_level < end_level {
-                console::log!("> 2 {} {}", parent_end_level, parent_end_level + 1);
-                (parent_end_level, parent_end_level + 1)
-            } else if parent_start_level < end_level {
-                console::log!("> 3 {} {}", parent_start_level, parent_start_level + 1);
-                (parent_start_level, parent_start_level + 1)
-            } else {
-                panic!("The child group was somehow fully present above the parent\n parent: ({}, {}); child: ({}, {})", parent_start_level, parent_end_level, start_level, end_level);
-            };
+        for EdgeCountData {
+            to: to_group,
+            from_level: edge_start_level,
+            to_level: edge_end_level,
+            edge_type,
+            count: _,
+        } in graph.get_children(group)
+        {
+            let edge_data = EdgeData::new(to_group, edge_start_level, edge_end_level, edge_type);
 
             let group_connection = group_layers
                 .get(&group)
@@ -301,17 +288,15 @@ fn add_edges_with_dummies<T: Tag>(
                 add_to_edges(edges, prev, id);
                 prev = id;
             }
-            edge_bend_nodes.insert((group, edge_type, to_group), bends);
+            edge_bend_nodes.insert((group, edge_data.clone()), bends);
 
             let to_group_connection = *group_layers
                 .get(&to_group)
                 .unwrap()
                 .get(&edge_end_level)
                 .unwrap();
-            edge_connection_nodes.insert(
-                (group, edge_type, to_group),
-                (*group_connection, to_group_connection),
-            );
+            edge_connection_nodes
+                .insert((group, edge_data), (*group_connection, to_group_connection));
             add_to_edges(edges, prev, to_group_connection);
         }
     }
@@ -323,11 +308,8 @@ fn format_layout<T: Tag>(
     graph: &dyn GroupedGraphStructure<T>,
     node_positions: HashMap<usize, Point>,
     layer_positions: HashMap<LevelNo, f32>,
-    edge_bend_nodes: HashMap<(NodeGroupID, EdgeType<T>, NodeGroupID), Vec<NodeGroupID>>,
-    edge_connection_nodes: HashMap<
-        (NodeGroupID, EdgeType<T>, NodeGroupID),
-        (NodeGroupID, NodeGroupID),
-    >,
+    edge_bend_nodes: HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>>,
+    edge_connection_nodes: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)>,
     dummy_group_start_id: usize,
 ) -> DiagramLayout<T> {
     let centered_node_positions: HashMap<usize, Point> = node_positions
@@ -376,15 +358,13 @@ fn format_layout<T: Tag>(
                         exists: Transition::plain(1.),
                         edges: graph
                             .get_children(group_id)
-                            .group_by(|(_, to, _)| *to)
                             .into_iter()
-                            .map(|(to, mut edges)| {
+                            .map(|edge_data| {
                                 (
-                                    to,
-                                    format_edges(
-                                        &mut edges,
+                                    edge_data.drop_count(),
+                                    format_edge(
+                                        &edge_data,
                                         group_id,
-                                        to,
                                         &node_positions,
                                         &centered_node_positions,
                                         &edge_bend_nodes,
@@ -400,70 +380,78 @@ fn format_layout<T: Tag>(
     }
 }
 
-fn format_edges<T: Tag>(
-    edges: &mut dyn Iterator<Item = (EdgeType<T>, usize, i32)>,
+fn format_edge<T: Tag>(
+    edge: &EdgeCountData<T>,
     group_id: NodeGroupID,
-    to: NodeGroupID,
     node_positions: &HashMap<usize, Point>,
     centered_node_positions: &HashMap<usize, Point>,
-    edge_bend_nodes: &HashMap<(NodeGroupID, EdgeType<T>, NodeGroupID), Vec<NodeGroupID>>,
-    edge_connection_nodes: &HashMap<
-        (NodeGroupID, EdgeType<T>, NodeGroupID),
-        (NodeGroupID, NodeGroupID),
-    >,
-) -> HashMap<EdgeType<T>, EdgeLayout> {
-    edges
-        .map(|(edge_type, _, _)| {
-            let (start_offset, end_offset) = edge_connection_nodes
-                .get(&(group_id, edge_type, to))
-                .map_or_else(
-                    || (Point { x: 0.0, y: 0.0 }, Point { x: 0.0, y: 0.0 }),
-                    |(start_id, end_id)| {
-                        (
-                            node_positions.get(&start_id).map_or_else(
-                                || Point { x: 0.0, y: 0.0 },
-                                |start_point| {
-                                    centered_node_positions.get(&group_id).map_or_else(
-                                        || Point { x: 0., y: 0. },
-                                        |center_point| *start_point - *center_point,
-                                    )
-                                },
-                            ),
-                            node_positions.get(&end_id).map_or_else(
-                                || Point { x: 0.0, y: 0.0 },
-                                |end_point| {
-                                    centered_node_positions.get(&to).map_or_else(
-                                        || Point { x: 0., y: 0. },
-                                        |center_point| *end_point - *center_point,
-                                    )
-                                },
-                            ),
-                        )
-                    },
-                );
+    edge_bend_nodes: &HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>>,
+    edge_connection_nodes: &HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)>,
+) -> EdgeLayout {
+    let EdgeCountData {
+        to,
+        from_level,
+        to_level,
+        edge_type: _,
+        count: _,
+    } = edge;
+    let edge_data = edge.drop_count();
 
-            (
-                edge_type,
-                EdgeLayout {
-                    start_offset: Transition::plain(start_offset),
-                    end_offset: Transition::plain(end_offset),
-                    points: edge_bend_nodes.get(&(group_id, edge_type, to)).map_or_else(
-                        || Vec::new(),
-                        |nodes| {
-                            nodes
-                                .iter()
-                                .map(|dummy_id| EdgePoint {
-                                    point: Transition::plain(
-                                        *node_positions.get(&dummy_id).unwrap(),
-                                    ),
-                                    exists: Transition::plain(1.),
-                                })
-                                .collect()
+    console::log!("{}:{} > {}:{}", group_id, from_level, to, to_level);
+
+    let (start_offset, end_offset) = edge_connection_nodes
+        .get(&(group_id, edge_data.clone()))
+        .map_or_else(
+            || (Point { x: 0.0, y: 0.0 }, Point { x: 0.0, y: 0.0 }),
+            |(start_id, end_id)| {
+                (
+                    node_positions.get(&start_id).map_or_else(
+                        || Point { x: 0.0, y: 0.0 },
+                        |start_point| {
+                            centered_node_positions.get(&group_id).map_or_else(
+                                || Point { x: 0., y: 0. },
+                                |center_point| *start_point - *center_point,
+                            )
                         },
                     ),
-                    exists: Transition::plain(1.),
-                },
-            )
-        })
-        .collect()
+                    node_positions.get(&end_id).map_or_else(
+                        || Point { x: 0.0, y: 0.0 },
+                        |end_point| {
+                            centered_node_positions.get(&to).map_or_else(
+                                || Point { x: 0., y: 0. },
+                                |center_point| *end_point - *center_point,
+                            )
+                        },
+                    ),
+                )
+            },
+        );
+
+    console::log!(
+        "{}:{} {} > {}:{} {}",
+        group_id,
+        from_level,
+        start_offset,
+        to,
+        to_level,
+        end_offset
+    );
+
+    EdgeLayout {
+        start_offset: Transition::plain(start_offset),
+        end_offset: Transition::plain(end_offset),
+        points: edge_bend_nodes.get(&(group_id, edge_data)).map_or_else(
+            || Vec::new(),
+            |nodes| {
+                nodes
+                    .iter()
+                    .map(|dummy_id| EdgePoint {
+                        point: Transition::plain(*node_positions.get(&dummy_id).unwrap()),
+                        exists: Transition::plain(1.),
+                    })
+                    .collect()
+            },
+        ),
+        exists: Transition::plain(1.),
+    }
 }

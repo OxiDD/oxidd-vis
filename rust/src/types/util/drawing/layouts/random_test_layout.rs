@@ -61,50 +61,30 @@ impl<T: Tag> LayoutRules<T> for RandomTestLayout {
                             exists: Transition::plain(1.),
                             edges: graph
                                 .get_children(group_id)
-                                .group_by(|(_, to, _)| *to)
                                 .into_iter()
-                                .map(|(to, edges)| {
-                                    (
-                                        to,
-                                        edges
-                                            .map(|(edge_type, _, _)| {
-                                                (
-                                                    edge_type,
-                                                    EdgeLayout {
-                                                        start_offset: Transition::plain(Point {
-                                                            x: 0.,
-                                                            y: 0.,
-                                                        }),
-                                                        end_offset: Transition::plain(Point {
-                                                            x: 0.,
-                                                            y: 0.,
-                                                        }),
-                                                        points: (vec![
-                                                            0;
-                                                            (random() * 3.0) as usize
-                                                        ])
-                                                        .iter()
-                                                        .map(|_| EdgePoint {
-                                                            point: Transition {
-                                                                old: Point { x: 0.0, y: 0.0 },
-                                                                new: Point {
-                                                                    x: (random() * 20. - 10.)
-                                                                        as f32,
-                                                                    y: (random() * 20. - 10.)
-                                                                        as f32,
-                                                                },
-                                                                old_time: time,
-                                                                duration: 1000,
-                                                            },
-                                                            exists: Transition::plain(1.),
-                                                        })
-                                                        .collect(),
-                                                        exists: Transition::plain(1.),
+                                .map(|edge_data| {
+                                    (edge_data.drop_count(), {
+                                        EdgeLayout {
+                                            start_offset: Transition::plain(Point { x: 0., y: 0. }),
+                                            end_offset: Transition::plain(Point { x: 0., y: 0. }),
+                                            points: (vec![0; (random() * 3.0) as usize])
+                                                .iter()
+                                                .map(|_| EdgePoint {
+                                                    point: Transition {
+                                                        old: Point { x: 0.0, y: 0.0 },
+                                                        new: Point {
+                                                            x: (random() * 20. - 10.) as f32,
+                                                            y: (random() * 20. - 10.) as f32,
+                                                        },
+                                                        old_time: time,
+                                                        duration: 1000,
                                                     },
-                                                )
-                                            })
-                                            .collect(),
-                                    )
+                                                    exists: Transition::plain(1.),
+                                                })
+                                                .collect(),
+                                            exists: Transition::plain(1.),
+                                        }
+                                    })
                                 })
                                 .collect(),
                         }

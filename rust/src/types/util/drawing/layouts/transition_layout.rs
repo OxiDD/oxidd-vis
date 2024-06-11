@@ -12,7 +12,7 @@ use crate::{
             layout_rules::LayoutRules,
         },
         edge_type::EdgeType,
-        group_manager::GroupManager,
+        group_manager::{EdgeData, GroupManager},
         grouped_graph_structure::GroupedGraphStructure,
     },
     util::logging::console,
@@ -71,118 +71,104 @@ impl<T: Tag, L: LayoutRules<T>> LayoutRules<T> for TransitionLayout<T, L> {
             val.old * (1.0 - per) + val.new * per
         };
 
-        let map_edges = |to: &NodeGroupID,
-                         edges: &HashMap<EdgeType<T>, EdgeLayout>,
-                         old_group: &NodeGroupLayout<T>|
-         -> HashMap<EdgeType<T>, EdgeLayout> {
-            edges
-                .iter()
-                .map(|(edge_type, edge)| {
-                    if let Some(old_to_edges) = old_group.edges.get(to) {
-                        if let Some(old_edge) = old_to_edges.get(edge_type) {
-                            // Add all points needed for the new layout, and transition from any old points
-                            let mut new_points: Vec<EdgePoint> = edge
-                                .points
-                                .iter()
-                                .enumerate()
-                                .map(|(index, point)| {
-                                    let out_point = if index >= old_edge.points.len() {
-                                        let to_pos = old.groups.get(to).unwrap().center_position;
-                                        Transition {
-                                            old: get_current_point(to_pos),
-                                            new: point.point.new,
-                                            duration,
-                                            old_time: time,
-                                        }
-                                    } else {
-                                        Transition {
-                                            old: get_current_point(
-                                                old_edge.points.get(index).unwrap().point,
-                                            ),
-                                            new: point.point.new,
-                                            duration,
-                                            old_time: time,
-                                        }
-                                    };
+        let map_edge = |edge_data: &EdgeData<T>,
+                        edge: &EdgeLayout,
+                        old_group: &NodeGroupLayout<T>|
+         -> EdgeLayout {
+            let to = &edge_data.to;
+            // let edge_type = edge_data.edge_type;
+            if let Some(old_edge) = old_group.edges.get(edge_data) {
+                // Add all points needed for the new layout, and transition from any old points
+                let mut new_points: Vec<EdgePoint> = edge
+                    .points
+                    .iter()
+                    .enumerate()
+                    .map(|(index, point)| {
+                        let out_point = if index >= old_edge.points.len() {
+                            let to_pos = old.groups.get(to).unwrap().center_position;
+                            Transition {
+                                old: get_current_point(to_pos),
+                                new: point.point.new,
+                                duration,
+                                old_time: time,
+                            }
+                        } else {
+                            Transition {
+                                old: get_current_point(old_edge.points.get(index).unwrap().point),
+                                new: point.point.new,
+                                duration,
+                                old_time: time,
+                            }
+                        };
 
-                                    EdgePoint {
-                                        point: out_point,
-                                        exists: point.exists,
-                                    }
-                                })
-                                .collect();
-
-                            // Add any extra nodes needed to finish previous animation if needed
-                            new_points.extend(
-                                old_edge
-                                    .points
-                                    .iter()
-                                    .skip(edge.points.len())
-                                    .filter(|point| get_current_float(point.exists) > 0.0)
-                                    .map(|point| EdgePoint {
-                                        point: Transition {
-                                            duration,
-                                            old_time,
-                                            old: get_current_point(point.point),
-                                            new: new.groups.get(to).unwrap().center_position.new,
-                                        },
-                                        exists: Transition {
-                                            duration,
-                                            old_time,
-                                            old: get_current_float(point.exists),
-                                            new: 0.0,
-                                        },
-                                    }),
-                            );
-
-                            return (
-                                *edge_type,
-                                EdgeLayout {
-                                    start_offset: Transition {
-                                        duration,
-                                        old_time,
-                                        old: get_current_point(old_edge.start_offset),
-                                        new: edge.start_offset.new,
-                                    },
-                                    end_offset: Transition {
-                                        duration,
-                                        old_time,
-                                        old: get_current_point(old_edge.end_offset),
-                                        new: edge.end_offset.new,
-                                    },
-                                    points: new_points,
-                                    exists: edge.exists,
-                                },
-                            );
+                        EdgePoint {
+                            point: out_point,
+                            exists: point.exists,
                         }
-                    }
+                    })
+                    .collect();
 
-                    // else:
-                    let points = edge
+                // Add any extra nodes needed to finish previous animation if needed
+                new_points.extend(
+                    old_edge
                         .points
                         .iter()
-                        .filter(|_| false)
+                        .skip(edge.points.len())
+                        .filter(|point| get_current_float(point.exists) > 0.0)
                         .map(|point| EdgePoint {
                             point: Transition {
                                 duration,
                                 old_time,
-                                old: get_current_point(old_group.center_position),
-                                new: point.point.new,
+                                old: get_current_point(point.point),
+                                new: new.groups.get(to).unwrap().center_position.new,
                             },
-                            exists: point.exists,
-                        })
-                        .collect();
-                    (
-                        *edge_type,
-                        EdgeLayout {
-                            start_offset: edge.start_offset,
-                            end_offset: edge.end_offset,
-                            points: points,
-                            exists: edge.exists,
+                            exists: Transition {
+                                duration,
+                                old_time,
+                                old: get_current_float(point.exists),
+                                new: 0.0,
+                            },
+                        }),
+                );
+
+                EdgeLayout {
+                    start_offset: Transition {
+                        duration,
+                        old_time,
+                        old: get_current_point(old_edge.start_offset),
+                        new: edge.start_offset.new,
+                    },
+                    end_offset: Transition {
+                        duration,
+                        old_time,
+                        old: get_current_point(old_edge.end_offset),
+                        new: edge.end_offset.new,
+                    },
+                    points: new_points,
+                    exists: edge.exists,
+                }
+            } else {
+                let points = edge
+                    .points
+                    .iter()
+                    .filter(|_| false)
+                    .map(|point| EdgePoint {
+                        point: Transition {
+                            duration,
+                            old_time,
+                            old: get_current_point(old_group.center_position),
+                            new: point.point.new,
                         },
-                    )
-                })
-                .collect()
+                        exists: point.exists,
+                    })
+                    .collect();
+                EdgeLayout {
+                    start_offset: edge.start_offset,
+                    end_offset: edge.end_offset,
+                    points: points,
+                    exists: edge.exists,
+                }
+            }
         };
 
         DiagramLayout {
@@ -216,7 +202,9 @@ impl<T: Tag, L: LayoutRules<T>> LayoutRules<T> for TransitionLayout<T, L> {
                                 edges: group
                                     .edges
                                     .iter()
-                                    .map(|(to, edges)| (*to, map_edges(to, edges, old_group)))
+                                    .map(|(edge_data, edge)| {
+                                        (edge_data.clone(), map_edge(edge_data, edge, old_group))
+                                    })
                                     .collect(),
                             }
                         } else {

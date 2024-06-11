@@ -50,6 +50,7 @@ use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition_layout::TransitionLayout;
 use super::util::drawing::renderer::Renderer;
+use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::edge_type::EdgeType;
 use super::util::graph_structure::GraphStructure;
@@ -78,9 +79,9 @@ where
 }
 
 impl<
-        ET: Tag + 'static,
+        // ET: Tag + 'static,
         T: 'static,
-        E: Edge<Tag = ET> + 'static,
+        E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
         R: DiagramRules<E, N, T> + 'static,
         MR: ManagerRef + 'static,
@@ -88,10 +89,33 @@ impl<
     > Diagram for BDDDiagram<MR, F>
 where
     for<'id> F::Manager<'id>:
-        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
+        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramDrawer> {
-        let renderer = WebglRenderer::from_canvas(canvas).unwrap();
+        let renderer = WebglRenderer::from_canvas(
+            canvas,
+            HashMap::from([
+                (
+                    EdgeType::new((), 0),
+                    EdgeRenderingType {
+                        color: (0., 0., 0.),
+                        width: 0.15,
+                        dash_solid: 1.0,
+                        dash_transparent: 0.0, // No dashing, just solid
+                    },
+                ),
+                (
+                    EdgeType::new((), 1),
+                    EdgeRenderingType {
+                        color: (0.6, 0.6, 0.6),
+                        width: 0.1,
+                        dash_solid: 0.2,
+                        dash_transparent: 0.1,
+                    },
+                ),
+            ]),
+        )
+        .unwrap();
         let layout = LayeredLayout::new(
             SugiyamaOrdering::new(1, 1),
             AverageGroupAlignment,
@@ -141,8 +165,8 @@ impl<T: Tag + 'static, G: GraphStructure<T> + 'static, R: Renderer<T>, L: Layout
                 group_manager,
             ),
         };
-        out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+        out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         // out.reveal_all(30000);
         out
     }

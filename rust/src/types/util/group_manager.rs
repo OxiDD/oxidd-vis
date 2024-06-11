@@ -19,7 +19,10 @@ use crate::{
     wasm_interface::{NodeGroupID, NodeID, TargetID, TargetIDType},
 };
 
-use super::{graph_structure::GraphStructure, grouped_graph_structure::GroupedGraphStructure};
+use super::{
+    graph_structure::GraphStructure,
+    grouped_graph_structure::{EdgeCountData, GroupedGraphStructure},
+};
 
 pub struct GroupManager<T: Tag, G: GraphStructure<T>> {
     /// root: Rc<F>,
@@ -35,11 +38,42 @@ pub struct GroupManager<T: Tag, G: GraphStructure<T>> {
     max_level: LevelNo,
 }
 
-type EdgeSet<T: Tag> = HashMap<NodeGroupID, HashMap<EdgeType<T>, i32>>;
+#[derive(PartialEq, Eq, Clone)]
+pub struct EdgeData<T: Tag> {
+    pub to: NodeGroupID,
+    pub from_level: LevelNo,
+    pub to_level: LevelNo,
+    pub edge_type: EdgeType<T>,
+}
+impl<T: Tag> EdgeData<T> {
+    pub fn new(
+        to: NodeGroupID,
+        from_level: LevelNo,
+        to_level: LevelNo,
+        edge_type: EdgeType<T>,
+    ) -> EdgeData<T> {
+        EdgeData {
+            to,
+            from_level,
+            to_level,
+            edge_type,
+        }
+    }
+}
+impl<T: Tag> Hash for EdgeData<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.to.hash(state);
+        self.from_level.hash(state);
+        self.to_level.hash(state);
+        self.edge_type.hash(state);
+    }
+}
+
+type EdgeCounts<T: Tag> = HashMap<EdgeData<T>, usize>;
 pub struct NodeGroup<T: Tag> {
     nodes: HashSet<NodeID>,
-    out_edges: EdgeSet<T>,
-    in_edges: EdgeSet<T>,
+    out_edges: EdgeCounts<T>,
+    in_edges: EdgeCounts<T>,
     layer_min: PriorityQueue<NodeID, Reverse<LevelNo>>,
     layer_max: PriorityQueue<NodeID, LevelNo>,
 }
@@ -83,21 +117,11 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
         self.free_ids.make_available(id);
     }
 
-    fn remove_edges_to_set(
-        edges: &mut EdgeSet<T>,
-        edge_type: EdgeType<T>,
-        target: NodeGroupID,
-        count: i32,
-    ) {
-        if let Some(target_edges) = edges.get_mut(&target) {
-            if let Some(cur_count) = target_edges.get_mut(&edge_type) {
-                *cur_count -= count;
-                if (*cur_count <= 0) {
-                    target_edges.remove(&edge_type);
-                }
-            }
-            if target_edges.is_empty() {
-                edges.remove(&target);
+    fn remove_edges_to_set(edges: &mut EdgeCounts<T>, edge_data: EdgeData<T>, count: usize) {
+        if let Some(cur_count) = edges.get_mut(&edge_data) {
+            *cur_count -= count;
+            if (*cur_count <= 0) {
+                edges.remove(&edge_data);
             }
         }
     }
@@ -105,40 +129,54 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
     fn remove_edges(
         &mut self,
         from: NodeGroupID,
+        from_level: LevelNo,
         to: NodeGroupID,
+        to_level: LevelNo,
         edge_type: EdgeType<T>,
-        count: i32,
+        count: usize,
     ) {
         let from_group = self.get_node_group_mut(from);
-        GroupManager::<T, G>::remove_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
+        GroupManager::<T, G>::remove_edges_to_set(
+            &mut from_group.out_edges,
+            EdgeData::new(to, from_level, to_level, edge_type),
+            count,
+        );
 
         let to_group = self.get_node_group_mut(to);
-        GroupManager::<T, G>::remove_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
+        GroupManager::<T, G>::remove_edges_to_set(
+            &mut to_group.in_edges,
+            EdgeData::new(from, to_level, from_level, edge_type),
+            count,
+        );
     }
 
-    fn add_edges_to_set(
-        edges: &mut EdgeSet<T>,
-        edge_type: EdgeType<T>,
-        target: NodeGroupID,
-        count: i32,
-    ) {
-        let target_edges = edges.entry(target).or_insert_with(|| HashMap::new());
-        let cur_count = target_edges.entry(edge_type).or_insert(0);
+    fn add_edges_to_set(edges: &mut EdgeCounts<T>, edge_data: EdgeData<T>, count: usize) {
+        let cur_count = edges.entry(edge_data).or_insert(0);
         *cur_count += count;
     }
 
     fn add_edges(
         &mut self,
         from: NodeGroupID,
+        from_level: LevelNo,
         to: NodeGroupID,
+        to_level: LevelNo,
         edge_type: EdgeType<T>,
-        count: i32,
+        count: usize,
     ) {
         let from_group = self.get_node_group_mut(from);
-        GroupManager::<T, G>::add_edges_to_set(&mut from_group.out_edges, edge_type, to, count);
+        GroupManager::<T, G>::add_edges_to_set(
+            &mut from_group.out_edges,
+            EdgeData::new(to, from_level, to_level, edge_type),
+            count,
+        );
 
         let to_group = self.get_node_group_mut(to);
-        GroupManager::<T, G>::add_edges_to_set(&mut to_group.in_edges, edge_type, from, count);
+        GroupManager::<T, G>::add_edges_to_set(
+            &mut to_group.in_edges,
+            EdgeData::new(from, to_level, from_level, edge_type),
+            count,
+        );
     }
 }
 
@@ -209,16 +247,24 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
                 // Update edges
                 for (edge_type, child_id) in self.graph.get_children(from_id) {
                     let child_group_id = self.get_node_group_id(child_id);
+                    let child_level = self.graph.get_level(child_id);
+
                     if contained && cur_group_id != child_group_id {
-                        self.remove_edges(cur_group_id, child_group_id, edge_type, 1);
+                        self.remove_edges(
+                            cur_group_id,
+                            from_level,
+                            child_group_id,
+                            child_level,
+                            edge_type,
+                            1,
+                        );
                     }
                     if to != child_group_id {
-                        self.add_edges(to, child_group_id, edge_type, 1);
+                        self.add_edges(to, from_level, child_group_id, child_level, edge_type, 1);
                     }
 
                     // Ensure the child id is in there
                     if child_group_id == 0 {
-                        let child_level = self.graph.get_level(child_id);
                         let child_group = self.get_node_group_mut(child_group_id);
                         if child_group.nodes.insert(child_id) {
                             child_group.layer_min.push(child_id, Reverse(child_level));
@@ -227,14 +273,22 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
                     }
                 }
 
-                for (edge_type, edge_from) in self.graph.get_known_parents(from_id) {
-                    let from_group = self.get_node_group_id(edge_from);
+                for (edge_type, parent_id) in self.graph.get_known_parents(from_id) {
+                    let parent_group_id = self.get_node_group_id(parent_id);
+                    let parent_level = self.graph.get_level(parent_id);
 
-                    if contained && from_group != cur_group_id {
-                        self.remove_edges(from_group, cur_group_id, edge_type, 1);
+                    if contained && parent_group_id != cur_group_id {
+                        self.remove_edges(
+                            parent_group_id,
+                            parent_level,
+                            cur_group_id,
+                            from_level,
+                            edge_type,
+                            1,
+                        );
                     }
-                    if from_group != to {
-                        self.add_edges(from_group, to, edge_type, 1);
+                    if parent_group_id != to {
+                        self.add_edges(parent_group_id, parent_level, to, from_level, edge_type, 1);
                     }
                 }
 
@@ -281,23 +335,29 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
                 let layer_max: Vec<(NodeID, LevelNo)> =
                     from_group.layer_max.iter().map(|(&n, &i)| (n, i)).collect();
 
-                for out_edge_target in out_edges.keys() {
-                    let out_types = &out_edges[out_edge_target];
-                    for out_type in out_types.keys() {
-                        let count = out_types[out_type];
+                for edge_data in out_edges.keys() {
+                    let count = out_edges[edge_data];
+                    let EdgeData {
+                        to: edge_to,
+                        from_level,
+                        to_level,
+                        edge_type,
+                    } = *edge_data;
 
-                        self.remove_edges(from_id, *out_edge_target, *out_type, count);
-                        self.add_edges(to, *out_edge_target, *out_type, count);
-                    }
+                    self.remove_edges(from_id, from_level, edge_to, to_level, edge_type, count);
+                    self.add_edges(to, from_level, edge_to, to_level, edge_type, count);
                 }
-                for in_edge_target in in_edges.keys() {
-                    let in_types = &in_edges[in_edge_target];
-                    for in_type in in_types.keys() {
-                        let count = in_types[in_type];
+                for edge_data in in_edges.keys() {
+                    let count = in_edges[edge_data];
+                    let EdgeData {
+                        to: edge_to,
+                        from_level,
+                        to_level,
+                        edge_type,
+                    } = *edge_data;
 
-                        self.remove_edges(*in_edge_target, from_id, *in_type, count);
-                        self.add_edges(*in_edge_target, to, *in_type, count);
-                    }
+                    self.remove_edges(edge_to, to_level, from_id, from_level, edge_type, count);
+                    self.add_edges(edge_to, to_level, to, from_level, edge_type, count);
                 }
 
                 for from_node in &from_nodes {
@@ -392,36 +452,56 @@ impl<T: Tag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, 
         }
     }
 
-    fn get_parents(&self, group: NodeGroupID) -> IntoIter<(EdgeType<T>, NodeGroupID, i32)> {
-        if let Some(group) = self.group_by_id.get(&group) {
-            return group
-                .in_edges
-                .iter()
-                .flat_map(|(to, edges)| {
-                    edges
-                        .iter()
-                        .map(move |(edge_type, count)| (*edge_type, *to, *count))
-                })
-                .collect::<Vec<(EdgeType<T>, NodeGroupID, i32)>>()
-                .into_iter();
-        }
-        Vec::new().into_iter()
+    fn get_parents(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>> {
+        self.group_by_id.get(&group).map_or_else(
+            || Vec::default().into_iter(),
+            |group| {
+                group
+                    .in_edges
+                    .iter()
+                    .map(
+                        |(
+                            &EdgeData {
+                                to,
+                                from_level,
+                                to_level,
+                                edge_type,
+                            },
+                            &count,
+                        )| {
+                            EdgeCountData::new(to, from_level, to_level, edge_type, count)
+                        },
+                    )
+                    .collect::<Vec<EdgeCountData<T>>>()
+                    .into_iter()
+            },
+        )
     }
 
-    fn get_children(&self, group: NodeGroupID) -> IntoIter<(EdgeType<T>, NodeGroupID, i32)> {
-        if let Some(group) = self.group_by_id.get(&group) {
-            return group
-                .out_edges
-                .iter()
-                .flat_map(|(to, edges)| {
-                    edges
-                        .iter()
-                        .map(move |(edge_type, count)| (*edge_type, *to, *count))
-                })
-                .collect::<Vec<(EdgeType<T>, NodeGroupID, i32)>>()
-                .into_iter();
-        }
-        Vec::new().into_iter()
+    fn get_children(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>> {
+        self.group_by_id.get(&group).map_or_else(
+            || Vec::default().into_iter(),
+            |group| {
+                group
+                    .out_edges
+                    .iter()
+                    .map(
+                        |(
+                            &EdgeData {
+                                to,
+                                from_level,
+                                to_level,
+                                edge_type,
+                            },
+                            &count,
+                        )| {
+                            EdgeCountData::new(to, from_level, to_level, edge_type, count)
+                        },
+                    )
+                    .collect::<Vec<EdgeCountData<T>>>()
+                    .into_iter()
+            },
+        )
     }
 
     fn get_level_range(&self, group_id: NodeGroupID) -> (oxidd::LevelNo, oxidd::LevelNo) {
@@ -440,15 +520,17 @@ impl<T: Tag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, 
     }
 
     fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID> {
-        if let Some(group) = self.group_by_id.get(&group) {
-            return group
-                .nodes
-                .iter()
-                .map(|&id| id)
-                .collect::<Vec<NodeID>>()
-                .into_iter();
-        }
-        Vec::new().into_iter()
+        self.group_by_id.get(&group).map_or_else(
+            || Vec::default().into_iter(),
+            |group| {
+                group
+                    .nodes
+                    .iter()
+                    .map(|&id| id)
+                    .collect::<Vec<NodeID>>()
+                    .into_iter()
+            },
+        )
     }
 
     fn get_group(&self, node: NodeID) -> NodeGroupID {

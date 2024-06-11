@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     ops::{Add, Sub},
     rc::Rc,
 };
@@ -7,7 +8,7 @@ use std::{
 use oxidd_core::Tag;
 
 use crate::{
-    types::util::edge_type::EdgeType,
+    types::util::{edge_type::EdgeType, group_manager::EdgeData},
     util::rectangle::Rectangle,
     wasm_interface::{NodeGroupID, NodeID},
 };
@@ -35,6 +36,11 @@ impl Sub for Point {
             x: self.x - rhs.x,
             y: self.y - rhs.y,
         }
+    }
+}
+impl Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
     }
 }
 
@@ -74,7 +80,7 @@ pub struct NodeGroupLayout<T: Tag> {
     pub size: Transition<Point>,
     pub label: String,
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
-    pub edges: HashMap<NodeGroupID, HashMap<EdgeType<T>, EdgeLayout>>,
+    pub edges: HashMap<EdgeData<T>, EdgeLayout>,
 }
 impl<T: Tag> NodeGroupLayout<T> {
     // TODO: possibly consider the selection time? (animations should be quick and not have a huge effect however)
