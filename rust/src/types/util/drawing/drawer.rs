@@ -12,8 +12,16 @@ use oxidd_core::Tag;
 use web_sys::WebGl2RenderingContext;
 
 use crate::{
-    types::util::{group_manager::GroupManager, grouped_graph_structure::GroupedGraphStructure},
-    util::{logging::console, rectangle::Rectangle, transformation::Transformation},
+    types::util::{
+        group_manager::GroupManager,
+        grouped_graph_structure::{GroupedGraphStructure, SourceReader, SourceTracker},
+    },
+    util::{
+        logging::console,
+        rc_refcell::{MutRcRefCell, RcRefCell},
+        rectangle::Rectangle,
+        transformation::Transformation,
+    },
 };
 
 use super::{
@@ -22,24 +30,22 @@ use super::{
     renderer::Renderer,
 };
 
-pub struct Drawer<T: Tag, R: Renderer<T>, L: LayoutRules<T>> {
+pub struct Drawer<T: Tag, R: Renderer<T>, L: LayoutRules<T, G>, G: GroupedGraphStructure<T>> {
     renderer: R,
     layout_rules: L,
     layout: DiagramLayout<T>,
-    graph: Rc<RefCell<dyn GroupedGraphStructure<T>>>,
+    graph: RcRefCell<G>,
+    sources: G::Tracker,
     transform: Transformation,
 }
 
-impl<T: Tag, R: Renderer<T>, L: LayoutRules<T>> Drawer<T, R, L> {
-    pub fn new(
-        renderer: R,
-        layout_rules: L,
-        graph: Rc<RefCell<dyn GroupedGraphStructure<T>>>,
-    ) -> Drawer<T, R, L> {
+impl<T: Tag, R: Renderer<T>, L: LayoutRules<T, G>, G: GroupedGraphStructure<T>> Drawer<T, R, L, G> {
+    pub fn new(renderer: R, layout_rules: L, graph: MutRcRefCell<G>) -> Drawer<T, R, L, G> {
         Drawer {
+            sources: graph.get().get_source_reader(),
             renderer,
             layout_rules,
-            graph,
+            graph: graph.clone_readonly(),
             layout: DiagramLayout {
                 groups: HashMap::new(),
                 layers: HashMap::new(),
@@ -49,9 +55,12 @@ impl<T: Tag, R: Renderer<T>, L: LayoutRules<T>> Drawer<T, R, L> {
     }
 
     pub fn layout(&mut self, time: u32) {
-        self.layout = self
-            .layout_rules
-            .layout(&(*self.graph.borrow()), &self.layout, time);
+        self.layout =
+            self.layout_rules
+                .layout(&*self.graph.read(), &self.layout, &self.sources, time);
+        for group_id in self.sources.get_sourced_nodes() {
+            self.sources.delete_source(group_id);
+        }
         self.renderer.update_layout(&self.layout);
     }
     pub fn set_transform(&mut self, width: u32, height: u32, x: f32, y: f32, scale: f32) {

@@ -4,5 +4,6 @@ pub mod free_id_manager;
 pub mod logging;
 pub mod matrix4;
 pub mod panic_hook;
+pub mod rc_refcell;
 pub mod rectangle;
 pub mod transformation;

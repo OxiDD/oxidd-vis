@@ -7,7 +7,7 @@ use crate::{
             diagram_layout::{DiagramLayout, Point},
             layout_rules::LayoutRules,
         },
-        grouped_graph_structure::GroupedGraphStructure,
+        grouped_graph_structure::{GroupedGraphStructure, SourceReader},
     },
     util::logging::console,
     wasm_interface::NodeGroupID,
@@ -38,21 +38,22 @@ impl<T: Tag> SugiyamaLibLayout<T> {
     }
 }
 
-impl<T: Tag> LayoutRules<T> for SugiyamaLibLayout<T> {
+impl<T: Tag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for SugiyamaLibLayout<T> {
     fn layout(
         &mut self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &G,
         old: &DiagramLayout<T>,
+        sources: &G::Tracker,
         time: u32,
     ) -> DiagramLayout<T> {
-        self.layout.layout(graph, old, time)
+        self.layout.layout(graph, old, sources, time)
     }
 }
 struct SugiyamaLibPositioning;
 impl<T: Tag> NodePositioning<T> for SugiyamaLibPositioning {
     fn position_nodes(
         &self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,

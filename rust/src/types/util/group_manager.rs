@@ -22,6 +22,7 @@ use crate::{
 use super::{
     graph_structure::GraphStructure,
     grouped_graph_structure::{EdgeCountData, GroupedGraphStructure},
+    source_tracker_manager::{SourceReader, SourceTrackerManager},
 };
 
 pub struct GroupManager<T: Tag, G: GraphStructure<T>> {
@@ -34,8 +35,9 @@ pub struct GroupManager<T: Tag, G: GraphStructure<T>> {
     group_id_by_node: HashMap<NodeID, NodeGroupID>,
     group_by_id: HashMap<NodeGroupID, NodeGroup<T>>,
     free_ids: FreeIdManager<usize>,
-    /// The highest level found so far
-    max_level: LevelNo,
+    returned_ids: HashSet<usize>,
+    /// Source trackers to manage sources obtained from the groupedGraphStructure
+    sources: SourceTrackerManager,
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -114,7 +116,21 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
 
     fn remove_group(&mut self, id: NodeGroupID) {
         self.group_by_id.remove(&id);
-        self.free_ids.make_available(id);
+
+        // We are not allowed to reuse an ID, until it's no longer a source
+        if self.sources.is_tracked_source(id) {
+            self.returned_ids.insert(id);
+        } else {
+            self.free_ids.make_available(id);
+        }
+
+        // Perform some cleanup of earlier returned ids
+        for returned in self.returned_ids.clone() {
+            if !self.sources.is_tracked_source(returned) {
+                self.remove_group(returned);
+                self.returned_ids.remove(&returned);
+            }
+        }
     }
 
     fn remove_edges_to_set(edges: &mut EdgeCounts<T>, edge_data: EdgeData<T>, count: usize) {
@@ -207,7 +223,8 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
                 },
             )]),
             free_ids: FreeIdManager::new(1),
-            max_level: 0,
+            returned_ids: HashSet::new(),
+            sources: SourceTrackerManager::new(),
         }
     }
 
@@ -381,6 +398,13 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
         &mut self,
         from: Vec<crate::wasm_interface::TargetID>,
     ) -> crate::wasm_interface::NodeGroupID {
+        let maybe_source = from
+            .get(0)
+            .map(|&TargetID(target_type, id)| match target_type {
+                TargetIDType::NodeID => self.get_node_group_id(id),
+                _ => id,
+            });
+
         let new_id = self.free_ids.get_next();
         self.group_by_id.insert(
             new_id,
@@ -393,6 +417,9 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
             },
         );
         self.set_group(from, new_id);
+        if let Some(source) = maybe_source {
+            self.sources.add_source(new_id, source);
+        }
         new_id
     }
 
@@ -435,6 +462,7 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
 }
 
 impl<T: Tag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, G> {
+    type Tracker = SourceReader;
     fn get_root(&self) -> NodeGroupID {
         let root_node = &self.graph.get_root();
         self.get_node_group_id(*root_node)
@@ -535,5 +563,9 @@ impl<T: Tag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, 
 
     fn get_group(&self, node: NodeID) -> NodeGroupID {
         self.get_node_group_id(node)
+    }
+
+    fn get_source_reader(&mut self) -> SourceReader {
+        self.sources.get_reader()
     }
 }

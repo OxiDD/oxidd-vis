@@ -13,16 +13,17 @@ use crate::types::util::{
         layout_rules::LayoutRules,
     },
     group_manager::GroupManager,
-    grouped_graph_structure::GroupedGraphStructure,
+    grouped_graph_structure::{GroupedGraphStructure, SourceReader},
 };
 
 pub struct RandomTestLayout;
 
-impl<T: Tag> LayoutRules<T> for RandomTestLayout {
+impl<T: Tag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for RandomTestLayout {
     fn layout(
         &mut self,
-        graph: &GroupedGraphStructure<T>,
+        graph: &G,
         old: &DiagramLayout<T>,
+        sources: &G::Tracker,
         time: u32,
     ) -> DiagramLayout<T> {
         let groups = graph.get_all_groups();
@@ -59,7 +60,6 @@ impl<T: Tag> LayoutRules<T> for RandomTestLayout {
                                 duration: 1000,
                             },
                             exists: Transition::plain(1.),
-                            nodes: graph.get_nodes_of_group(group_id).collect(),
                             edges: graph
                                 .get_children(group_id)
                                 .into_iter()

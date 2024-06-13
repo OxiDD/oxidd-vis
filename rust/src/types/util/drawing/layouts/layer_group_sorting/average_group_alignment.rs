@@ -20,7 +20,7 @@ pub struct AverageGroupAlignment;
 impl<T: Tag> LayerGroupSorting<T> for AverageGroupAlignment {
     fn align_cross_layer_nodes(
         &self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group

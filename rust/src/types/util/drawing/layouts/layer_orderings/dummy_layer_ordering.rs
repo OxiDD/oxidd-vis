@@ -17,7 +17,7 @@ pub struct DummyLayerOrdering;
 impl<T: Tag> LayerOrdering<T> for DummyLayerOrdering {
     fn order_nodes(
         &self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,

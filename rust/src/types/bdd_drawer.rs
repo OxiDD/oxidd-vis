@@ -16,6 +16,7 @@ use crate::traits::Diagram;
 use crate::traits::DiagramDrawer;
 use crate::util::free_id_manager::FreeIdManager;
 use crate::util::logging::console;
+use crate::util::rc_refcell::MutRcRefCell;
 use crate::util::rectangle::Rectangle;
 use crate::wasm_interface::NodeGroupID;
 use crate::wasm_interface::NodeID;
@@ -79,7 +80,6 @@ where
 }
 
 impl<
-        // ET: Tag + 'static,
         T: 'static,
         E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
@@ -129,17 +129,26 @@ where
     }
 }
 
-pub struct BDDDiagramDrawer<T: Tag, G: GraphStructure<T>, R: Renderer<T>, L: LayoutRules<T>> {
-    group_manager: Rc<RefCell<GroupManager<T, G>>>,
-    drawer: Drawer<T, R, L>,
+pub struct BDDDiagramDrawer<
+    T: Tag,
+    G: GraphStructure<T>,
+    R: Renderer<T>,
+    L: LayoutRules<T, GroupManager<T, G>>,
+> {
+    group_manager: MutRcRefCell<GroupManager<T, G>>,
+    drawer: Drawer<T, R, L, GroupManager<T, G>>,
 }
 
-impl<T: Tag + 'static, G: GraphStructure<T> + 'static, R: Renderer<T>, L: LayoutRules<T>>
-    BDDDiagramDrawer<T, G, R, L>
+impl<
+        T: Tag + 'static,
+        G: GraphStructure<T> + 'static,
+        R: Renderer<T>,
+        L: LayoutRules<T, GroupManager<T, G>>,
+    > BDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> BDDDiagramDrawer<T, G, R, L> {
         let root = graph.get_root();
-        let group_manager = Rc::new(RefCell::new(GroupManager::new(graph)));
+        let group_manager = MutRcRefCell::new(GroupManager::new(graph));
         let mut out = BDDDiagramDrawer {
             group_manager: group_manager.clone(),
             drawer: Drawer::new(
@@ -176,8 +185,7 @@ impl<T: Tag + 'static, G: GraphStructure<T> + 'static, R: Renderer<T>, L: Layout
     pub fn reveal_all(&mut self, limit: u32) {
         let nodes = {
             let explored_group = self.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
-            let groups = (*self.group_manager).borrow_mut();
-            groups.get_nodes_of_group(explored_group)
+            self.group_manager.read().get_nodes_of_group(explored_group)
         };
         let mut count = 0;
         for node_id in nodes {
@@ -192,8 +200,8 @@ impl<T: Tag + 'static, G: GraphStructure<T> + 'static, R: Renderer<T>, L: Layout
     }
 }
 
-impl<T: Tag, G: GraphStructure<T>, R: Renderer<T>, L: LayoutRules<T>> DiagramDrawer
-    for BDDDiagramDrawer<T, G, R, L>
+impl<T: Tag, G: GraphStructure<T>, R: Renderer<T>, L: LayoutRules<T, GroupManager<T, G>>>
+    DiagramDrawer for BDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         // let children = self.get_children(&self.root);
@@ -223,18 +231,18 @@ impl<T: Tag, G: GraphStructure<T>, R: Renderer<T>, L: LayoutRules<T>> DiagramDra
         from: Vec<crate::wasm_interface::TargetID>,
         to: crate::wasm_interface::NodeGroupID,
     ) -> bool {
-        (*self.group_manager).borrow_mut().set_group(from, to)
+        self.group_manager.get().set_group(from, to)
     }
 
     fn create_group(
         &mut self,
         from: Vec<crate::wasm_interface::TargetID>,
     ) -> crate::wasm_interface::NodeGroupID {
-        (*self.group_manager).borrow_mut().create_group(from)
+        self.group_manager.get().create_group(from)
     }
 
     fn split_edges(&mut self, group: NodeGroupID, fully: bool) {
-        (*self.group_manager).borrow_mut().split_edges(group, fully);
+        self.group_manager.get().split_edges(group, fully);
     }
 
     fn get_nodes(&self, area: Rectangle) -> Vec<crate::wasm_interface::NodeGroupID> {

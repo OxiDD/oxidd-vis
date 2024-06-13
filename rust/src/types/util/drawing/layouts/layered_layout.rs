@@ -19,7 +19,7 @@ use crate::{
         },
         edge_type::EdgeType,
         group_manager::EdgeData,
-        grouped_graph_structure::{EdgeCountData, GroupedGraphStructure},
+        grouped_graph_structure::{EdgeCountData, GroupedGraphStructure, SourceReader},
     },
     util::logging::console,
     wasm_interface::NodeGroupID,
@@ -31,7 +31,7 @@ use super::util::layered::layer_orderer::{EdgeMap, Order};
 pub trait LayerOrdering<T: Tag> {
     fn order_nodes(
         &self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
@@ -47,7 +47,7 @@ pub trait LayerOrdering<T: Tag> {
 pub trait NodePositioning<T: Tag> {
     fn position_nodes(
         &self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
@@ -63,7 +63,7 @@ pub trait NodePositioning<T: Tag> {
 pub trait LayerGroupSorting<T: Tag> {
     fn align_cross_layer_nodes(
         &self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
@@ -118,13 +118,19 @@ pub fn is_edge_dummy(node: NodeGroupID, dummy_edge_start_id: NodeGroupID) -> boo
     node >= dummy_edge_start_id
 }
 
-impl<T: Tag, O: LayerOrdering<T>, G: LayerGroupSorting<T>, P: NodePositioning<T>> LayoutRules<T>
-    for LayeredLayout<T, O, G, P>
+impl<
+        T: Tag,
+        O: LayerOrdering<T>,
+        S: LayerGroupSorting<T>,
+        P: NodePositioning<T>,
+        G: GroupedGraphStructure<T>,
+    > LayoutRules<T, G> for LayeredLayout<T, O, S, P>
 {
     fn layout(
         &mut self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &G,
         old: &DiagramLayout<T>,
+        sources: &G::Tracker,
         time: u32,
     ) -> DiagramLayout<T> {
         // Setup the layers and edges, and a way of adding o them
@@ -210,7 +216,7 @@ fn add_to_edges(edges: &mut EdgeMap, from: NodeGroupID, to: NodeGroupID) {
 }
 
 fn add_groups_with_dummies<T: Tag>(
-    graph: &dyn GroupedGraphStructure<T>,
+    graph: &impl GroupedGraphStructure<T>,
     layers: &mut Vec<Order>,
     edges: &mut EdgeMap,
     dummy_owners: &mut HashMap<NodeGroupID, NodeGroupID>,
@@ -249,7 +255,7 @@ fn add_groups_with_dummies<T: Tag>(
 }
 
 fn add_edges_with_dummies<T: Tag>(
-    graph: &dyn GroupedGraphStructure<T>,
+    graph: &impl GroupedGraphStructure<T>,
     layers: &mut Vec<Order>,
     edges: &mut EdgeMap,
     dummy_owners: &mut HashMap<NodeGroupID, NodeGroupID>,
@@ -313,7 +319,7 @@ fn add_edges_with_dummies<T: Tag>(
 }
 
 fn format_layout<T: Tag>(
-    graph: &dyn GroupedGraphStructure<T>,
+    graph: &impl GroupedGraphStructure<T>,
     max_curve_offset: f32,
     node_positions: HashMap<usize, Point>,
     layer_positions: HashMap<LevelNo, f32>,
@@ -365,7 +371,6 @@ fn format_layout<T: Tag>(
                                     - layer_positions.get(&s).unwrap_or(&0.)),
                         }),
                         exists: Transition::plain(1.),
-                        nodes: graph.get_nodes_of_group(group_id).collect(),
                         edges: graph
                             .get_children(group_id)
                             .into_iter()

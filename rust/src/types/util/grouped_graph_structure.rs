@@ -1,4 +1,4 @@
-use std::{hash::Hash, vec::IntoIter};
+use std::{borrow::Borrow, cell::RefCell, collections::HashSet, hash::Hash, rc::Rc, vec::IntoIter};
 
 use oxidd::LevelNo;
 use oxidd_core::Tag;
@@ -8,6 +8,7 @@ use crate::wasm_interface::{NodeGroupID, NodeID};
 use super::{edge_type::EdgeType, group_manager::EdgeData};
 
 pub trait GroupedGraphStructure<T: Tag> {
+    type Tracker: SourceTracker;
     fn get_root(&self) -> NodeGroupID;
     fn get_all_groups(&self) -> Vec<NodeGroupID>;
     fn get_hidden(&self) -> Option<NodeGroupID>;
@@ -16,6 +17,8 @@ pub trait GroupedGraphStructure<T: Tag> {
     fn get_children(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>>;
     fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID>;
     fn get_level_range(&self, group: NodeGroupID) -> (LevelNo, LevelNo);
+    /// Retrieves a source reader, which can be used to animate creation of new groups
+    fn get_source_reader(&mut self) -> Self::Tracker;
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -60,4 +63,15 @@ impl<T: Tag> Hash for EdgeCountData<T> {
         self.edge_type.hash(state);
         self.count.hash(state);
     }
+}
+pub trait SourceTracker: SourceReader {
+    /// Deletes the source (tracking) of the given group, such that a feature call with give get_source(group) = group, until a new group with the same ID is created
+    fn delete_source(&mut self, group: NodeGroupID) -> ();
+}
+
+pub trait SourceReader {
+    /// Retrieves the group that the given group originates (is created/split up/merged) from, such that for s = get_source(group) we have get_source(s) = s
+    fn get_source(&self, group: NodeGroupID) -> NodeGroupID;
+    /// Retrieves all nodes for which sources are stored
+    fn get_sourced_nodes(&self) -> HashSet<NodeGroupID>;
 }

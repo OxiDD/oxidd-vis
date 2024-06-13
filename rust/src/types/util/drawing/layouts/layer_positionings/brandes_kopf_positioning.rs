@@ -29,7 +29,7 @@ pub struct BrandesKopfPositioning;
 impl<T: Tag> NodePositioning<T> for BrandesKopfPositioning {
     fn position_nodes(
         &self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,

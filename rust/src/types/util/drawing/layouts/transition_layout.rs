@@ -17,7 +17,7 @@ use crate::{
         },
         edge_type::EdgeType,
         group_manager::{EdgeData, GroupManager},
-        grouped_graph_structure::GroupedGraphStructure,
+        grouped_graph_structure::{GroupedGraphStructure, SourceReader},
     },
     util::logging::console,
     wasm_interface::NodeGroupID,
@@ -27,32 +27,38 @@ use crate::{
 /// A layout builder that takes another layout approach, and applies transitioning to it.
 /// This will make layout changes smoothly transition from the previous state to the new state.
 ///
-pub struct TransitionLayout<T: Tag, L: LayoutRules<T>> {
+pub struct TransitionLayout<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> {
     layout: L,
     duration: u32,
+    // TODO: see if these generics and  phantom data is even needed
     tag: PhantomData<T>,
+    graph: PhantomData<G>,
 }
 
-impl<T: Tag, L: LayoutRules<T>> TransitionLayout<T, L> {
-    pub fn new(layout: L) -> TransitionLayout<T, L> {
+impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> TransitionLayout<T, G, L> {
+    pub fn new(layout: L) -> TransitionLayout<T, G, L> {
         TransitionLayout {
             layout,
             duration: 1000,
             tag: PhantomData,
+            graph: PhantomData,
         }
     }
 }
 
-impl<T: Tag, L: LayoutRules<T>> LayoutRules<T> for TransitionLayout<T, L> {
+impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G>
+    for TransitionLayout<T, G, L>
+{
     fn layout(
         &mut self,
-        graph: &GroupedGraphStructure<T>,
+        graph: &G,
         old: &DiagramLayout<T>,
+        sources: &G::Tracker,
         time: u32,
     ) -> DiagramLayout<T> {
         let duration = self.duration;
         let old_time = time;
-        let new = self.layout.layout(graph, old, time);
+        let new = self.layout.layout(graph, old, sources, time);
 
         fn get_per<T>(time: u32, val: Transition<T>) -> f32 {
             f32::max(
@@ -75,7 +81,8 @@ impl<T: Tag, L: LayoutRules<T>> LayoutRules<T> for TransitionLayout<T, L> {
             val.old * (1.0 - per) + val.new * per
         };
 
-        let (node_mapping, edge_mapping) = relate_elements(graph, old, &new, &get_current_point);
+        let (node_mapping, edge_mapping) =
+            relate_elements(graph, old, &new, sources, &get_current_point);
 
         let map_edge = |from: NodeGroupID,
                         edge_data: &EdgeData<T>,
@@ -238,7 +245,6 @@ impl<T: Tag, L: LayoutRules<T>> LayoutRules<T> for TransitionLayout<T, L> {
                                         )
                                     })
                                     .collect(),
-                                nodes: group.nodes.clone(),
                             }
                         } else {
                             group.clone()
@@ -251,10 +257,11 @@ impl<T: Tag, L: LayoutRules<T>> LayoutRules<T> for TransitionLayout<T, L> {
     }
 }
 
-fn relate_elements<T: Tag>(
-    graph: &dyn GroupedGraphStructure<T>,
+fn relate_elements<T: Tag, G: GroupedGraphStructure<T>>(
+    graph: &G,
     old: &DiagramLayout<T>,
     new: &DiagramLayout<T>,
+    sources: &G::Tracker,
     get_current_point: &impl Fn(Transition<Point>) -> Point,
 ) -> (
     /* A mapping from a node to an old node + offset */
@@ -305,7 +312,7 @@ fn relate_elements<T: Tag>(
             if let Some(to_old) =
                 old_to_edges.get(&(old_node, edge.from_level, edge.edge_type, edge.to_level))
             {
-                if !can_come_from(old, new, *to_old, edge.to) {
+                if !can_come_from(*to_old, edge.to, sources) {
                     continue;
                 }
 
@@ -356,7 +363,7 @@ fn relate_elements<T: Tag>(
                 reverse_edge.edge_type,
                 reverse_edge.to_level,
             )) {
-                if !can_come_from(old, new, *from_old, reverse_edge.to) {
+                if !can_come_from(*from_old, reverse_edge.to, sources) {
                     continue;
                 }
 
@@ -380,21 +387,23 @@ fn relate_elements<T: Tag>(
     (node_mapping, edge_mapping)
 }
 
-fn can_come_from<T: Tag>(
-    old: &DiagramLayout<T>,
-    new: &DiagramLayout<T>,
+fn can_come_from(
+    // old: &DiagramLayout<T>,
+    // new: &DiagramLayout<T>,
     old_group: NodeGroupID,
     new_group: NodeGroupID,
+    sources: &impl SourceReader,
 ) -> bool {
-    let Some(old_nodes) = old.groups.get(&old_group).map(|group| &group.nodes) else {
-        return false;
-    };
-    let Some(new_nodes) = new.groups.get(&new_group).map(|group| &group.nodes) else {
-        return false;
-    };
+    // let Some(old_nodes) = old.groups.get(&old_group).map(|group| &group.nodes) else {
+    //     return false;
+    // };
+    // let Some(new_nodes) = new.groups.get(&new_group).map(|group| &group.nodes) else {
+    //     return false;
+    // };
 
-    // TODO: add other conditions here later to handle animations related to
-    return new_nodes.is_subset(&old_nodes) || new_nodes.is_superset(&old_nodes);
+    // // TODO: add other conditions here later to handle animations related to
+    // return new_nodes.is_subset(&old_nodes) || new_nodes.is_superset(&old_nodes);
+    return sources.get_source(new_group) == old_group;
 }
 
 fn get_edge_lookup<T: Tag>(

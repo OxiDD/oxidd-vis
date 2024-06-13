@@ -47,7 +47,7 @@ impl SugiyamaOrdering {
 impl<T: Tag> LayerOrdering<T> for SugiyamaOrdering {
     fn order_nodes(
         &self,
-        graph: &dyn GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,
