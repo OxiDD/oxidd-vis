@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
-    ops::{Add, Sub},
+    ops::{Add, Mul, Sub},
     rc::Rc,
 };
 
@@ -19,10 +19,13 @@ pub struct Point {
     pub y: f32,
 }
 impl Point {
-    fn distance(&self, other: &Point) -> f32 {
+    pub fn distance(&self, other: &Point) -> f32 {
         let dx = other.x - self.x;
         let dy = other.y - self.y;
         (dx * dx + dy * dy).sqrt()
+    }
+    pub fn length(&self) -> f32 {
+        (self.x * self.x + self.y * self.y).sqrt()
     }
 }
 impl Add for Point {
@@ -48,6 +51,38 @@ impl Sub for Point {
 impl Display for Point {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {})", self.x, self.y)
+    }
+}
+impl<R: Clone> Mul<R> for Point
+where
+    f32: Mul<R, Output = f32>,
+{
+    type Output = Point;
+
+    fn mul(self, rhs: R) -> Self::Output {
+        Point {
+            x: self.x * rhs.clone(),
+            y: self.y * rhs,
+        }
+    }
+}
+
+impl Mul<Point> for f32 {
+    type Output = Point;
+
+    fn mul(self, rhs: Point) -> Self::Output {
+        Point {
+            x: self * rhs.x,
+            y: self * rhs.y,
+        }
+    }
+}
+impl Default for Point {
+    fn default() -> Self {
+        Self {
+            x: Default::default(),
+            y: Default::default(),
+        }
     }
 }
 
@@ -81,9 +116,34 @@ impl<T: Add<Output = T>> Add for Transition<T> {
     }
 }
 
+// impl<T, L: Clone + Sized + Mul<T, Output = T>> Mul<Transition<T>> for L {
+//     type Output = Transition<T>;
+
+//     fn mul(self, rhs: Transition<T>) -> Self::Output {
+//         Transition {
+//             old_time: rhs.old_time,
+//             duration: rhs.duration,
+//             old: self * rhs.old,
+//             new: self * rhs.new,
+//         }
+//     }
+// }
+impl<R: Clone, T: Mul<R, Output = T>> Mul<R> for Transition<T> {
+    type Output = Transition<T>;
+
+    fn mul(self, rhs: R) -> Self::Output {
+        Transition {
+            old_time: self.old_time,
+            duration: self.duration,
+            old: self.old * rhs.clone(),
+            new: self.new * rhs,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct NodeGroupLayout<T: Tag> {
-    pub center_position: Transition<Point>,
+    pub position: Transition<Point>, // Bottom left point
     pub size: Transition<Point>,
     pub label: String,
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
@@ -94,12 +154,7 @@ impl<T: Tag> NodeGroupLayout<T> {
     pub fn get_rect(&self) -> Rectangle {
         let width = self.size.new.x;
         let height = self.size.new.y;
-        Rectangle::new(
-            self.center_position.new.x - width / 2.0,
-            self.center_position.new.y - height / 2.0,
-            width,
-            height,
-        )
+        Rectangle::new(self.position.new.x, self.position.new.y, width, height)
     }
 }
 

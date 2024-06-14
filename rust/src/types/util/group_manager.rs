@@ -127,8 +127,8 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
         // Perform some cleanup of earlier returned ids
         for returned in self.returned_ids.clone() {
             if !self.sources.is_tracked_source(returned) {
-                self.remove_group(returned);
                 self.returned_ids.remove(&returned);
+                self.free_ids.make_available(returned);
             }
         }
     }
@@ -314,7 +314,7 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
                 let from_empty = cur_group.nodes.is_empty();
                 if from_empty {
                     self.remove_group(cur_group_id);
-                    console::log!("removed");
+                    console::log!("removed {}", cur_group_id);
                 }
             } else if from_id == to {
                 continue;
@@ -424,7 +424,7 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
     }
 
     pub fn split_edges(&mut self, group_id: NodeGroupID, fully: bool) {
-        // TODO: rethink this enture approach, one nodeID can end up in multiple splits atm
+        // TODO: rethink this entire approach, one nodeID can end up in multiple splits atm
         let group_nodes = &self.get_node_group(group_id).nodes.clone();
         let mut splits: HashMap<(EdgeType<T>, NodeGroupID), HashSet<NodeID>> = HashMap::new();
         for &node in group_nodes {
@@ -449,7 +449,7 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
                     self.create_group(vec![TargetID(TargetIDType::NodeID, node)]);
                 }
             } else {
-                console::log!("{}", nodes.iter().join(", "));
+                console::log!("create-group: {}", nodes.iter().join(", "));
                 self.create_group(
                     nodes
                         .iter()

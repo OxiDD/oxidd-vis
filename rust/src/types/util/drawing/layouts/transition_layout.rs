@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet, LinkedList},
     iter::FromIterator,
     marker::PhantomData,
+    ops::Add,
 };
 
 use oxidd::{Edge, Function, InnerNode, LevelNo, Manager};
@@ -102,6 +103,18 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G
 
             // let edge_type = edge_data.edge_type;
             if let Some((old_edge_data, old_edge_layout)) = maybe_old_edge {
+                let start_node_offset = node_mapping
+                    .get(&from)
+                    .map(|(_, offset, _)| *offset)
+                    .unwrap_or_default();
+                let start_offset =
+                    get_current_point(old_edge_layout.start_offset) - start_node_offset;
+                let end_node_offset = node_mapping
+                    .get(&edge_data.to)
+                    .map(|(_, offset, _)| *offset)
+                    .unwrap_or_default();
+                let end_offset = get_current_point(old_edge_layout.end_offset) - end_node_offset;
+
                 // Add all points needed for the new layout, and transition from any old points
                 let mut new_points: Vec<EdgePoint> = edge
                     .points
@@ -109,9 +122,9 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G
                     .enumerate()
                     .map(|(index, point)| {
                         let out_point = if index >= old_edge_layout.points.len() {
-                            let to_pos = old.groups.get(&old_edge_data.to).unwrap().center_position;
+                            let to_pos = old.groups.get(&old_edge_data.to).unwrap().position;
                             Transition {
-                                old: get_current_point(to_pos),
+                                old: get_current_point(to_pos) + end_offset,
                                 new: point.point.new,
                                 duration,
                                 old_time: time,
@@ -146,7 +159,7 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G
                                 duration,
                                 old_time,
                                 old: get_current_point(point.point),
-                                new: new.groups.get(&edge_data.to).unwrap().center_position.new,
+                                new: new.groups.get(&edge_data.to).unwrap().position.new,
                             },
                             exists: Transition {
                                 duration,
@@ -161,13 +174,13 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G
                     start_offset: Transition {
                         duration,
                         old_time,
-                        old: get_current_point(old_edge_layout.start_offset),
+                        old: start_offset,
                         new: edge.start_offset.new,
                     },
                     end_offset: Transition {
                         duration,
                         old_time,
-                        old: get_current_point(old_edge_layout.end_offset),
+                        old: end_offset,
                         new: edge.end_offset.new,
                     },
                     points: new_points,
@@ -187,7 +200,9 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G
                         point: Transition {
                             duration,
                             old_time,
-                            old: get_current_point(old_group.center_position),
+                            // TODO: could also transition in from the new node's edge start position
+                            old: get_current_point(old_group.position)
+                                + get_current_point(edge.end_offset),
                             new: point.point.new,
                         },
                         exists: point.exists,
@@ -210,22 +225,36 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G
                 .map(|(id, group)| {
                     (
                         *id,
-                        if let Some((offset, old_group)) =
-                            node_mapping.get(&id).and_then(|(old_id, offset)| {
-                                old.groups.get(old_id).map(|group| (offset, group))
+                        if let Some((&offset, old_group, &copy_size)) = node_mapping
+                            .get(&id)
+                            .and_then(|(old_id, offset, copy_size)| {
+                                old.groups
+                                    .get(old_id)
+                                    .map(|group| (offset, group, copy_size))
                             })
                         {
+                            let cur_size = get_current_point(old_group.size);
+                            let cur_center = get_current_point(old_group.position);
+                            let start_size = if copy_size {
+                                cur_size
+                            } else {
+                                // TODO: Perform better inside bounding box guarantee that uses offset
+                                Point {
+                                    x: f32::min(cur_size.x, group.size.new.x),
+                                    y: f32::min(cur_size.y, group.size.new.y),
+                                }
+                            };
                             NodeGroupLayout {
-                                center_position: Transition {
+                                position: Transition {
                                     old_time,
                                     duration,
-                                    old: get_current_point(old_group.center_position),
-                                    new: group.center_position.new,
+                                    old: cur_center + offset,
+                                    new: group.position.new,
                                 },
                                 size: Transition {
                                     old_time,
                                     duration: duration,
-                                    old: get_current_point(old_group.size),
+                                    old: start_size,
                                     new: group.size.new,
                                 },
                                 label: group.label.clone(),
@@ -264,174 +293,93 @@ fn relate_elements<T: Tag, G: GroupedGraphStructure<T>>(
     sources: &G::Tracker,
     get_current_point: &impl Fn(Transition<Point>) -> Point,
 ) -> (
-    /* A mapping from a node to an old node + offset */
-    HashMap<NodeGroupID, (NodeGroupID, Point)>,
+    /* A mapping from a node to (old node, offset, whether to use source size)*/
+    HashMap<NodeGroupID, (NodeGroupID, Point, bool)>,
     /* A mapping from an edge (including source node) to another edge */
     HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, EdgeData<T>)>,
 ) {
-    let old_to_edges = get_edge_lookup(old, false);
-    let old_reverse_edges = get_edge_lookup(old, true);
-
     let mut edge_mapping: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, EdgeData<T>)> =
         HashMap::new();
 
-    // Perform trivial mapping
-    let mut node_mapping: HashMap<NodeGroupID, (NodeGroupID, Point)> = new
+    // Perform initial node mapping without offsets
+    let mut node_mapping: HashMap<NodeGroupID, (NodeGroupID, Point, bool)> = new
         .groups
         .iter()
-        .filter_map(|(&group_id, data)| {
-            if old.groups.contains_key(&group_id) {
-                Some((group_id, (group_id, Point { x: 0., y: 0. })))
-            } else {
-                None
-            }
+        .map(|(&group_id, data)| {
+            (
+                group_id,
+                (sources.get_source(group_id), Point { x: 0., y: 0. }, false),
+            )
         })
         .collect();
 
-    // Perform search from this mapping
-    let mut queue = LinkedList::from_iter(node_mapping.iter().map(|(&old, &(new, _))| (old, new)));
-    while let Some((old_node, new_node)) = queue.pop_front() {
-        // Follow and link child edges
-        for edge in graph.get_children(new_node) {
-            if let Some(&(old_to, _)) = node_mapping.get(&edge.to) {
-                edge_mapping.insert(
-                    (new_node, edge.drop_count()),
-                    (
-                        old_node,
-                        EdgeData {
-                            to: old_to,
-                            from_level: edge.from_level,
-                            to_level: edge.to_level,
-                            edge_type: edge.edge_type,
-                        },
-                    ),
-                );
+    // Decide which node should represent the old source, and hence copy the size
+    let mut source_dests: HashMap<NodeGroupID, HashSet<NodeGroupID>> = HashMap::new();
+    for (&node, &(source, _, _)) in &node_mapping {
+        source_dests
+            .entry(source)
+            .or_insert_with(|| HashSet::new())
+            .insert(node);
+    }
+    for (_, dests) in source_dests {
+        let sizes = dests
+            .iter()
+            .filter_map(|dest| new.groups.get(dest).map(|group| (dest, group.size.old)));
+        let Some((node, _)) = sizes.reduce(|(node1, size1), (node2, size2)| {
+            if size1.length() > size2.length() {
+                (node1, size1)
+            } else {
+                (node2, size2)
+            }
+        }) else {
+            continue;
+        };
+        node_mapping
+            .entry(*node)
+            .and_modify(|(_, _, copy_size)| *copy_size = true);
+    }
+
+    // Perform edge mapping + derive offsets
+    for (&node, &(source, _, _)) in &node_mapping.clone() {
+        for edge in graph.get_children(node) {
+            let edge = edge.drop_count();
+            let Some(&(to_source, _, _)) = node_mapping.get(&edge.to) else {
                 continue;
-            }
-
-            if let Some(to_old) =
-                old_to_edges.get(&(old_node, edge.from_level, edge.edge_type, edge.to_level))
-            {
-                if !can_come_from(*to_old, edge.to, sources) {
-                    continue;
-                }
-
-                let old_edge_data = EdgeData {
-                    to: *to_old,
-                    from_level: edge.from_level,
-                    to_level: edge.to_level,
-                    edge_type: edge.edge_type,
-                };
-                let offset = old
-                    .groups
-                    .get(&old_node)
-                    .and_then(|group| {
-                        group
-                            .edges
-                            .get(&old_edge_data)
-                            .map(|layout| get_current_point(layout.end_offset))
-                    })
-                    .unwrap_or_else(|| Point { x: 0., y: 0. });
-                node_mapping.insert(edge.to, (*to_old, offset));
-                edge_mapping.insert((new_node, edge.drop_count()), (old_node, old_edge_data));
-                queue.push_back((*to_old, edge.to));
-            }
-        }
-
-        // Follow and link parent edges
-        for reverse_edge in graph.get_parents(new_node) {
-            let old_edge_data = EdgeData {
-                to: old_node,
-                from_level: reverse_edge.to_level,
-                to_level: reverse_edge.from_level,
-                edge_type: reverse_edge.edge_type,
             };
-            let new_edge_data = EdgeData {
-                to: new_node,
-                from_level: reverse_edge.to_level,
-                to_level: reverse_edge.from_level,
-                edge_type: reverse_edge.edge_type,
+
+            let old_edge = EdgeData {
+                to: to_source,
+                ..edge
             };
-            if let Some(&(old_from, _)) = node_mapping.get(&reverse_edge.to) {
-                edge_mapping.insert((reverse_edge.to, new_edge_data), (old_from, old_edge_data));
+
+            let Some(old_edge_layout) = old
+                .groups
+                .get(&source)
+                .and_then(|group| group.edges.get(&old_edge))
+            else {
                 continue;
+            };
+
+            edge_mapping.insert((node, edge.clone()), (source, old_edge));
+
+            let Some(new_edge_layout) = new
+                .groups
+                .get(&node)
+                .and_then(|group| group.edges.get(&edge))
+            else {
+                continue;
+            };
+
+            if let Some((_, offset, false)) = node_mapping.get_mut(&edge.to) {
+                *offset =
+                    get_current_point(old_edge_layout.end_offset) - new_edge_layout.end_offset.old;
             }
-
-            if let Some(from_old) = old_reverse_edges.get(&(
-                old_node,
-                reverse_edge.from_level,
-                reverse_edge.edge_type,
-                reverse_edge.to_level,
-            )) {
-                if !can_come_from(*from_old, reverse_edge.to, sources) {
-                    continue;
-                }
-
-                let offset = old
-                    .groups
-                    .get(&from_old)
-                    .and_then(|group| {
-                        group
-                            .edges
-                            .get(&old_edge_data)
-                            .map(|layout| get_current_point(layout.start_offset))
-                    })
-                    .unwrap_or_else(|| Point { x: 0., y: 0. });
-                node_mapping.insert(reverse_edge.to, (*from_old, offset));
-                edge_mapping.insert((reverse_edge.to, new_edge_data), (*from_old, old_edge_data));
-                queue.push_back((*from_old, reverse_edge.to));
+            if let Some((_, offset, false)) = node_mapping.get_mut(&node) {
+                *offset = get_current_point(old_edge_layout.start_offset)
+                    - new_edge_layout.start_offset.old;
             }
         }
     }
 
     (node_mapping, edge_mapping)
-}
-
-fn can_come_from(
-    // old: &DiagramLayout<T>,
-    // new: &DiagramLayout<T>,
-    old_group: NodeGroupID,
-    new_group: NodeGroupID,
-    sources: &impl SourceReader,
-) -> bool {
-    // let Some(old_nodes) = old.groups.get(&old_group).map(|group| &group.nodes) else {
-    //     return false;
-    // };
-    // let Some(new_nodes) = new.groups.get(&new_group).map(|group| &group.nodes) else {
-    //     return false;
-    // };
-
-    // // TODO: add other conditions here later to handle animations related to
-    // return new_nodes.is_subset(&old_nodes) || new_nodes.is_superset(&old_nodes);
-    return sources.get_source(new_group) == old_group;
-}
-
-fn get_edge_lookup<T: Tag>(
-    layout: &DiagramLayout<T>,
-    reverse: bool,
-) -> HashMap<(NodeGroupID, LevelNo, EdgeType<T>, LevelNo), NodeGroupID> {
-    layout
-        .groups
-        .iter()
-        .flat_map(|(&from_group_id, group)| {
-            group.edges.keys().map(move |edge| {
-                if reverse {
-                    (
-                        (edge.to, edge.to_level, edge.edge_type, edge.from_level),
-                        (from_group_id),
-                    )
-                } else {
-                    (
-                        (
-                            from_group_id,
-                            edge.from_level,
-                            edge.edge_type,
-                            edge.to_level,
-                        ),
-                        (edge.to),
-                    )
-                }
-            })
-        })
-        .collect()
 }

@@ -40,7 +40,7 @@ impl<T: Tag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for RandomTestLayout
                         NodeGroupLayout {
                             label: group_id.to_string(),
                             // center_position: Transition::plain(Point { x, y }),
-                            center_position: Transition {
+                            position: Transition {
                                 old: Point { x: 0.0, y: 0.0 },
                                 new: Point { x, y },
                                 old_time: time,

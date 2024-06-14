@@ -327,7 +327,8 @@ fn format_layout<T: Tag>(
     edge_connection_nodes: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)>,
     dummy_group_start_id: usize,
 ) -> DiagramLayout<T> {
-    let centered_node_positions: HashMap<usize, Point> = node_positions
+    let node_size = 1.; // TODO: make configurable
+    let bottom_node_positions: HashMap<usize, Point> = node_positions
         .iter()
         .map(|(&group_id, pos)| {
             (
@@ -340,8 +341,7 @@ fn format_layout<T: Tag>(
                         x: pos.x,
                         y: pos.y
                             - (layer_positions.get(&e).unwrap_or(&0.)
-                                - layer_positions.get(&s).unwrap_or(&0.))
-                                / 2.,
+                                - layer_positions.get(&s).unwrap_or(&0.)),
                     }
                 },
             )
@@ -361,12 +361,10 @@ fn format_layout<T: Tag>(
                     group_id,
                     NodeGroupLayout {
                         label: group_id.to_string(),
-                        center_position: Transition::plain(
-                            *centered_node_positions.get(&group_id).unwrap(),
-                        ),
+                        position: Transition::plain(*bottom_node_positions.get(&group_id).unwrap()),
                         size: Transition::plain(Point {
-                            x: 1.,
-                            y: 1.
+                            x: node_size,
+                            y: node_size
                                 + (layer_positions.get(&e).unwrap_or(&0.)
                                     - layer_positions.get(&s).unwrap_or(&0.)),
                         }),
@@ -404,9 +402,10 @@ fn format_layout<T: Tag>(
                                                 },
                                                 group_id,
                                                 &node_positions,
-                                                &centered_node_positions,
+                                                &bottom_node_positions,
                                                 &edge_bend_nodes,
                                                 &edge_connection_nodes,
+                                                node_size,
                                             ),
                                         )
                                     })
@@ -425,9 +424,10 @@ fn format_edge<T: Tag>(
     curve_offset: f32,
     group_id: NodeGroupID,
     node_positions: &HashMap<usize, Point>,
-    centered_node_positions: &HashMap<usize, Point>,
+    bottom_node_positions: &HashMap<usize, Point>,
     edge_bend_nodes: &HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>>,
     edge_connection_nodes: &HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)>,
+    node_size: f32,
 ) -> EdgeLayout {
     let EdgeCountData {
         to,
@@ -438,8 +438,6 @@ fn format_edge<T: Tag>(
     } = edge;
     let edge_data = edge.drop_count();
 
-    console::log!("{}:{} > {}:{}", group_id, from_level, to, to_level);
-
     let (start_offset, end_offset) = edge_connection_nodes
         .get(&(group_id, edge_data.clone()))
         .map_or_else(
@@ -449,7 +447,7 @@ fn format_edge<T: Tag>(
                     node_positions.get(&start_id).map_or_else(
                         || Point { x: 0.0, y: 0.0 },
                         |start_point| {
-                            centered_node_positions.get(&group_id).map_or_else(
+                            bottom_node_positions.get(&group_id).map_or_else(
                                 || Point { x: 0., y: 0. },
                                 |center_point| *start_point - *center_point,
                             )
@@ -458,7 +456,7 @@ fn format_edge<T: Tag>(
                     node_positions.get(&end_id).map_or_else(
                         || Point { x: 0.0, y: 0.0 },
                         |end_point| {
-                            centered_node_positions.get(&to).map_or_else(
+                            bottom_node_positions.get(&to).map_or_else(
                                 || Point { x: 0., y: 0. },
                                 |center_point| *end_point - *center_point,
                             )
@@ -468,26 +466,23 @@ fn format_edge<T: Tag>(
             },
         );
 
-    console::log!(
-        "{}:{} {} > {}:{} {}",
-        group_id,
-        from_level,
-        start_offset,
-        to,
-        to_level,
-        end_offset
-    );
+    let edge_offset = Point {
+        x: node_size,
+        y: node_size,
+    } * 0.5;
 
     EdgeLayout {
-        start_offset: Transition::plain(start_offset),
-        end_offset: Transition::plain(end_offset),
+        start_offset: Transition::plain(start_offset + edge_offset),
+        end_offset: Transition::plain(end_offset + edge_offset),
         points: edge_bend_nodes.get(&(group_id, edge_data)).map_or_else(
             || Vec::new(),
             |nodes| {
                 nodes
                     .iter()
                     .map(|dummy_id| EdgePoint {
-                        point: Transition::plain(*node_positions.get(&dummy_id).unwrap()),
+                        point: Transition::plain(
+                            *node_positions.get(&dummy_id).unwrap() + edge_offset,
+                        ),
                         exists: Transition::plain(1.),
                     })
                     .collect()
