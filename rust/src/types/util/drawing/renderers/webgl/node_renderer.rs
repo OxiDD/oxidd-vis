@@ -22,71 +22,8 @@ impl NodeRenderer {
     pub fn new(context: &WebGl2RenderingContext) -> NodeRenderer {
         let vertex_renderer = VertexRenderer::new(
             context,
-            r##"#version 300 es
-            in vec2 position;
-            in vec2 positionOld;
-            in float positionStartTime;
-            in float positionDuration;
-
-            in vec2 size;
-            in vec2 sizeOld;
-            in float sizeStartTime;
-            in float sizeDuration;
-            
-            uniform mat4 transform;
-            uniform float time;
-
-            out vec2 cornerPos;
-            out vec2 curSize;
-
-            void main() {
-                float positionPer = min((time - positionStartTime) / positionDuration, 1.0);
-                vec2 curPosition = positionPer * position + (1.0 - positionPer) * positionOld;
-
-                float sizePer = min((time - sizeStartTime) / sizeDuration, 1.0);
-                curSize = sizePer * size + (1.0 - sizePer) * sizeOld;
-
-                int corner = gl_VertexID % 6; // two triangles
-                cornerPos = curSize * (
-                    corner == 0  || corner == 3  ? vec2(0.5, 0.5)
-                    : corner == 1                ? vec2(0.5, -0.5)
-                    : corner == 2 || corner == 4 ? vec2(-0.5, -0.5)
-                    :                              vec2(-0.5, 0.5)
-                );
-                gl_Position = transform * vec4(curPosition + cornerPos, 0.0, 1.0) * vec4(vec3(2.0), 1.0); // 2 to to make the default width and height of the screen 1, instead of 2
-            }
-            "##,
-        r##"#version 300 es
-            precision highp float;
-            out vec4 outColor;
-            in vec2 cornerPos;
-            in vec2 curSize;
-
-            uniform mat4 transform;
-            float cornerSize = 0.3;
-            float fuzziness = 0.003; // A form of anti-aliasing by making the circle border a slight gradient
-            
-            void main() {
-                float alpha = 1.0;
-                float cornerSize2 = cornerSize * cornerSize;
-                float scaledFuzziness = fuzziness / transform[0][0];
-
-                float xBoundary = curSize.x / 2.0 - cornerSize;
-                float yBoundary = curSize.y / 2.0 - cornerSize;
-                float absX = abs(cornerPos.x);
-                float absY = abs(cornerPos.y);
-                if (absX > xBoundary && absY > yBoundary) {
-                    float dx = xBoundary - absX;
-                    float dy = yBoundary - absY;
-                    float distance2 = dx*dx + dy*dy;
-                    if(distance2 >= cornerSize2)
-                    //     alpha = 1.0 - max(0.0, (sqrt(distance2) - cornerSize) / scaledFuzziness);
-                        alpha = 0.0;
-                }
-
-                outColor = vec4(0, 0, 0, alpha);
-            }
-            "##,
+            include_str!("node_renderer.vert"),
+            include_str!("node_renderer.frag"),
         )
         .unwrap();
         NodeRenderer { vertex_renderer }

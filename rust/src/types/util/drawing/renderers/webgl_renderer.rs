@@ -91,7 +91,7 @@ impl<T: Tag> Renderer<T> for WebglRenderer<T> {
                 .groups
                 .values()
                 .map(|group| Node {
-                    center_position: group.center_position,
+                    center_position: group.position + group.size * 0.5,
                     size: group.size,
                     label: group.label.clone(),
                     exists: group.exists,
@@ -105,13 +105,12 @@ impl<T: Tag> Renderer<T> for WebglRenderer<T> {
                 .groups
                 .values()
                 .flat_map(|group| {
-                    let start = group.center_position;
+                    let start = group.position;
                     let edge_type_ids = &edge_type_ids;
                     group.edges.iter().map(move |(edge_data, edge)| Edge {
                         start: start + edge.start_offset,
                         points: edge.points.iter().map(|point| point.point).collect(),
-                        end: layout.groups.get(&edge_data.to).unwrap().center_position
-                            + edge.end_offset,
+                        end: layout.groups.get(&edge_data.to).unwrap().position + edge.end_offset,
                         edge_type: *edge_type_ids.get(&edge_data.edge_type).unwrap(),
                         shift: edge.curve_offset,
                     })

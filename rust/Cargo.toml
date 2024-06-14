@@ -23,6 +23,7 @@ priority-queue = "2.0.2"
 itertools = "0.12.1"
 rust-sugiyama = "0.2.0"
 num-rational = "0.4.2"
+regex = "1.10.5"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

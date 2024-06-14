@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use wasm_bindgen::JsValue;
+use regex::Regex;
+use wasm_bindgen::{JsValue, UnwrapThrowExt};
 use web_sys::{
     WebGl2RenderingContext, WebGlBuffer, WebGlProgram, WebGlUniformLocation, WebGlVertexArrayObject,
 };
@@ -30,16 +31,24 @@ impl VertexRenderer {
         vertex_shader: &str,
         fragment_shader: &str,
     ) -> Result<VertexRenderer, JsValue> {
+        VertexRenderer::from_template(context, vertex_shader, fragment_shader, &HashMap::new())
+    }
+    pub fn from_template(
+        context: &WebGl2RenderingContext,
+        vertex_shader: &str,
+        fragment_shader: &str,
+        template_vars: &HashMap<&str, &str>,
+    ) -> Result<VertexRenderer, JsValue> {
         let vert_shader = compile_shader(
             &context,
             WebGl2RenderingContext::VERTEX_SHADER,
-            &vertex_shader,
+            &replace_template_vars(vertex_shader, template_vars).as_str(),
         )?;
 
         let frag_shader = compile_shader(
             &context,
             WebGl2RenderingContext::FRAGMENT_SHADER,
-            &fragment_shader,
+            &replace_template_vars(fragment_shader, template_vars).as_str(),
         )?;
 
         let program = link_program(&context, &vert_shader, &frag_shader)?;
@@ -157,5 +166,41 @@ impl VertexRenderer {
 
 // impl Drop for VertexRenderer {
 //     fn drop(&mut self) {
+
 //     }
 // }
+fn replace_template_vars(template: &str, vars: &HashMap<&str, &str>) -> String {
+    if vars.len() == 0 {
+        return template.to_string();
+    }
+
+    let mut out = template.to_string();
+
+    let start_re = Regex::new(r"/\*\s*\$(?P<var_name>\w+)\s*(?P<capture>\{?)\s*\*/").unwrap();
+    let end_re = Regex::new(r"/\*\s*\}\s*\*/").unwrap();
+    for capture in start_re.captures_iter(template) {
+        let all = capture.get(0).unwrap();
+        let range = all.range();
+        let start = range.start;
+        let mut end = range.end;
+        let Some(name) = capture.name("var_name") else {
+            continue;
+        };
+        if let Some(_) = capture.name("capture") {
+            let end_match = end_re
+                .captures_at(template, end)
+                .expect("End of template could not be found");
+            end = end_match.get(0).unwrap().range().end;
+        }
+
+        let replacement = vars.get(name.as_str()).expect(
+            format!(
+                "No value for template variable '{}' was provided",
+                name.as_str()
+            )
+            .as_str(),
+        );
+        out.replace_range(start..end, replacement);
+    }
+    out
+}
