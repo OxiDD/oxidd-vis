@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../PhD"
+		},
+		{
+			"path": "../swash_demo"
 		}
 	],
 	"settings": {}

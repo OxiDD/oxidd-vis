@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use web_sys::WebGl2RenderingContext;
+use web_sys::{WebGl2RenderingContext, WebGlTexture};
 
 use crate::{
-    types::util::drawing::diagram_layout::{Point, Transition},
+    types::util::drawing::{
+        diagram_layout::{Point, Transition},
+        renderers::webgl::render_texture::RenderTexture,
+    },
     util::{logging::console, matrix4::Matrix4},
 };
 
@@ -43,13 +46,17 @@ impl EdgeRenderer {
     ) -> EdgeRenderer {
         let type_count = edge_types.len();
         console::log!("uniform EdgeType types[{type_count}];");
-        let vertex_renderer = VertexRenderer::from_template(
+        let vertex_renderer = VertexRenderer::new_advanced(
             context,
             &include_str!("edge_renderer.vert"),
             &include_str!("edge_renderer.frag"),
-            &HashMap::from([("type_count", type_count.to_string().as_str())]),
+            Some(&HashMap::from([(
+                "type_count",
+                type_count.to_string().as_str(),
+            )])),
         )
         .unwrap();
+
         EdgeRenderer {
             vertex_renderer,
             edge_types,

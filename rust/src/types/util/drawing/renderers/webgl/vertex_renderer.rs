@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use regex::Regex;
 use wasm_bindgen::{JsValue, UnwrapThrowExt};
 use web_sys::{
-    WebGl2RenderingContext, WebGlBuffer, WebGlProgram, WebGlUniformLocation, WebGlVertexArrayObject,
+    WebGl2RenderingContext as Gl, WebGlBuffer, WebGlFramebuffer, WebGlProgram, WebGlTexture,
+    WebGlUniformLocation, WebGlVertexArrayObject,
 };
 
 use crate::util::logging::console;
@@ -27,27 +28,27 @@ struct AttributeData {
 
 impl VertexRenderer {
     pub fn new(
-        context: &WebGl2RenderingContext,
+        context: &Gl,
         vertex_shader: &str,
         fragment_shader: &str,
     ) -> Result<VertexRenderer, JsValue> {
-        VertexRenderer::from_template(context, vertex_shader, fragment_shader, &HashMap::new())
+        VertexRenderer::new_advanced(context, vertex_shader, fragment_shader, None)
     }
-    pub fn from_template(
-        context: &WebGl2RenderingContext,
+    pub fn new_advanced(
+        context: &Gl,
         vertex_shader: &str,
         fragment_shader: &str,
-        template_vars: &HashMap<&str, &str>,
+        template_vars: Option<&HashMap<&str, &str>>,
     ) -> Result<VertexRenderer, JsValue> {
         let vert_shader = compile_shader(
             &context,
-            WebGl2RenderingContext::VERTEX_SHADER,
+            Gl::VERTEX_SHADER,
             &replace_template_vars(vertex_shader, template_vars).as_str(),
         )?;
 
         let frag_shader = compile_shader(
             &context,
-            WebGl2RenderingContext::FRAGMENT_SHADER,
+            Gl::FRAGMENT_SHADER,
             &replace_template_vars(fragment_shader, template_vars).as_str(),
         )?;
 
@@ -55,7 +56,8 @@ impl VertexRenderer {
         context.use_program(Some(&program));
 
         let buffer = context.create_buffer().ok_or("Failed to create buffer")?;
-        context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+        context.bind_buffer(Gl::ARRAY_BUFFER, Some(&buffer));
+
         let vao = context
             .create_vertex_array()
             .ok_or("Could not create vertex array object")?;
@@ -68,13 +70,7 @@ impl VertexRenderer {
             uniforms: HashMap::new(),
         })
     }
-    pub fn set_data(
-        &mut self,
-        context: &WebGl2RenderingContext,
-        name: &str,
-        data: &[f32],
-        element_size: u8,
-    ) {
+    pub fn set_data(&mut self, context: &Gl, name: &str, data: &[f32], element_size: u8) {
         let mut index = 0;
         for attribute_data in &mut self.attributes {
             if attribute_data.name == name {
@@ -97,9 +93,9 @@ impl VertexRenderer {
             attribute_location: context.get_attrib_location(&self.program, name) as u32,
         });
     }
-    pub fn update_data(&mut self, context: &WebGl2RenderingContext) {
+    pub fn update_data(&mut self, context: &Gl) {
         context.bind_vertex_array(Some(&self.vao));
-        context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.buffer));
+        context.bind_buffer(Gl::ARRAY_BUFFER, Some(&self.buffer));
         // context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.buffer));
 
         // Note that `Float32Array::view` is somewhat dangerous (hence the
@@ -114,9 +110,9 @@ impl VertexRenderer {
             let positions_array_buf_view = js_sys::Float32Array::view(&self.buffer_data);
 
             context.buffer_data_with_array_buffer_view(
-                WebGl2RenderingContext::ARRAY_BUFFER,
+                Gl::ARRAY_BUFFER,
                 &positions_array_buf_view,
-                WebGl2RenderingContext::STATIC_DRAW,
+                Gl::STATIC_DRAW,
             );
         }
 
@@ -125,7 +121,7 @@ impl VertexRenderer {
             context.vertex_attrib_pointer_with_i32(
                 attribute_data.attribute_location,
                 attribute_data.element_size,
-                WebGl2RenderingContext::FLOAT,
+                Gl::FLOAT,
                 false,
                 0,
                 4 * index, // 4 * to convert to bytes
@@ -136,7 +132,7 @@ impl VertexRenderer {
     }
     pub fn set_uniform(
         &mut self,
-        context: &WebGl2RenderingContext,
+        context: &Gl,
         name: &str,
         set: impl Fn(Option<&WebGlUniformLocation>) -> (),
     ) {
@@ -148,16 +144,19 @@ impl VertexRenderer {
             self.uniforms.insert(name.to_string(), uniform_location);
         }
     }
-    pub fn render(&self, context: &WebGl2RenderingContext, mode: u32) {
-        if let Some(attribute) = self.attributes.get(0) {
+    pub fn render(&self, context: &Gl, mode: u32) {
+        if let Some(point_count) = self
+            .attributes
+            .get(0)
+            .map(|attribute| (attribute.data_size as i32) / attribute.element_size)
+        {
             context.use_program(Some(&self.program));
             context.bind_vertex_array(Some(&self.vao));
-            let points = (attribute.data_size as i32) / attribute.element_size;
-            context.draw_arrays(mode, 0, points);
+            context.draw_arrays(mode, 0, point_count);
         }
     }
 
-    pub fn dispose(&self, context: &WebGl2RenderingContext) {
+    pub fn dispose(&self, context: &Gl) {
         context.delete_buffer(Some(&self.buffer));
         context.delete_program(Some(&self.program));
         context.delete_vertex_array(Some(&self.vao));
@@ -169,10 +168,10 @@ impl VertexRenderer {
 
 //     }
 // }
-fn replace_template_vars(template: &str, vars: &HashMap<&str, &str>) -> String {
-    if vars.len() == 0 {
+fn replace_template_vars(template: &str, vars: Option<&HashMap<&str, &str>>) -> String {
+    let Some(vars) = vars else {
         return template.to_string();
-    }
+    };
 
     let mut out = template.to_string();
 

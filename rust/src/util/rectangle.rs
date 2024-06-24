@@ -1,7 +1,10 @@
 use std::fmt::Display;
 
+use crate::types::util::drawing::diagram_layout::Point;
+
 use super::matrix4::Matrix4;
 
+#[derive(Clone)]
 pub struct Rectangle {
     pub x: f32, // left
     pub y: f32, // bottom
@@ -45,6 +48,20 @@ impl Rectangle {
             && other.x >= self.x
             && self.y + self.height >= other.y + other.height
             && other.y >= self.y
+    }
+
+    pub fn pos(&self) -> Point {
+        Point {
+            x: self.x,
+            y: self.y,
+        }
+    }
+
+    pub fn size(&self) -> Point {
+        Point {
+            x: self.width,
+            y: self.height,
+        }
     }
 
     /// Retrieves the bounding box rectangle of the transformation matrix being applied to this rectangle

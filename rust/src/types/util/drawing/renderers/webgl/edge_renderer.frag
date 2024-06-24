@@ -58,7 +58,7 @@ void main() {
             endAngle = getAngle(curEnd, 0.0);
             startAngle = getAngle(curStart, endAngle);
             pointAngle = getAngle(outPos, endAngle);
-    } else {
+        } else {
             startAngle = getAngle(curStart, 0.0);
             endAngle = getAngle(curEnd, startAngle);
             pointAngle = getAngle(outPos, startAngle);
