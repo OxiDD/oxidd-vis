@@ -63,7 +63,12 @@ impl<T: Tag> WebglRenderer<T> {
                 &context,
                 // include_bytes!("../../../../../resources/Coffee Fills.ttf").to_vec(),
                 include_bytes!("../../../../../resources/Roboto-Bold.ttf").to_vec(),
-                TextRendererSettings::new().resolution(screen_texture.get_size().1 as f32),
+                TextRendererSettings::new()
+                    .resolution(screen_texture.get_size().1 as f32)
+                    .sample_distance(35.)
+                    .scale_factor_group_size(3.0)
+                    .scale_cache_size(10) // Very large, mostly for testing
+                    .max_scale(1.5),
             ),
             webgl_context: context,
             screen_texture,
@@ -143,14 +148,24 @@ impl<T: Tag> Renderer<T> for WebglRenderer<T> {
 
         self.text_renderer.set_texts(
             &self.webgl_context,
-            &vec![Text {
-                text: "abcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*();:'\",.<>[]-=_+{}\\|`~/?"
-                    .to_string(),
-                // text: "\"hello world!\"".to_string(),
-                // text: "o".to_string(),
-                position: Transition::plain(Point { x: 0., y: 0. }),
-                exists: Transition::plain(1.0),
-            }],
+            &vec![
+                Text {
+                    // text: "abcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*();:'\",.<>[]-=_+{}\\|`~/?"
+                    //     .to_string(),
+                    text: "\"hello world!\"".to_string(),
+                    // text: "olya".to_string(),
+                    position: Transition::plain(Point { x: 0., y: 0. }),
+                    exists: Transition::plain(1.0),
+                },
+                Text {
+                    // text: "abcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*();:'\",.<>[]-=_+{}\\|`~/?"
+                    //     .to_string(),
+                    text: "And some other sentence right here".to_string(),
+                    // text: "olya".to_string(),
+                    position: Transition::plain(Point { x: 0., y: -1. }),
+                    exists: Transition::plain(1.0),
+                },
+            ],
         );
     }
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) {

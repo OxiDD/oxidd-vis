@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     iter::FromIterator,
+    num::NonZeroUsize,
     rc::Rc,
     slice,
 };
@@ -10,6 +11,7 @@ use i_overlay::core::{
     fill_rule::FillRule, float_overlay::FloatOverlay, overlay::ShapeType, overlay_rule::OverlayRule,
 };
 use itertools::Itertools;
+use lru::LruCache;
 use swash::{
     proxy::CharmapProxy,
     scale::{outline::Outline, Render, ScaleContext, Scaler, Source},
@@ -34,10 +36,11 @@ use crate::{
 pub struct TextRenderer {
     vertex_renderer: VertexRenderer,
     char_renderer: VertexRenderer,
-    char_atlas: RenderTexture,
-    char_atlas_poses: HashMap<GlyphId, (Rectangle, Point)>,
+    atlases: LruCache<i32, Atlas>,
+    // char_atlases: Vec<RenderTexture>,
+    // char_atlas_poses: HashMap<GlyphId, (Rectangle, Point, usize)>,
     settings: TextRendererSettings,
-    cur_scale: f32,
+    cur_scale_index: i32,
     cur_text: Vec<Text>,
 
     // Font helpers
@@ -45,6 +48,11 @@ pub struct TextRenderer {
     font: FontRef<'static>,
     _char_scaler_context: Box<ScaleContext>,
     char_scaler: Scaler<'static>,
+}
+
+struct Atlas {
+    pub textures: Vec<RenderTexture>,
+    pub positions: HashMap<GlyphId, (Rectangle, Point, usize)>,
 }
 
 #[derive(Clone)]
@@ -91,17 +99,16 @@ impl TextRenderer {
         };
         let scaler = scaler_context_ref
             .builder(font)
-            .size(settings.resolution * settings.scale_threshold)
+            .size(settings.resolution * settings.scale_factor_group_size)
             .build();
 
         TextRenderer {
             vertex_renderer,
             char_renderer,
-            char_atlas: RenderTexture::new(context, 1, 1, (0.0, 0.0, 0.0, 0.0)).unwrap(),
-            char_atlas_poses: HashMap::new(),
+            atlases: LruCache::new(NonZeroUsize::new(settings.scale_cache_size as usize).unwrap()),
             _font_data: font_data,
             settings,
-            cur_scale: 1.,
+            cur_scale_index: -20,
             cur_text: Vec::new(),
 
             _char_scaler_context: scaler_context,
@@ -110,22 +117,38 @@ impl TextRenderer {
         }
     }
 
-    pub fn get_char_scale(&self) -> f32 {
-        self.cur_scale
+    fn get_cur_atlas(&mut self) -> &mut Atlas {
+        self.atlases.get_mut(&self.cur_scale_index).unwrap()
     }
-    pub fn get_draw_scale(&self) -> f32 {
+    fn get_char_scale(&self) -> f32 {
+        self.get_scale_from_index(self.cur_scale_index)
+    }
+    fn get_draw_scale(&self) -> f32 {
         self.settings.text_size
     }
-    pub fn get_atlas_resolution(&self) -> f32 {
-        self.settings.resolution * self.settings.scale_threshold
+    fn get_atlas_resolution(&self) -> f32 {
+        self.settings.resolution * self.settings.scale_factor_group_size
+    }
+    fn get_scale_index(&self, scale: f32) -> i32 {
+        (scale.log2() / self.settings.scale_factor_group_size.log2()).floor() as i32
+    }
+    fn get_scale_from_index(&self, index: i32) -> f32 {
+        self.settings.scale_factor_group_size.powi(index)
     }
 
     fn update_chars(&mut self, context: &WebGl2RenderingContext, required_chars: Vec<GlyphId>) {
+        let atlas = self
+            .atlases
+            .get_or_insert_mut(self.cur_scale_index, || Atlas {
+                textures: Vec::new(),
+                positions: HashMap::new(),
+            });
+
         let count = required_chars.len() * 2;
         let chars = required_chars
             .iter()
             .cloned()
-            .chain(self.char_atlas_poses.keys().cloned())
+            .chain(atlas.positions.keys().cloned())
             .take(count)
             .collect::<Vec<GlyphId>>();
 
@@ -136,11 +159,7 @@ impl TextRenderer {
                 let bounds = outline.bounds();
                 let width = bounds.width() * self.get_char_scale();
                 let height = bounds.height() * self.get_char_scale();
-                if width == 0.0 || height == 0.0 {
-                    None
-                } else {
-                    Some((glyph_id, ((width, height), outline)))
-                }
+                Some((glyph_id, ((width, height), outline)))
             })
             .collect();
 
@@ -153,49 +172,89 @@ impl TextRenderer {
             .values()
             .fold(0., |sum, ((width, height), _)| sum + width * height);
         let target_width = area.sqrt();
+        let max_size = self.settings.max_atlas_size as f32;
 
-        self.char_atlas_poses.clear();
+        {
+            let atlas = self.get_cur_atlas();
+            atlas.positions.clear();
+            for atlas in &atlas.textures {
+                atlas.dispose(context);
+            }
+            atlas.textures.clear();
+        }
 
+        let scale = self.get_char_scale();
+        let spacing = self.settings.atlas_spacing;
+
+        console::log!("------");
+        let mut texture_id = 0;
         let mut width = 0.;
         let mut row_height = 0.;
         let mut x = 0.;
         let mut y = 0.;
+        let finish_texture = |atlas: &mut Atlas, width: f32, height: f32| {
+            let width = f32::ceil(width) as usize;
+            let height = f32::ceil(height) as usize;
+            console::log!("atlas: ({}, {})", width, height);
+
+            atlas
+                .textures
+                .push(RenderTexture::new(context, width, height, (0.0, 0.0, 0.0, 0.0)).unwrap());
+        };
+
         for char in char_data.keys() {
             let Some(((char_width, char_height), outline)) = char_data.get(char) else {
                 continue;
             };
-            let min = outline.bounds().min * self.get_char_scale();
-            self.char_atlas_poses.insert(
+            // Make sure that the character fits here, otherwise go to the next valid position
+            let end_x = x + *char_width;
+            if end_x > max_size {
+                x = 0.;
+                y += row_height + spacing;
+                row_height = 0.;
+            }
+            if *char_height > row_height && y + char_height > max_size {
+                finish_texture(self.get_cur_atlas(), width, y + row_height);
+                x = 0.;
+                y = 0.;
+                row_height = 0.;
+                texture_id += 1;
+            }
+
+            // Reserve the space for the character, and update the line height
+            let min = outline.bounds().min * scale;
+            self.get_cur_atlas().positions.insert(
                 *char,
                 (
                     Rectangle::new(x, y, *char_width, *char_height),
                     Point { x: min.x, y: min.y },
+                    texture_id,
                 ),
             );
-            x += *char_width + self.settings.atlas_spacing;
+
             if *char_height > row_height {
                 row_height = *char_height;
             }
 
+            // Go to the next position based on the target-width
+            x += *char_width;
             if x > width {
                 width = x;
             }
+            x += spacing;
             if x > target_width {
                 x = 0.;
-                y += row_height + self.settings.atlas_spacing;
+                y += row_height + spacing;
                 row_height = 0.;
             }
         }
 
-        let width = f32::ceil(width) as usize;
-        let height = f32::ceil(y + row_height) as usize;
-        console::log!("atlas: ({}, {})", width, height);
-        self.char_atlas.dispose(context);
-        self.char_atlas = RenderTexture::new(context, width, height, (0.0, 0.0, 0.0, 0.0)).unwrap();
+        finish_texture(self.get_cur_atlas(), width, y + row_height);
     }
 
-    fn get_atlas_coord(&self, point: Point) -> Point {
-        let texture_size = self.char_atlas.get_size();
+    fn get_atlas_coord(&mut self, point: Point, index: usize) -> Point {
+        let atlas = self.get_cur_atlas();
+        let texture_size = atlas.textures.get(index).unwrap().get_size();
         Point {
             x: point.x / (texture_size.0 as f32),
             y: point.y / (texture_size.1 as f32),
@@ -203,49 +262,65 @@ impl TextRenderer {
     }
 
     fn draw_chars(&mut self, context: &WebGl2RenderingContext, char_data: &CharDataMap) {
-        let glyphs = char_data.iter().filter_map(|(glyph_id, (_, outline))| {
-            self.char_atlas_poses
-                .get(glyph_id)
-                .map(|pos| (outline, pos))
-        });
-
-        let texture_size = self.char_atlas.get_size();
-        let texture_size = Point {
-            x: texture_size.0 as f32,
-            y: texture_size.1 as f32,
-        };
-        self.char_renderer.set_data(
-            context,
-            "position",
-            &glyphs
-                .flat_map(|(outline, (pos, min))| {
-                    let offset = pos.pos() - *min;
-
-                    let scale = self.get_char_scale();
-                    let display_scale = self.get_draw_scale() * scale;
-                    // display_scale == 1 when the character size is self.resolution, and gets smaller as the character gets smaller. Hence we can use more pixels per character then, before scaling of the character, however we should not do this linearly or we lose too much detail on small scale, hence we take the sqrt to preserve more detail even at small scale.
-                    let distance_per_sample = self.settings.sample_distance / display_scale.sqrt();
-                    let triangles = triangulate(outline.path().commands(), distance_per_sample);
-                    triangles
-                        .iter()
-                        .flat_map(|point| {
-                            vec![
-                                (point.x * scale + offset.x) / texture_size.x,
-                                (point.y * scale + offset.y) / texture_size.y,
-                            ]
-                        })
-                        .collect::<Vec<_>>()
+        let glyphs = {
+            let atlas = self.get_cur_atlas();
+            char_data
+                .iter()
+                .filter_map(|(glyph_id, (_, outline))| {
+                    atlas
+                        .positions
+                        .get(glyph_id)
+                        .map(|pos| (outline.clone(), pos.clone()))
                 })
-                .collect::<Vec<f32>>(),
-            2,
-        );
+                .collect_vec()
+        };
+        let grouped_glyphs = glyphs.iter().group_by(|(_, (_, _, index))| *index);
 
-        self.char_renderer.update_data(context);
+        for (index, group) in grouped_glyphs.into_iter() {
+            let texture_size = self.get_cur_atlas().textures.get(index).unwrap().get_size();
+            let texture_size = Point {
+                x: texture_size.0 as f32,
+                y: texture_size.1 as f32,
+            };
 
-        self.char_atlas.bind_buffer(context);
-        self.char_atlas.clear(context);
-        self.char_renderer
-            .render(context, WebGl2RenderingContext::TRIANGLES);
+            let scale = self.get_char_scale();
+            let distance_per_sample = {
+                let display_scale =
+                    self.get_draw_scale() * scale.min(self.settings.max_sample_scale);
+                // display_scale == 1 when the character size is self.resolution, and gets smaller as the character gets smaller. Hence we can use more pixels per character then, before scaling of the character, however we should not do this linearly or we lose too much detail on small scale, hence we take the sqrt to preserve more detail even at small scale.
+                self.settings.sample_distance / display_scale.sqrt()
+            };
+
+            self.char_renderer.set_data(
+                context,
+                "position",
+                &group
+                    .flat_map(|(outline, (pos, min, index))| {
+                        let offset = pos.pos() - *min;
+
+                        let triangles = triangulate(outline.path().commands(), distance_per_sample);
+                        triangles
+                            .iter()
+                            .flat_map(|point| {
+                                vec![
+                                    (point.x * scale + offset.x) / texture_size.x,
+                                    (point.y * scale + offset.y) / texture_size.y,
+                                ]
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<f32>>(),
+                2,
+            );
+
+            self.char_renderer.update_data(context);
+
+            let texture = self.get_cur_atlas().textures.get(index).unwrap();
+            texture.bind_buffer(context);
+            texture.clear(context);
+            self.char_renderer
+                .render(context, WebGl2RenderingContext::TRIANGLES);
+        }
     }
 
     pub fn set_texts(&mut self, context: &WebGl2RenderingContext, texts: &Vec<Text>) {
@@ -290,20 +365,28 @@ impl TextRenderer {
             glyphs.insert(charmap.map(char));
         }
 
-        let has_new_glyphs = !glyphs.is_subset(&self.char_atlas_poses.keys().cloned().collect());
-        if has_new_glyphs {
+        if let Some(atlas) = self.atlases.get(&self.cur_scale_index) {
+            let has_new_glyphs = !glyphs.is_subset(&atlas.positions.keys().cloned().collect());
+            if has_new_glyphs {
+                self.update_chars(context, glyphs.iter().cloned().collect());
+            }
+        } else {
             self.update_chars(context, glyphs.iter().cloned().collect());
         }
 
         // Bind the character data to the shader
-        let char_data = char_data
-            .iter()
-            .filter_map(|(glyph_id, pos)| {
-                self.char_atlas_poses
-                    .get(glyph_id)
-                    .map(|glyph_pos| (glyph_pos, pos))
-            })
-            .collect::<Vec<_>>();
+        let char_data = {
+            let atlas = self.get_cur_atlas();
+            char_data
+                .iter()
+                .filter_map(|(glyph_id, pos)| {
+                    atlas
+                        .positions
+                        .get(glyph_id)
+                        .map(|glyph_pos| (glyph_pos.clone(), pos.clone()))
+                })
+                .collect::<Vec<_>>()
+        };
 
         let make_square = |p: Point, size: Point| {
             let p1 = p;
@@ -326,7 +409,7 @@ impl TextRenderer {
 
         let positions_old = char_data
             .iter()
-            .flat_map(|((glyph_pos, offset), text_pos)| {
+            .flat_map(|((glyph_pos, offset, _), text_pos)| {
                 make_square(
                     text_pos.old + *offset * char_to_draw_scale,
                     glyph_pos.size() * char_to_draw_scale,
@@ -336,7 +419,7 @@ impl TextRenderer {
 
         let positions_new = char_data
             .iter()
-            .flat_map(|((glyph_pos, offset), text_pos)| {
+            .flat_map(|((glyph_pos, offset, _), text_pos)| {
                 make_square(
                     text_pos.new + *offset * char_to_draw_scale,
                     glyph_pos.size() * char_to_draw_scale,
@@ -355,12 +438,17 @@ impl TextRenderer {
 
         let char_coords = char_data
             .iter()
-            .flat_map(|((glyph_pos, _), _)| {
+            .flat_map(|((glyph_pos, _, index), _)| {
                 make_square(
-                    self.get_atlas_coord(glyph_pos.pos()),
-                    self.get_atlas_coord(glyph_pos.size()),
+                    self.get_atlas_coord(glyph_pos.pos(), *index),
+                    self.get_atlas_coord(glyph_pos.size(), *index),
                 )
             })
+            .collect::<Vec<_>>();
+
+        let texture_indices = char_data
+            .iter()
+            .flat_map(|((_, _, index), _)| [*index as f32; 6])
             .collect::<Vec<_>>();
 
         self.vertex_renderer
@@ -373,28 +461,57 @@ impl TextRenderer {
             .set_data(context, "positionDuration", &positions_duration, 1);
         self.vertex_renderer
             .set_data(context, "charCoord", &char_coords, 2);
+        self.vertex_renderer
+            .set_data(context, "textureIndex", &texture_indices, 1);
 
         self.vertex_renderer.update_data(context);
     }
 
     pub fn set_transform(&mut self, context: &WebGl2RenderingContext, transform: &Matrix4) {
-        let p1 = transform.mul_vec3((0., 0., 0.));
-        let p2 = transform.mul_vec3((1., 0., 0.));
-        let scale = Point { x: p1.0, y: p1.1 }
-            .distance(&Point { x: p2.0, y: p2.1 })
-            .min(self.settings.max_scale);
-
-        let factor = 3.;
-        if scale > self.cur_scale * factor || self.cur_scale > scale * factor {
-            self.cur_scale = scale;
-            // self.cur_scale = 0.07;
-            // console::log!("{}", scale);
-            self.update_chars(context, self.char_atlas_poses.keys().cloned().collect());
-            self.set_texts(context, &self.cur_text.clone());
-        }
         self.vertex_renderer.set_uniform(context, "transform", |u| {
             context.uniform_matrix4fv_with_f32_array(u, true, &transform.0)
         });
+
+        let p1 = transform.mul_vec3((0., 0., 0.));
+        let p2 = transform.mul_vec3((1., 0., 0.));
+
+        let exact_scale = Point { x: p1.0, y: p1.1 }
+            .distance(&Point { x: p2.0, y: p2.1 })
+            .min(self.settings.max_scale);
+        let scale_index = self.get_scale_index(exact_scale);
+        let cur_index = self.cur_scale_index;
+
+        if cur_index != scale_index {
+            self.cur_scale_index = scale_index;
+
+            let charmap = self.font.charmap();
+            let chars = self
+                .cur_text
+                .iter()
+                .flat_map(|s| s.text.chars())
+                .collect::<HashSet<_>>()
+                .iter()
+                .map(|char| charmap.map(*char))
+                .collect::<HashSet<_>>();
+
+            let skip_update = self
+                .atlases
+                .get(&scale_index)
+                .map(|atlas| {
+                    atlas
+                        .positions
+                        .keys()
+                        .cloned()
+                        .collect::<HashSet<_>>()
+                        .is_superset(&chars)
+                })
+                .unwrap_or(false);
+            if !skip_update {
+                self.update_chars(context, chars.into_iter().collect());
+            }
+
+            self.set_texts(context, &self.cur_text.clone());
+        }
     }
 
     pub fn render<T: RenderTarget>(
@@ -407,20 +524,34 @@ impl TextRenderer {
         self.vertex_renderer
             .set_uniform(context, "time", |u| context.uniform1f(u, time as f32));
 
-        let atlas = &self.char_atlas;
-        self.vertex_renderer
-            .set_uniform(context, "characters", |u| {
-                atlas.bind_texture(context, u, 0);
-            });
+        if let Some(char_atlas) = self.atlases.get(&self.cur_scale_index) {
+            let (r, g, b) = self.settings.rgb_color;
+            self.vertex_renderer
+                .set_uniform(context, "color", |u| context.uniform3f(u, r, g, b));
+            for (index, atlas) in char_atlas.textures.iter().enumerate() {
+                self.vertex_renderer
+                    .set_uniform(context, "boundTextureIndex", |u| {
+                        context.uniform1i(u, index as i32)
+                    });
+                self.vertex_renderer
+                    .set_uniform(context, "characters", |u| {
+                        atlas.bind_texture(context, u, 0);
+                    });
 
-        self.vertex_renderer
-            .render(context, WebGl2RenderingContext::TRIANGLES);
+                self.vertex_renderer
+                    .render(context, WebGl2RenderingContext::TRIANGLES);
+            }
+        }
     }
 
     pub fn dispose(&mut self, context: &WebGl2RenderingContext) {
         self.vertex_renderer.dispose(context);
         self.char_renderer.dispose(context);
-        self.char_atlas.dispose(context);
+        for (_, char_atlas) in &self.atlases {
+            for atlas in &char_atlas.textures {
+                atlas.dispose(context);
+            }
+        }
     }
 }
 
@@ -429,38 +560,50 @@ type CharDataMap = HashMap<u16, ((f32, f32), Outline)>;
 pub struct TextRendererSettings {
     /// The screen height to base the atlas resolution on
     pub resolution: f32,
-    /// The factor difference allowed in scale before rescaling the atlas
-    pub scale_threshold: f32,
+    /// The base of the range of scales that use the same rendering quality: scale in [scale_step^i..scale_step^{i+1})
+    pub scale_factor_group_size: f32,
     /// The relative screen size to render the text at
     pub text_size: f32,
     /// The sample distance between points expressed in relation to the resolution (i.e. in terms of the distance between pixels if a character is rendered at full resolution)
     pub sample_distance: f32,
     /// The maximum rendering scale to use for the atlas, above which rendering quality won't be increased anymore
     pub max_scale: f32,
+    /// The maximum scale after which the number of sample points won't increaase anymore
+    pub max_sample_scale: f32,
     /// The spacing that characters have in the atlas
     pub atlas_spacing: f32,
     /// The default characters that should always be included on the atlas
     pub default_chars: String,
+    /// The maximum width and height that the atlas may have (to adhere to hardware limitations)
+    pub max_atlas_size: u32,
+    /// The size of the cache to keep for different scales
+    pub scale_cache_size: u8,
+    /// The color of the text
+    pub rgb_color: (f32, f32, f32),
 }
 
 impl TextRendererSettings {
     pub fn new() -> TextRendererSettings {
         TextRendererSettings {
             resolution: 1080.,
-            scale_threshold: 2.0,
+            scale_factor_group_size: 2.0,
             text_size: 1.0,
             sample_distance: 25.,
             max_scale: 1.0,
+            max_sample_scale: 1.0,
             atlas_spacing: 2.0,
             default_chars: "abcdefghijklmnopqrstuvwxyz_-".to_string(),
+            max_atlas_size: 4096,
+            scale_cache_size: 6,
+            rgb_color: (0., 0., 0.),
         }
     }
     pub fn resolution(mut self, resolution: f32) -> TextRendererSettings {
         self.resolution = resolution;
         self
     }
-    pub fn scale_threshold(mut self, scale_threshold: f32) -> TextRendererSettings {
-        self.scale_threshold = scale_threshold;
+    pub fn scale_factor_group_size(mut self, scale_factor_group_size: f32) -> TextRendererSettings {
+        self.scale_factor_group_size = scale_factor_group_size;
         self
     }
     pub fn text_size(mut self, text_size: f32) -> TextRendererSettings {
@@ -469,6 +612,10 @@ impl TextRendererSettings {
     }
     pub fn sample_distance(mut self, sample_distance: f32) -> TextRendererSettings {
         self.sample_distance = sample_distance;
+        self
+    }
+    pub fn max_sample_scale(mut self, max_sample_scale: f32) -> TextRendererSettings {
+        self.max_sample_scale = max_sample_scale;
         self
     }
     pub fn max_scale(mut self, max_scale: f32) -> TextRendererSettings {
@@ -481,6 +628,19 @@ impl TextRendererSettings {
     }
     pub fn default_chars(mut self, default_chars: String) -> TextRendererSettings {
         self.default_chars = default_chars;
+        self
+    }
+    pub fn max_atlas_size(mut self, max_atlas_size: u32) -> TextRendererSettings {
+        self.max_atlas_size = max_atlas_size;
+        self
+    }
+
+    pub fn scale_cache_size(mut self, scale_cache_size: u8) -> TextRendererSettings {
+        self.scale_cache_size = scale_cache_size;
+        self
+    }
+    pub fn rgb_color(mut self, color: (f32, f32, f32)) -> TextRendererSettings {
+        self.rgb_color = color;
         self
     }
 }
