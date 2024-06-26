@@ -19,6 +19,7 @@ pub trait GraphStructure<T: Tag> {
     /// This is only supported for nodeIDs that have been obtained from this interface before
     fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)>;
     fn get_level(&mut self, node: NodeID) -> LevelNo;
+    fn get_level_label(&self, level: LevelNo) -> String;
 }
 
 pub struct OxiddGraphStructure<T: Tag, F: Function>
@@ -126,5 +127,10 @@ where
             });
         }
         0
+    }
+
+    fn get_level_label(&self, level: LevelNo) -> String {
+        // TODO: get actual level vars
+        level.to_string()
     }
 }

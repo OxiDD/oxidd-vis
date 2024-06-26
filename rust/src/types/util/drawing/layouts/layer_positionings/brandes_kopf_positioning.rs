@@ -75,7 +75,7 @@ impl<T: Tag> NodePositioning<T> for BrandesKopfPositioning {
             layers
                 .iter()
                 .enumerate()
-                .map(|(level, _)| (level as u32, level as f32 * spacing))
+                .map(|(level, _)| (level as u32, -(level as f32 * spacing)))
                 .collect(),
         )
     }

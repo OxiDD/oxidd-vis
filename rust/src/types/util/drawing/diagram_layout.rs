@@ -5,6 +5,7 @@ use std::{
     rc::Rc,
 };
 
+use oxidd::LevelNo;
 use oxidd_core::Tag;
 
 use crate::{
@@ -115,6 +116,15 @@ impl<T: Add<Output = T>> Add for Transition<T> {
         }
     }
 }
+impl<T: Display> Display for Transition<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} -> {} @ {} for {}",
+            self.old, self.new, self.old_time, self.duration
+        )
+    }
+}
 
 // impl<T, L: Clone + Sized + Mul<T, Output = T>> Mul<Transition<T>> for L {
 //     type Output = Transition<T>;
@@ -175,15 +185,20 @@ pub struct EdgePoint {
     pub exists: Transition<f32>, // Whether this point actually exists in the output (it might be used only to transition shape)
 }
 
+#[derive(Clone)]
 pub struct LayerLayout {
-    pub start_layer: i32,
-    pub end_layer: i32,
+    pub start_layer: LevelNo,
+    pub end_layer: LevelNo,
+    pub label: String,
     pub top: Transition<f32>,
     pub bottom: Transition<f32>,
+    pub index: Transition<f32>,
+    pub exists: Transition<f32>,
 }
 
 #[derive(Clone)]
 pub struct DiagramLayout<T: Tag> {
     pub groups: HashMap<NodeGroupID, NodeGroupLayout<T>>,
-    pub layers: HashMap<i32, Rc<LayerLayout>>,
+    /// Note: this vector has to be sorted in increasing order of start_layer
+    pub layers: Vec<LayerLayout>,
 }

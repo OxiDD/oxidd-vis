@@ -48,7 +48,7 @@ impl<T: Tag, R: Renderer<T>, L: LayoutRules<T, G>, G: GroupedGraphStructure<T>> 
             graph: graph.clone_readonly(),
             layout: DiagramLayout {
                 groups: HashMap::new(),
-                layers: HashMap::new(),
+                layers: Vec::new(),
             },
             transform: Transformation::default(),
         }

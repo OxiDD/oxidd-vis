@@ -21,11 +21,15 @@ use crate::{
         group_manager::EdgeData,
         grouped_graph_structure::{EdgeCountData, GroupedGraphStructure, SourceReader},
     },
-    util::logging::console,
+    util::{logging::console, rectangle::Rectangle},
     wasm_interface::NodeGroupID,
 };
 
-use super::util::layered::layer_orderer::{EdgeMap, Order};
+use super::util::{
+    compute_layers_layout::compute_layers_layout,
+    layered::layer_orderer::{EdgeMap, Order},
+    remove_redundant_bendpoints::remove_redundant_bendpoints,
+};
 
 /// The trait used to decide what ordering of nodes to use in the layout, including dummy nodes
 pub trait LayerOrdering<T: Tag> {
@@ -186,8 +190,6 @@ impl<
             &dummy_owners,
         );
 
-        // TODO: remove straight edge bendpoints
-
         format_layout(
             graph,
             self.max_curve_offset,
@@ -328,30 +330,63 @@ fn format_layout<T: Tag>(
     dummy_group_start_id: usize,
 ) -> DiagramLayout<T> {
     let node_size = 1.; // TODO: make configurable
+    let node_size_shift = -0.5
+        * Point {
+            x: node_size,
+            y: node_size,
+        };
+    let node_positions: HashMap<usize, Point> = node_positions
+        .iter()
+        .map(|(&group_id, &pos)| (group_id, pos + node_size_shift))
+        .collect();
     let bottom_node_positions: HashMap<usize, Point> = node_positions
         .iter()
         .map(|(&group_id, pos)| {
             (
                 group_id,
-                if group_id >= dummy_group_start_id {
+                (if group_id >= dummy_group_start_id {
                     *pos
                 } else {
                     let (s, e) = graph.get_level_range(group_id);
                     Point {
                         x: pos.x,
                         y: pos.y
-                            - (layer_positions.get(&e).unwrap_or(&0.)
-                                - layer_positions.get(&s).unwrap_or(&0.)),
+                            - (layer_positions.get(&s).unwrap_or(&0.)
+                                - layer_positions.get(&e).unwrap_or(&0.)),
                     }
-                },
+                }),
             )
         })
         .collect();
 
     // Map to a diagram layout
     DiagramLayout {
-        // TODO: add layers
-        layers: HashMap::new(),
+        layers: compute_layers_layout(
+            graph,
+            node_positions
+                .iter()
+                .filter(|(&group_id, _)| group_id < dummy_group_start_id)
+                .map(|(&group_id, pos)| {
+                    let (s, e) = graph.get_level_range(group_id);
+
+                    let start_layer_y = layer_positions.get(&s).unwrap_or(&0.);
+                    let prev_layer_y = (if s > 0 {
+                        layer_positions.get(&(s - 1)).cloned()
+                    } else {
+                        None
+                    })
+                    .unwrap_or(start_layer_y + 2. * node_size);
+                    let start_y = (start_layer_y + prev_layer_y) / 2.0;
+
+                    let end_layer_y = *layer_positions.get(&e).unwrap_or(&0.);
+                    let next_layer_y = layer_positions
+                        .get(&(e + 1))
+                        .cloned()
+                        .unwrap_or(end_layer_y - 2. * node_size);
+                    let end_y = (end_layer_y + next_layer_y) / 2.0;
+                    (group_id, Rectangle::new(0., end_y, 0., start_y - end_y))
+                }),
+        ),
         groups: graph
             .get_all_groups()
             .iter()
@@ -365,8 +400,9 @@ fn format_layout<T: Tag>(
                         size: Transition::plain(Point {
                             x: node_size,
                             y: node_size
-                                + (layer_positions.get(&e).unwrap_or(&0.)
-                                    - layer_positions.get(&s).unwrap_or(&0.)),
+                                + (layer_positions.get(&s).unwrap_or(&0.)
+                                    - layer_positions.get(&e).unwrap_or(&0.))
+                                    * node_size,
                         }),
                         exists: Transition::plain(1.),
                         edges: graph
@@ -477,15 +513,18 @@ fn format_edge<T: Tag>(
         points: edge_bend_nodes.get(&(group_id, edge_data)).map_or_else(
             || Vec::new(),
             |nodes| {
-                nodes
-                    .iter()
-                    .map(|dummy_id| EdgePoint {
-                        point: Transition::plain(
-                            *node_positions.get(&dummy_id).unwrap() + edge_offset,
-                        ),
-                        exists: Transition::plain(1.),
-                    })
-                    .collect()
+                remove_redundant_bendpoints(
+                    &nodes
+                        .iter()
+                        .map(|dummy_id| *node_positions.get(&dummy_id).unwrap() + edge_offset)
+                        .collect(),
+                )
+                .iter()
+                .map(|&point| EdgePoint {
+                    point: Transition::plain(point),
+                    exists: Transition::plain(1.),
+                })
+                .collect()
             },
         ),
         exists: Transition::plain(1.),

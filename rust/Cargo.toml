@@ -29,6 +29,7 @@ earcutr = "0.4.3"
 i_float = "^1.0.0"
 i_overlay = "^1.0.0"
 lru = "0.12.3"
+ordered-float = "4.2.0"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

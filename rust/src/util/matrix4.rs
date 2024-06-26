@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Matrix4(pub [f32; 16]);
 
 impl Display for Matrix4 {

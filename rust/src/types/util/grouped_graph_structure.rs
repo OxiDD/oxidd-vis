@@ -17,6 +17,7 @@ pub trait GroupedGraphStructure<T: Tag> {
     fn get_children(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>>;
     fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID>;
     fn get_level_range(&self, group: NodeGroupID) -> (LevelNo, LevelNo);
+    fn get_level_label(&self, level: LevelNo) -> String;
     /// Retrieves a source reader, which can be used to animate creation of new groups
     fn get_source_reader(&mut self) -> Self::Tracker;
 }

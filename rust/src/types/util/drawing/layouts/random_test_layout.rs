@@ -93,7 +93,7 @@ impl<T: Tag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for RandomTestLayout
                     })
                 })
                 .collect(),
-            layers: HashMap::new(),
+            layers: Vec::new(),
         }
     }
 }

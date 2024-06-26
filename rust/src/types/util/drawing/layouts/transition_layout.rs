@@ -5,6 +5,7 @@ use std::{
     ops::Add,
 };
 
+use itertools::{EitherOrBoth, Itertools};
 use oxidd::{Edge, Function, InnerNode, LevelNo, Manager};
 use oxidd_core::{DiagramRules, Tag};
 
@@ -12,7 +13,8 @@ use crate::{
     types::util::{
         drawing::{
             diagram_layout::{
-                DiagramLayout, EdgeLayout, EdgePoint, NodeGroupLayout, Point, Transition,
+                DiagramLayout, EdgeLayout, EdgePoint, LayerLayout, NodeGroupLayout, Point,
+                Transition,
             },
             layout_rules::LayoutRules,
         },
@@ -61,15 +63,6 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G
         let old_time = time;
         let new = self.layout.layout(graph, old, sources, time);
 
-        fn get_per<T>(time: u32, val: Transition<T>) -> f32 {
-            f32::max(
-                0.0,
-                f32::min(
-                    (time as f32 - val.old_time as f32) / val.duration as f32,
-                    1.0,
-                ),
-            )
-        }
         let get_current_point = |val: Transition<Point>| {
             let per = get_per(time, val);
             Point {
@@ -281,7 +274,13 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G
                     )
                 })
                 .collect(),
-            layers: new.layers,
+            layers: transition_layers(
+                &old.layers,
+                &new.layers,
+                duration,
+                old_time,
+                &get_current_float,
+            ),
         }
     }
 }
@@ -382,4 +381,289 @@ fn relate_elements<T: Tag, G: GroupedGraphStructure<T>>(
     }
 
     (node_mapping, edge_mapping)
+}
+
+fn transition_layers(
+    old: &Vec<LayerLayout>,
+    new: &Vec<LayerLayout>,
+    duration: u32,
+    old_time: u32,
+    get_current_float: &impl Fn(Transition<f32>) -> f32,
+) -> Vec<LayerLayout> {
+    let mut out = Vec::new();
+
+    let transition_out = |old_layer: &LayerLayout, out: &mut Vec<LayerLayout>| {
+        let exists = get_current_float(old_layer.exists);
+        if exists > 0. {
+            out.push(LayerLayout {
+                exists: Transition {
+                    old_time,
+                    duration,
+                    old: exists,
+                    new: 0.,
+                },
+                ..old_layer.clone()
+            });
+        }
+    };
+
+    let mut old_iter = old.iter().peekable();
+    for new_layer in new {
+        // Progress to the right old layer
+        while let Some(&old_layer) = old_iter.peek() {
+            if old_layer.exists.new >= 1. && old_layer.start_layer >= new_layer.start_layer {
+                break;
+            }
+            old_iter.next();
+            transition_out(&old_layer, &mut out);
+        }
+
+        // Try to transition from old to new
+        if let Some(&old_layer) = old_iter.peek() {
+            if old_layer.start_layer == new_layer.start_layer
+                && old_layer.end_layer == new_layer.end_layer
+            {
+                old_iter.next();
+                out.push(LayerLayout {
+                    bottom: Transition {
+                        old_time,
+                        duration,
+                        old: get_current_float(old_layer.bottom),
+                        new: new_layer.bottom.new,
+                    },
+                    top: Transition {
+                        old_time,
+                        duration,
+                        old: get_current_float(old_layer.top),
+                        new: new_layer.top.new,
+                    },
+                    exists: Transition {
+                        old_time,
+                        duration,
+                        old: get_current_float(old_layer.exists),
+                        new: new_layer.exists.new,
+                    },
+                    index: Transition {
+                        old_time,
+                        duration,
+                        old: get_current_float(old_layer.index),
+                        new: new_layer.index.new,
+                    },
+                    ..new_layer.clone()
+                });
+                continue;
+            }
+        }
+
+        // Otherwise insert new
+        if old.len() == 0 {
+            out.push(new_layer.clone()); // Don't transition in when there is no old
+        } else {
+            let center = (new_layer.bottom.old + new_layer.top.old) / 2.;
+            out.push(LayerLayout {
+                top: Transition {
+                    old_time,
+                    duration,
+                    old: center,
+                    new: new_layer.top.new,
+                },
+                bottom: Transition {
+                    old_time,
+                    duration,
+                    old: center,
+                    new: new_layer.bottom.new,
+                },
+                exists: Transition {
+                    old_time,
+                    duration,
+                    old: 0.,
+                    new: new_layer.exists.new,
+                },
+                ..new_layer.clone()
+            });
+        }
+    }
+
+    // Transition out any other old layers
+    for old_layer in old_iter {
+        transition_out(&old_layer, &mut out);
+    }
+
+    console::log!(
+        "layers: {}",
+        out.iter()
+            .map(|layer| format!(
+                "([{}], [{}], [{}])",
+                layer.label.replace("\n", ""),
+                layer.exists,
+                layer.index
+            ))
+            .join(",\n ")
+    );
+
+    out
+}
+// fn transition_layers(
+//     old: &Vec<LayerLayout>,
+//     new: &Vec<LayerLayout>,
+//     duration: u32,
+//     old_time: u32,
+//     get_current_float: &impl Fn(Transition<f32>) -> f32,
+// ) -> Vec<LayerLayout> {
+//     let prev_bottom = old
+//         .iter()
+//         .last()
+//         .map(|last_old| get_current_float(last_old.bottom));
+
+//     let boundaries = old
+//         .iter()
+//         .flat_map(|layer| [layer.start_layer, layer.end_layer + 1])
+//         .chain(
+//             new.iter()
+//                 .flat_map(|layer| [layer.start_layer, layer.end_layer + 1]),
+//         )
+//         .sorted()
+//         .dedup();
+
+//     let mut old_iter = old.iter().peekable();
+//     let mut new_iter = old.iter().peekable();
+//     for (start_layer_no, end_layer_no) in boundaries.clone().zip(boundaries.skip(1)) {
+//         // Progress to the right layer
+//         while let Some(old) = old_iter.peek() {
+//             if old.end_layer >= start_layer_no {
+//                 break;
+//             }
+//             old_iter.next();
+//         }
+//         while let Some(new) = new_iter.peek() {
+//             if new.end_layer >= start_layer_no {
+//                 break;
+//             }
+//             new_iter.next();
+//         }
+
+//         // Match new case
+//         match (old_iter.peek(), new_iter.peek()) {
+//             (Some(old), Some(new)) => {
+//                 let old_longer
+//             }
+//             _ => {}
+//         }
+//     }
+
+//     let mut out = Vec::new();
+
+//     let mut old_layers = old.iter().peekable();
+//     for new_layer in new {
+//         if let Some(old_layer) = old_layers.peek() {
+//             let in_old = new_layer.end_layer <= old_layer.end_layer;
+//             let in_new = old_layer.end_layer <= new_layer.end_layer;
+//             match (in_old, in_new) {
+//                 (true, true) => {}
+//                 (_, _) => {}
+//             }
+//         } else {
+//             out.push(LayerLayout {
+//                 top: Transition {
+//                     old_time,
+//                     duration,
+//                     old: prev_bottom.unwrap_or(new_layer.top.new),
+//                     new: new_layer.top.new,
+//                 },
+//                 bottom: Transition {
+//                     old_time,
+//                     duration,
+//                     old: prev_bottom.unwrap_or(new_layer.bottom.new),
+//                     new: new_layer.bottom.new,
+//                 },
+//                 exists: Transition {
+//                     old_time,
+//                     duration,
+//                     old: 0.,
+//                     new: new_layer.exists.new,
+//                 },
+//                 ..new_layer.clone()
+//             });
+//         }
+//     }
+//     out
+// }
+
+fn transition_layers_shift(
+    old: &Vec<LayerLayout>,
+    new: &Vec<LayerLayout>,
+    duration: u32,
+    old_time: u32,
+    get_current_float: &impl Fn(Transition<f32>) -> f32,
+) -> Vec<LayerLayout> {
+    let prev_bottom = old
+        .iter()
+        .last()
+        .map(|last_old| get_current_float(last_old.bottom));
+
+    new.iter()
+        .zip_longest(old.iter())
+        .filter_map(|p| match p {
+            EitherOrBoth::Both(new_layer, old_layer) => Some(LayerLayout {
+                bottom: Transition {
+                    old_time,
+                    duration,
+                    old: get_current_float(old_layer.bottom),
+                    new: new_layer.bottom.new,
+                },
+                top: Transition {
+                    old_time,
+                    duration,
+                    old: get_current_float(old_layer.top),
+                    new: new_layer.top.new,
+                },
+                exists: Transition {
+                    old_time,
+                    duration,
+                    old: get_current_float(old_layer.exists),
+                    new: new_layer.exists.new,
+                },
+                ..new_layer.clone()
+            }),
+            EitherOrBoth::Left(new_layer) => Some(LayerLayout {
+                top: Transition {
+                    old_time,
+                    duration,
+                    old: prev_bottom.unwrap_or(new_layer.top.new),
+                    new: new_layer.top.new,
+                },
+                bottom: Transition {
+                    old_time,
+                    duration,
+                    old: prev_bottom.unwrap_or(new_layer.bottom.new),
+                    new: new_layer.bottom.new,
+                },
+                exists: Transition {
+                    old_time,
+                    duration,
+                    old: 0.,
+                    new: new_layer.exists.new,
+                },
+                ..new_layer.clone()
+            }),
+            EitherOrBoth::Right(old_layer) => {
+                let exists = get_current_float(old_layer.exists);
+                if exists > 0.0 {
+                    Some(old_layer.clone())
+                } else {
+                    None
+                }
+            }
+        })
+        .collect()
+}
+
+fn get_per<T>(time: u32, val: Transition<T>) -> f32 {
+    f32::max(
+        0.0,
+        f32::min(
+            (time as f32 - val.old_time as f32) / val.duration as f32,
+            1.0,
+        ),
+    )
 }

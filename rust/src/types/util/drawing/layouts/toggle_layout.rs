@@ -35,7 +35,7 @@ impl<T: Tag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for ToggleLayout<T, 
         if self.layouts.len() == 0 {
             return DiagramLayout {
                 groups: HashMap::new(),
-                layers: HashMap::new(),
+                layers: Vec::new(),
             };
         }
         let layout =

@@ -348,6 +348,7 @@ impl TextRenderer {
                                     x: glyph.x + x,
                                     y: glyph.y,
                                 }),
+                            text.exists,
                         ));
                         x += glyph.advance;
                     }
@@ -357,7 +358,7 @@ impl TextRenderer {
             .collect::<Vec<_>>();
         let mut glyphs = char_data
             .iter()
-            .map(|&(glyph_id, _)| glyph_id)
+            .map(|&(glyph_id, _, _)| glyph_id)
             .collect::<HashSet<GlyphId>>();
 
         let charmap = self.font.charmap();
@@ -379,11 +380,11 @@ impl TextRenderer {
             let atlas = self.get_cur_atlas();
             char_data
                 .iter()
-                .filter_map(|(glyph_id, pos)| {
+                .filter_map(|(glyph_id, pos, exists)| {
                     atlas
                         .positions
                         .get(glyph_id)
-                        .map(|glyph_pos| (glyph_pos.clone(), pos.clone()))
+                        .map(|glyph_pos| (glyph_pos.clone(), pos.clone(), exists))
                 })
                 .collect::<Vec<_>>()
         };
@@ -409,7 +410,7 @@ impl TextRenderer {
 
         let positions_old = char_data
             .iter()
-            .flat_map(|((glyph_pos, offset, _), text_pos)| {
+            .flat_map(|((glyph_pos, offset, _), text_pos, _)| {
                 make_square(
                     text_pos.old + *offset * char_to_draw_scale,
                     glyph_pos.size() * char_to_draw_scale,
@@ -419,7 +420,7 @@ impl TextRenderer {
 
         let positions_new = char_data
             .iter()
-            .flat_map(|((glyph_pos, offset, _), text_pos)| {
+            .flat_map(|((glyph_pos, offset, _), text_pos, _)| {
                 make_square(
                     text_pos.new + *offset * char_to_draw_scale,
                     glyph_pos.size() * char_to_draw_scale,
@@ -429,16 +430,16 @@ impl TextRenderer {
 
         let positions_start_time = char_data
             .iter()
-            .flat_map(|(_, text_pos)| [text_pos.old_time as f32; 6])
+            .flat_map(|(_, text_pos, _)| [text_pos.old_time as f32; 6])
             .collect::<Vec<_>>();
         let positions_duration = char_data
             .iter()
-            .flat_map(|(_, text_pos)| [text_pos.duration as f32; 6])
+            .flat_map(|(_, text_pos, _)| [text_pos.duration as f32; 6])
             .collect::<Vec<_>>();
 
         let char_coords = char_data
             .iter()
-            .flat_map(|((glyph_pos, _, index), _)| {
+            .flat_map(|((glyph_pos, _, index), _, _)| {
                 make_square(
                     self.get_atlas_coord(glyph_pos.pos(), *index),
                     self.get_atlas_coord(glyph_pos.size(), *index),
@@ -448,7 +449,27 @@ impl TextRenderer {
 
         let texture_indices = char_data
             .iter()
-            .flat_map(|((_, _, index), _)| [*index as f32; 6])
+            .flat_map(|((_, _, index), _, _)| [*index as f32; 6])
+            .collect::<Vec<_>>();
+
+        let exists = char_data
+            .iter()
+            .flat_map(|(_, _, exists)| [exists.new; 6])
+            .collect::<Vec<_>>();
+
+        let exists_old = char_data
+            .iter()
+            .flat_map(|(_, _, exists)| [exists.old; 6])
+            .collect::<Vec<_>>();
+
+        let exists_start_time = char_data
+            .iter()
+            .flat_map(|(_, _, exists)| [exists.old_time as f32; 6])
+            .collect::<Vec<_>>();
+
+        let exists_duration = char_data
+            .iter()
+            .flat_map(|(_, _, exists)| [exists.duration as f32; 6])
             .collect::<Vec<_>>();
 
         self.vertex_renderer
@@ -463,6 +484,14 @@ impl TextRenderer {
             .set_data(context, "charCoord", &char_coords, 2);
         self.vertex_renderer
             .set_data(context, "textureIndex", &texture_indices, 1);
+
+        self.vertex_renderer
+            .set_data(context, "existsOld", &exists_old, 1);
+        self.vertex_renderer.set_data(context, "exists", &exists, 1);
+        self.vertex_renderer
+            .set_data(context, "existsStartTime", &exists_start_time, 1);
+        self.vertex_renderer
+            .set_data(context, "existsDuration", &exists_duration, 1);
 
         self.vertex_renderer.update_data(context);
     }
@@ -514,13 +543,7 @@ impl TextRenderer {
         }
     }
 
-    pub fn render<T: RenderTarget>(
-        &mut self,
-        context: &WebGl2RenderingContext,
-        time: u32,
-        target: &T,
-    ) {
-        target.bind_buffer(context);
+    pub fn render(&mut self, context: &WebGl2RenderingContext, time: u32) {
         self.vertex_renderer
             .set_uniform(context, "time", |u| context.uniform1f(u, time as f32));
 
@@ -592,7 +615,7 @@ impl TextRendererSettings {
             max_scale: 1.0,
             max_sample_scale: 1.0,
             atlas_spacing: 2.0,
-            default_chars: "abcdefghijklmnopqrstuvwxyz_-".to_string(),
+            default_chars: "abcdefghijklmnopqrstuvwxyz_- ".to_string(),
             max_atlas_size: 4096,
             scale_cache_size: 6,
             rgb_color: (0., 0., 0.),

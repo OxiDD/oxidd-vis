@@ -541,7 +541,6 @@ impl<T: Tag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, 
                     .peek()
                     .map_or(0, |(node, Reverse(layer))| *layer);
                 let max = group.layer_max.peek().map_or(0, |(node, layer)| *layer);
-                console::log!("{} {}", group_id, group);
                 (min, max)
             },
         )
@@ -567,5 +566,9 @@ impl<T: Tag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, 
 
     fn get_source_reader(&mut self) -> SourceReader {
         self.sources.get_reader()
+    }
+
+    fn get_level_label(&self, level: LevelNo) -> String {
+        self.graph.get_level_label(level)
     }
 }

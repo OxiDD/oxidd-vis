@@ -34,11 +34,7 @@ impl NodeRenderer {
             nodes: &Vec<Node>,
             map: impl Fn(&Node) -> [f32; LEN],
         ) -> Box<[f32]> {
-            nodes
-                .iter()
-                .flat_map(|node| map(node).repeat(6))
-                // .flat_map(|node| [0.0, 0.0].repeat(4))
-                .collect()
+            nodes.iter().flat_map(|node| map(node).repeat(6)).collect()
         }
 
         let old_positions = map(nodes, |node| {
@@ -98,7 +94,7 @@ impl NodeRenderer {
             .render(context, WebGl2RenderingContext::TRIANGLES);
     }
 
-    pub fn dispose(&self, context: &WebGl2RenderingContext) {
+    pub fn dispose(&mut self, context: &WebGl2RenderingContext) {
         self.vertex_renderer.dispose(context);
     }
 }

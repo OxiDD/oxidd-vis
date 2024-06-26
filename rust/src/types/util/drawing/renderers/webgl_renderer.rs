@@ -24,6 +24,11 @@ use crate::{
 
 use super::webgl::{
     edge_renderer::{Edge, EdgeRenderer, EdgeRenderingType},
+    layers::{
+        layer_bg_renderer::LayerBgRenderer,
+        layer_lines_renderer::LayerLinesRenderer,
+        layer_renderer::{Layer, LayerRenderer},
+    },
     node_renderer::{Node, NodeRenderer},
     render_texture::{RenderTarget, ScreenTexture},
     text::text_renderer::{Text, TextRenderer, TextRendererSettings},
@@ -34,7 +39,7 @@ pub struct WebglRenderer<T: Tag> {
     webgl_context: WebGl2RenderingContext,
     node_renderer: NodeRenderer,
     edge_renderer: EdgeRenderer,
-    text_renderer: TextRenderer,
+    layer_renderer: LayerRenderer,
     edge_type_ids: HashMap<EdgeType<T>, usize>,
     screen_texture: ScreenTexture,
 }
@@ -58,10 +63,10 @@ impl<T: Tag> WebglRenderer<T> {
         Ok(WebglRenderer {
             node_renderer: NodeRenderer::new(&context),
             edge_renderer: EdgeRenderer::new(&context, edge_rendering_types),
-            // TODO: create font params
-            text_renderer: TextRenderer::new(
+            layer_renderer: LayerRenderer::new(
                 &context,
-                // include_bytes!("../../../../../resources/Coffee Fills.ttf").to_vec(),
+                // LayerBgRenderer::new(&context),
+                LayerLinesRenderer::new(&context),
                 include_bytes!("../../../../../resources/Roboto-Bold.ttf").to_vec(),
                 TextRendererSettings::new()
                     .resolution(screen_texture.get_size().1 as f32)
@@ -109,7 +114,7 @@ impl<T: Tag> Renderer<T> for WebglRenderer<T> {
             .set_transform(&self.webgl_context, &matrix);
         self.edge_renderer
             .set_transform(&self.webgl_context, &matrix);
-        self.text_renderer
+        self.layer_renderer
             .set_transform(&self.webgl_context, &matrix);
     }
     fn update_layout(&mut self, layout: &DiagramLayout<T>) {
@@ -145,37 +150,29 @@ impl<T: Tag> Renderer<T> for WebglRenderer<T> {
                 })
                 .collect(),
         );
-
-        self.text_renderer.set_texts(
+        self.layer_renderer.set_layers(
             &self.webgl_context,
-            &vec![
-                Text {
-                    // text: "abcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*();:'\",.<>[]-=_+{}\\|`~/?"
-                    //     .to_string(),
-                    text: "\"hello world!\"".to_string(),
-                    // text: "olya".to_string(),
-                    position: Transition::plain(Point { x: 0., y: 0. }),
-                    exists: Transition::plain(1.0),
-                },
-                Text {
-                    // text: "abcdefghijklmnopqrstuvwxyz1234567890!@#$%^&*();:'\",.<>[]-=_+{}\\|`~/?"
-                    //     .to_string(),
-                    text: "And some other sentence right here".to_string(),
-                    // text: "olya".to_string(),
-                    position: Transition::plain(Point { x: 0., y: -1. }),
-                    exists: Transition::plain(1.0),
-                },
-            ],
+            &layout
+                .layers
+                .iter()
+                .map(|layer| Layer {
+                    top: layer.top,
+                    bottom: layer.bottom,
+                    label: layer.label.clone(),
+                    index: layer.index,
+                    exists: layer.exists,
+                })
+                .collect(),
         );
     }
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) {
         self.screen_texture.clear(&self.webgl_context);
-        // self.edge_renderer
-        //     .render(&self.webgl_context, time, selected_ids, hovered_ids);
-        // self.node_renderer
-        //     .render(&self.webgl_context, time, selected_ids, hovered_ids);
-        self.text_renderer
-            .render(&self.webgl_context, time, &self.screen_texture);
+        self.layer_renderer
+            .render(&self.webgl_context, time, selected_ids, hovered_ids);
+        self.edge_renderer
+            .render(&self.webgl_context, time, selected_ids, hovered_ids);
+        self.node_renderer
+            .render(&self.webgl_context, time, selected_ids, hovered_ids);
     }
 }
 
@@ -183,6 +180,6 @@ impl<T: Tag> Drop for WebglRenderer<T> {
     fn drop(&mut self) {
         self.node_renderer.dispose(&self.webgl_context);
         self.edge_renderer.dispose(&self.webgl_context);
-        self.text_renderer.dispose(&self.webgl_context);
+        self.layer_renderer.dispose(&self.webgl_context);
     }
 }
