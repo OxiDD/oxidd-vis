@@ -65,8 +65,8 @@ impl<T: Tag> WebglRenderer<T> {
             edge_renderer: EdgeRenderer::new(&context, edge_rendering_types),
             layer_renderer: LayerRenderer::new(
                 &context,
-                // LayerBgRenderer::new(&context),
-                LayerLinesRenderer::new(&context),
+                LayerBgRenderer::new(&context),
+                // LayerLinesRenderer::new(&context),
                 include_bytes!("../../../../../resources/Roboto-Bold.ttf").to_vec(),
                 TextRendererSettings::new()
                     .resolution(screen_texture.get_size().1 as f32)
