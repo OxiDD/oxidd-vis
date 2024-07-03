@@ -2,7 +2,7 @@ import {IDerivedCompute} from "./_types/IDerivedCompute";
 import {IRunnable} from "./_types/IRunnable";
 import {IWatchable} from "./_types/IWatchable";
 import {IWatcher} from "./_types/IWatcher";
-import {ListenerManager} from "./util/ListenerManager";
+import {ListenerManager} from "./utils/ListenerManager";
 
 // TODO: add debug mode that checks if value changed, even if dependencies did not change (I.e. derived value is impure) to warn the user
 

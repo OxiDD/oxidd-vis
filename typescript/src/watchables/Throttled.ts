@@ -1,7 +1,7 @@
 import {Derived} from "./Derived";
 import {PlainField} from "./PlainField";
 import {IWatchable} from "./_types/IWatchable";
-import {Signal} from "./util/Signal";
+import {Signal} from "./utils/Signal";
 
 /**
  * A class that throttles updates such that no update occurs more often than once per specified period

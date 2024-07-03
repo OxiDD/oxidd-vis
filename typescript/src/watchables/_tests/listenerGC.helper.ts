@@ -1,6 +1,6 @@
 import {IRunnable} from "../_types/IRunnable";
 import {IWatchable} from "../_types/IWatchable";
-import {ListenerManager} from "../util/ListenerManager";
+import {ListenerManager} from "../utils/ListenerManager";
 import {collectGarbage} from "./collectGarbage.helper";
 
 export function canGarbageCollectListeners(

@@ -1,4 +1,4 @@
-import {arraysEqual} from "../util/arraysEqual";
+import {arraysEqual} from "../utils/arraysEqual";
 import {Checked} from "../Checked";
 import {PlainField} from "../PlainField";
 import {canGarbageCollectListeners} from "./listenerGC.helper";

@@ -1,6 +1,7 @@
 import {Derived} from "./Derived";
 import {PlainField} from "./PlainField";
 import {IWatchable} from "./_types/IWatchable";
+import {Mutator} from "./mutator/Mutator";
 import {IMutator} from "./mutator/_types/IMutator";
 
 /**
@@ -53,7 +54,7 @@ export class Field<T> extends Derived<T> {
      *
      * @param value The new value to store
      */
-    public set(value: T): IMutator {
+    public set(value: T): Mutator {
         return this.val.set({plain: value});
     }
 
@@ -63,7 +64,15 @@ export class Field<T> extends Derived<T> {
      *
      * @param value The new watchable to mirror
      */
-    public setSource(value: IWatchable<T>): IMutator {
+    public setSource(value: IWatchable<T>): Mutator {
         return this.val.set({watchable: value});
+    }
+
+    /**
+     * Retrieves the watchable readonly version of this field
+     * @returns This field instance, with the appropriate typing
+     */
+    public readonly(): IWatchable<T> {
+        return this;
     }
 }

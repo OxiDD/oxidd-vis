@@ -38,7 +38,7 @@ module.exports = env => ({
       aggregateTimeout: 1200,
     },
     resolve: {
-        extensions: [".tsx", ".ts", ".d.ts", ".js", ".txt"],
+        extensions: [".tsx", ".ts", ".js", ".txt"],
         alias: {
             "vis-network": "vis-network/standalone",
         },

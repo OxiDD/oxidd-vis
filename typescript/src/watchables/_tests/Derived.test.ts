@@ -1,10 +1,10 @@
 import {wait} from "./wait.helper";
-import {ListenerManager} from "../util/ListenerManager";
+import {ListenerManager} from "../utils/ListenerManager";
 import {Derived} from "../Derived";
 import {IDerivedCompute} from "../_types/IDerivedCompute";
 import {IWatchable} from "../_types/IWatchable";
 import {IRunnable} from "../_types/IRunnable";
-import {IterableWeakSet} from "../util/IterableWeakSet";
+import {IterableWeakSet} from "../utils/IterableWeakSet";
 import {collectGarbage} from "./collectGarbage.helper";
 import {canGarbageCollectListeners} from "./listenerGC.helper";
 

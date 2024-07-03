@@ -1,7 +1,7 @@
 import {IWatchable} from "./_types/IWatchable";
 import {Mutator} from "./mutator/Mutator";
 import {IMutator} from "./mutator/_types/IMutator";
-import {ListenerManager} from "./util/ListenerManager";
+import {ListenerManager} from "./utils/ListenerManager";
 
 /**
  * A watchable field
@@ -38,7 +38,7 @@ export class PlainField<T> extends ListenerManager implements IWatchable<T> {
      * @param value The new value to be set
      * @returns The mutator that can be committed to change the value
      */
-    public set(value: T): IMutator {
+    public set(value: T): Mutator {
         return new Mutator(
             () => {
                 if (this.equals(this.value, value)) return;
@@ -47,5 +47,13 @@ export class PlainField<T> extends ListenerManager implements IWatchable<T> {
             },
             () => this.callChangeListeners()
         );
+    }
+
+    /**
+     * Retrieves the watchable readonly version of this field
+     * @returns This field instance, with the appropriate typing
+     */
+    public readonly(): IWatchable<T> {
+        return this;
     }
 }
