@@ -3,6 +3,7 @@ import {PlainField} from "./PlainField";
 import {IWatchable} from "./_types/IWatchable";
 import {Mutator} from "./mutator/Mutator";
 import {IMutator} from "./mutator/_types/IMutator";
+import {ISummary, inspect} from "./utils/devtools";
 
 /**
  * A field that can be set to either a value directly, or a watchable that gets mirrored
@@ -74,5 +75,32 @@ export class Field<T> extends Derived<T> {
      */
     public readonly(): IWatchable<T> {
         return this;
+    }
+
+    /** Custom console inspecting (note installDevtools has to be called) */
+    public [inspect](): ISummary {
+        const val = this.val.get();
+        const isPlain = "plain" in val;
+        const showVal = this.initialized || isPlain;
+        const long = {...super[inspect]().long};
+
+        // Don't show dependencies
+        if ("dependencies" in long) delete long["dependencies"];
+
+        // If the value is computed, show it, otherwise show a getter
+        if (showVal) Object.assign(long, {value: this.get()});
+        else Object.defineProperty(long, "value", {get: () => this.get()});
+
+        // Store the source
+        if (!isPlain) Object.assign(long, {source: val.watchable});
+
+        return {
+            ...(showVal
+                ? {
+                      short: {value: this.get()},
+                  }
+                : {}),
+            long,
+        };
     }
 }

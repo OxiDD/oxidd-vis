@@ -28,13 +28,14 @@ export class ViewManager implements IViewManager {
     /**
      * Adds a new view to the manager, not showing it yet until showView is called, or the layout is manually modified
      * @param view The view to be added
+     * @param id The ID that the view has/will have
      * @returns The mutator to commit the change
      */
-    public add(view: ViewState): IMutator {
+    public add(view: ViewState, id: string = view.ID): IMutator {
         const current = this.viewStates.get();
         return this.viewStates.set({
             ...current,
-            [view.ID]: view,
+            [id]: view,
         });
     }
 

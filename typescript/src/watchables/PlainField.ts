@@ -2,6 +2,7 @@ import {IWatchable} from "./_types/IWatchable";
 import {Mutator} from "./mutator/Mutator";
 import {IMutator} from "./mutator/_types/IMutator";
 import {ListenerManager} from "./utils/ListenerManager";
+import {ISummary, inspect} from "./utils/devtools";
 
 /**
  * A watchable field
@@ -55,5 +56,14 @@ export class PlainField<T> extends ListenerManager implements IWatchable<T> {
      */
     public readonly(): IWatchable<T> {
         return this;
+    }
+
+    /** Custom console inspecting (note installDevtools has to be called) */
+    public [inspect](): ISummary {
+        const val = this.get();
+        return {
+            short: {value: val},
+            long: {...super[inspect]().long, value: val},
+        };
     }
 }

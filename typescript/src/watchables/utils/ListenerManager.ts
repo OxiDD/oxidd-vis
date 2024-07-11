@@ -1,9 +1,10 @@
 import {IWatchable} from "../_types/IWatchable";
 import {IRunnable} from "../_types/IRunnable";
 import {IterableWeakSet} from "./IterableWeakSet";
+import {IInspectable, inspect} from "./devtools";
 
 /** A listener manager that watchable values can extend */
-export class ListenerManager implements Omit<IWatchable<unknown>, "get"> {
+export class ListenerManager implements Omit<IWatchable<unknown>, "get">, IInspectable {
     protected dirtyListeners = new Set<IRunnable>();
     protected changeListeners = new Set<IRunnable>();
     protected weakDirtyListeners = new IterableWeakSet<IRunnable>();
@@ -78,5 +79,19 @@ export class ListenerManager implements Omit<IWatchable<unknown>, "get"> {
             throw new Error(
                 "Watchable values may not be accessed during their dirty dispatch event"
             );
+    }
+
+    /** Custom console inspecting (note installDevtools has to be called) */
+    public [inspect](): {long: Object} {
+        return {
+            long: {
+                listeners: {
+                    dirtyWeak: this.weakDirtyListeners,
+                    dirtyStrong: this.dirtyListeners,
+                    changeWeak: this.weakChangeListeners,
+                    changeStrong: this.changeListeners,
+                },
+            },
+        };
     }
 }

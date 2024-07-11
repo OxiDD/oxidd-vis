@@ -1,10 +1,11 @@
 import {IRunnable} from "./_types/IRunnable";
 import {IWatchable} from "./_types/IWatchable";
+import {IInspectable, ISummary, inspect} from "./utils/devtools";
 
 /**
  * A constant value implementing the plain watchable interface
  */
-export class Constant<T> implements IWatchable<T> {
+export class Constant<T> implements IWatchable<T>, IInspectable {
     protected value: T;
 
     /**
@@ -39,5 +40,14 @@ export class Constant<T> implements IWatchable<T> {
      */
     public onChange(listener: IRunnable): IRunnable {
         return () => {};
+    }
+
+    /** @override */
+    public [inspect](): ISummary {
+        const val = this.get();
+        return {
+            short: {value: val},
+            long: {listeners: "untracked", value: val},
+        };
     }
 }

@@ -9,18 +9,33 @@ import {IViewComponents} from "./state/_types/IViewComponents";
 import {DummyViewState} from "./state/views/types/DummyViewState";
 import {all} from "./watchables/mutator/all";
 import {chain} from "./watchables/mutator/chain";
+import {Derived} from "./watchables/Derived";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
         const appState = new AppState();
+        (window as any).app = appState;
+        console.log(appState);
+        const configuration = appState.configuration;
 
-        chain(push => {
-            for (let i = 0; i < 5; i++) {
-                const dummy = new DummyViewState();
-                push(dummy.name.set("stuff " + i));
-                push(appState.views.show(dummy));
-            }
-        }).commit();
+        const init = (loaded: boolean) =>
+            chain(push => {
+                if (loaded) return;
+                for (let i = 0; i < 5; i++) {
+                    const dummy = new DummyViewState();
+                    push(dummy.name.set("stuff " + i));
+                    push(appState.views.show(dummy));
+                }
+            });
+        // configuration
+        //     .loadProfilesData()
+        //     .chain(init)
+        //     .commit();
+        init(false).commit();
+
+        window.addEventListener("beforeunload", () =>
+            appState.configuration.saveProfile().commit()
+        );
         return appState;
     }, []);
 

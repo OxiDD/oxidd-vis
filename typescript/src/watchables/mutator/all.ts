@@ -1,3 +1,4 @@
+import {dummyMutator} from "./Mutator";
 import {IMutator} from "./_types/IMutator";
 
 /**
@@ -6,5 +7,5 @@ import {IMutator} from "./_types/IMutator";
  * @returns The new mutator that will perform all of the given mutations
  */
 export function all(mutators: IMutator<unknown>[]): IMutator {
-    return mutators.reduce((a, b) => a.chain(b));
+    return mutators.length == 0 ? dummyMutator : mutators.reduce((a, b) => a.chain(b));
 }

@@ -8,9 +8,10 @@ export type IViewManager = {
     /**
      * Adds a new view to the layout
      * @param view The view to be added
+     * @param id The ID that the view has/will have
      * @returns The mutator to commit the change
      */
-    add(view: ViewState): IMutator;
+    add(view: ViewState, id?: string): IMutator;
 
     /**
      * Removes the given view from the layout

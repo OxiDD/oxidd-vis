@@ -3,6 +3,8 @@ import {IRunnable} from "./_types/IRunnable";
 import {IWatchable} from "./_types/IWatchable";
 import {IWatcher} from "./_types/IWatcher";
 import {ListenerManager} from "./utils/ListenerManager";
+import {IInspectable, ISummary, inspect} from "./utils/devtools";
+import {funcWithSource} from "./utils/funcWithSource";
 
 // TODO: add debug mode that checks if value changed, even if dependencies did not change (I.e. derived value is impure) to warn the user
 
@@ -18,7 +20,7 @@ import {ListenerManager} from "./utils/ListenerManager";
  * 1. It can not be reached from the root of the application by anything other than its dependencies AND
  * 2. It has no (non-weak) listeners itself
  */
-export class Derived<T> extends ListenerManager implements IWatchable<T> {
+export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspectable {
     protected compute: IDerivedCompute<T>;
     protected value: T;
 
@@ -53,13 +55,14 @@ export class Derived<T> extends ListenerManager implements IWatchable<T> {
         this.dirty = false; // Needs to be set after determining whether to recompute
         if (!recompute) return;
 
+        const computationID = ++this.computationID;
+
         /** Cleanup old dependencies */
         let removes = this.dependencies.map(({remove}) => remove);
         this.dependencies = []; // Set dependencies to empty list before removing dependencies to prevent unnecessary `updateDependenciesWeak` bubbling
         for (const remove of removes) remove();
 
         /** Compute new value and register new dependencies */
-        const computationID = ++this.computationID;
         const foundDependencies = new Set<IWatchable<unknown>>();
         const watch: IWatcher = dependency => {
             const value = dependency.get();
@@ -130,7 +133,7 @@ export class Derived<T> extends ListenerManager implements IWatchable<T> {
     }
 
     /** The listener that is called when a dependency turns dirty */
-    protected dirtyListener = () => this.callDirtyListeners();
+    protected dirtyListener = funcWithSource(() => this.callDirtyListeners(), this);
 
     /** @override */
     public onDirty(listener: IRunnable, weak?: boolean): IRunnable {
@@ -145,7 +148,7 @@ export class Derived<T> extends ListenerManager implements IWatchable<T> {
     }
 
     /** The listener that is called when a dependency signals an observable value change */
-    protected changeListener = () => this.callChangeListeners();
+    protected changeListener = funcWithSource(() => this.callChangeListeners(), this);
 
     /** @override */
     public onChange(listener: IRunnable, weak?: boolean): IRunnable {
@@ -156,6 +159,27 @@ export class Derived<T> extends ListenerManager implements IWatchable<T> {
         return () => {
             remove();
             this.updateDependenciesWeak();
+        };
+    }
+
+    /** Custom console inspecting (note installDevtools has to be called) */
+    public [inspect](): ISummary {
+        const getDependencies = () =>
+            this.dependencies.map(dependency => dependency.watchable);
+        const long = {...super[inspect]().long};
+        if (this.initialized) {
+            Object.assign(long, {value: this.get(), dependencies: getDependencies()});
+        } else {
+            Object.defineProperty(long, "value", {get: () => this.get()});
+            Object.defineProperty(long, "dependencies", {get: getDependencies});
+        }
+        return {
+            ...(this.initialized
+                ? {
+                      short: {value: this.get()},
+                  }
+                : {}),
+            long,
         };
     }
 }

@@ -116,7 +116,7 @@ export class ConfigurationState {
 
             const viewsWithData = profile.views.map(data => {
                 const view = this.createView(data.type);
-                push(this.viewManager.add(view));
+                push(this.viewManager.add(view, data.id));
                 return {view, data};
             });
             for (const {view, data} of viewsWithData) {

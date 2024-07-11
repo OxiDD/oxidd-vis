@@ -13,11 +13,22 @@ export function useWatch(): IWatcher {
     const [_, update] = useState({});
     const observer = usePersistentMemo(() => {
         const derived = new Derived<number>((watch, prev) => {
-            outWatch.current = watch;
+            outWatch.current = d => {
+                console.log("watch");
+                return watch(d);
+                return d.get();
+            };
+            console.log("compute");
             return (prev ?? 0) + 1;
         });
         return new Observer(derived).add(() => update({}));
     }, []);
-    useEffect(() => () => observer.destroy(), []);
+    useEffect(() => {
+        console.log("add");
+        return () => {
+            console.log("remove");
+            observer.destroy();
+        };
+    }, []);
     return outWatch.current!;
 }
