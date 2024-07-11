@@ -4,28 +4,35 @@ import {LayoutState} from "./layout/LayoutState";
 import {usePersistentMemo} from "./utils/usePersistentMemo";
 import {Constant} from "./watchables/Constant";
 import {VizTest} from "./VizTest";
+import {AppState} from "./state/AppState";
+import {IViewComponents} from "./state/_types/IViewComponents";
+import {DummyViewState} from "./state/views/types/DummyViewState";
+import {all} from "./watchables/mutator/all";
+import {chain} from "./watchables/mutator/chain";
 
 export const App: FC = () => {
-    const layoutState = usePersistentMemo(() => {
-        const layout = new LayoutState();
-        layout
-            .openTab("0", "0", () => console.log("closed 0"))
-            .chain(layout.openTab("0", "1", () => console.log("closed 1")))
-            .chain(layout.openTab("0", "2", () => console.log("closed 2")))
-            .chain(layout.openTab("0", "3", () => console.log("closed 3")))
-            .commit();
-        return layout;
+    const app = usePersistentMemo(() => {
+        const appState = new AppState();
+
+        chain(push => {
+            for (let i = 0; i < 5; i++) {
+                const dummy = new DummyViewState();
+                push(dummy.name.set("stuff " + i));
+                push(appState.views.show(dummy));
+            }
+        }).commit();
+        return appState;
     }, []);
+
     return (
         <DefaultLayout
-            state={layoutState}
-            getContent={id => {
-                return new Constant({
-                    name: "hoi " + id,
-                    id,
-                    content: <VizTest />,
-                });
-            }}
+            state={app.views.layoutState}
+            getContent={id => app.views.getPanelUI(id, components)}
         />
     );
+};
+
+const components: IViewComponents = {
+    none: () => <div>Not found</div>,
+    dummy: () => <div>Dummy</div>,
 };

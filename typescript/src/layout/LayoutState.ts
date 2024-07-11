@@ -18,6 +18,9 @@ import {Derived} from "../watchables/Derived";
 import {IMutator} from "../watchables/mutator/_types/IMutator";
 import {Mutator, dummyMutator} from "../watchables/mutator/Mutator";
 import {PlainField} from "../watchables/PlainField";
+import {all} from "../watchables/mutator/all";
+import {TDeepReadonly} from "../utils/_types/TDeepReadonly";
+import {Constant} from "../watchables/Constant";
 
 /**
  * A component to store the layout of the application
@@ -32,27 +35,26 @@ export class LayoutState {
 
     protected dragging = new PlainField<null | IDragData>(null);
 
-    /** The current layout settings */
-    public settings = new Field<ILayoutSettings>({
-        closeEmptyPanel: true,
-    });
+    protected closeEmptyPanels: IWatchable<boolean>;
 
-    protected closeListeners: Map<string, (() => void)[]> = new Map();
+    protected closeListeners: Map<string, (() => IMutator | void)[]> = new Map();
 
     /***
      * Creates a new layout state
+     * @param closeEmptyPanels Whether to close panels that have no more tabls
      */
-    public constructor(settings: Partial<ILayoutSettings> = {}) {
-        this.settings.set({...this.settings.get(), ...settings});
+    public constructor(closeEmptyPanels: IWatchable<boolean> = new Constant(true)) {
+        this.closeEmptyPanels = closeEmptyPanels;
     }
 
     // Layout data
     /**
      * Loads the given layout
      * @param layout The layout to be loaded
+     * @returns The mutator to commit the changes
      */
-    public loadLayout(layout: IPanelData): void {
-        this.layout.set(panelDataToState(layout));
+    public loadLayout(layout: TDeepReadonly<IPanelData>): IMutator {
+        return this.layout.set(panelDataToState(layout));
     }
 
     /** The current layout serialized data */
@@ -183,7 +185,7 @@ export class LayoutState {
                 }
             );
 
-            if (isNowEmpty && this.settings.get().closeEmptyPanel) {
+            if (isNowEmpty && this.closeEmptyPanels.get()) {
                 const removed = removePanel(newLayout, panelId);
                 if (removed != null) newLayout = removed;
             }
@@ -204,7 +206,7 @@ export class LayoutState {
     public openTab(
         panelId: string,
         tab: string | ITabState,
-        closeHandler?: () => void,
+        closeHandler?: () => IMutator | void,
         beforeTabId?: string
     ): IMutator {
         return this.updateLayout(layout => {
@@ -293,7 +295,11 @@ export class LayoutState {
         setTimeout(() => {
             const stillExists = !!this.allTabs.get().find(({id}) => tabId == id);
             if (!stillExists) {
-                this.closeListeners.get(tabId)?.forEach(handler => handler());
+                const mutators = this.closeListeners
+                    .get(tabId)
+                    ?.map(handler => handler())
+                    .filter((m): m is IMutator => !!m);
+                if (mutators) all(mutators);
                 this.closeListeners.delete(tabId);
             }
         }, 10);
@@ -327,7 +333,7 @@ export function panelStateToData(state: IPanelState): IPanelData {
  * @param data The serializable state
  * @returns The state data for this state
  */
-export function panelDataToState(data: IPanelData): IPanelState {
+export function panelDataToState(data: TDeepReadonly<IPanelData>): IPanelState {
     if (data.type == "split")
         return {
             ...data,

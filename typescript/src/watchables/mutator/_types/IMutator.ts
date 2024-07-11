@@ -1,5 +1,5 @@
 /** A mutator that can be used to mutate state, and allows for synchronization of mutations, with a type parameter for the return type */
-export interface IMutator<R = void> {
+export interface IMutator<R = unknown> {
     /**
      * Fully performs the mutation (calling both perform and signal)
      * @returns Some optional extra data obtained by performing the mutation
