@@ -15,17 +15,17 @@ export interface IWatchable<X> {
      */
     get(): X;
     /**
-     * A function to register listeners for value dirtying, returns the unsubscribe function
+     * A function to register listeners for value dirtying, returns the unsubscribe function.
+     * @note that listeners are weakly stored, meaning that unless a reference to the function is kept elsewhere, it may be garbage collected and no longer called.
      * @param listener The listener to be invoked
-     * @param weak Whether only a weak reference to the listener should be held, not guaranteeing to invoke the listeners if it's garbage collected
      * @returns A function that can be used to remove the listener
      */
-    onDirty(listener: IRunnable, weak?: boolean): IRunnable;
+    onDirty(listener: IRunnable): IRunnable;
     /**
      * A function to register listeners for value changes, returns the unsubscribe function
+     * @note that listeners are weakly stored, meaning that unless a reference to the function is kept elsewhere, it may be garbage collected and no longer called.
      * @param listener The listener to be invoked
-     * @param weak Whether only a weak reference to the listener should be held, not guaranteeing to invoke the listeners if it's garbage collected
      * @returns A function that can be used to remove the listener
      */
-    onChange(listener: IRunnable, weak?: boolean): IRunnable;
+    onChange(listener: IRunnable): IRunnable;
 }

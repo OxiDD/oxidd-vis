@@ -14,6 +14,8 @@ export class Throttled<T> extends Derived<T> implements IWatchable<T> {
     protected throttleStartSignal = new Signal();
     protected throttle: {type: ISignal; signal?: ISignal; timeoutID?: number} | undefined;
 
+    protected activeIndicator: boolean = true;
+
     /**
      * Creates a new throttled watchable, updates its value at most once per specified period
      * @param source The source for which to throttle computations/updates
@@ -26,42 +28,52 @@ export class Throttled<T> extends Derived<T> implements IWatchable<T> {
     }
 
     /**@override Called when the source is marked dirty */
-    protected dirtyListener = () => {
+    protected whenDirty() {
+        this.signaled = false;
+
         if (this.throttle) {
+            this.unsubDirtyDependencies();
             if (!this.throttle.signal) {
                 this.throttle.signal = "dirty";
                 this.throttleStartSignal.markDirty();
             }
         } else {
+            if (!this.activeIndicator) this.unsubDirtyDependencies();
             this.throttle = {
                 timeoutID: setTimeout(this.throttleEnd, this.period) as any,
                 type: "dirty",
             };
             this.callDirtyListeners();
         }
-    };
+    }
 
     /** @override Called when the source is changed */
-    protected changeListener = () => {
+    protected whenChange() {
+        if (this.signaled) return;
+
         if (this.throttle?.type == "change") {
+            this.signaled = true;
+            this.unsubChangeDependencies();
             this.throttle.signal = "change";
             this.throttleStartSignal.markChanged();
         } else {
+            if (!this.activeIndicator) this.unsubChangeDependencies();
             if (this.throttle) clearTimeout(this.throttle.timeoutID);
             this.throttle = {
                 timeoutID: setTimeout(this.throttleEnd, this.period) as any,
                 type: "change",
             };
-
             this.callChangeListeners();
         }
-    };
+    }
 
     /** @override */
     protected callChangeListeners() {
-        // We need to access source at least once to ensure that future updates regarding to the throttling state occur
-        const throttleIsObserved = !this.throttleStartSignal.isDirty();
-        if (throttleIsObserved) this.source.get();
+        if (this.activeIndicator) {
+            // We need to access source at least once to ensure that future updates regarding to the throttling state occur
+            const throttleIsObserved = !this.throttleStartSignal.isDirty();
+            if (throttleIsObserved) this.source.get();
+        }
         super.callChangeListeners();
     }
 

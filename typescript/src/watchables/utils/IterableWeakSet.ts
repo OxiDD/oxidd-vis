@@ -5,8 +5,6 @@ export class IterableWeakSet<T extends WeakKey> {
         this.refs.delete(ref);
     });
 
-    public IterableWeakSet() {}
-
     /**
      * Appends a new value to the end of the WeakSet.
      */

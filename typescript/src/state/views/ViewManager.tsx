@@ -11,6 +11,7 @@ import {ViewState} from "./ViewState";
 import {IViewComponents} from "../_types/IViewComponents";
 import {IViewManager} from "../_types/IViewManager";
 import {IContent} from "../../layout/_types/IContentGetter";
+import {PassiveDerived} from "../../watchables/PassiveDerived";
 
 /**
  * The manager of all different views and the layout corresponding to them.
@@ -81,7 +82,7 @@ export class ViewManager implements IViewManager {
      * @returns The watchable view (which might become available or unavailable later)
      */
     public get(id: string): IWatchable<ViewState | null> {
-        return new Derived(watch => watch(this.viewStates)[id] ?? null);
+        return new PassiveDerived(watch => watch(this.viewStates)[id] ?? null);
     }
 
     /**
@@ -133,7 +134,7 @@ export class ViewManager implements IViewManager {
         components: IViewComponents,
         onContext?: (view: ViewState, event: React.MouseEvent) => void
     ): IWatchable<IContent> {
-        return new Derived(watch => {
+        return new PassiveDerived(watch => {
             const viewState = watch(this.get(id));
             if (!viewState) {
                 const NotFoundComponent = components["none"];

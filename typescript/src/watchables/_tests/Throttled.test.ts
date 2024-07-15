@@ -152,6 +152,8 @@ describe("throttling indicator", () => {
     it("does not indicate it is throttling until an update is scheduled", async () => {
         const field = new PlainField(0);
         const throttled = new Throttled(field, 50);
+        // const listener = () => throttled.get();
+        // throttled.onChange(listener); // Need to read values to force throttling to occur for the status indicator to be accurate
         throttled.get();
         expect(throttled.throttling.get()).toBe(false);
         field.set(1).commit();

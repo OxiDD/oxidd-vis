@@ -11,14 +11,12 @@ import {funcWithSource} from "./utils/funcWithSource";
 /**
  * A simple derived value. This value is lazily computed, and cached.
  *
- * Invariants/properties of `w = new PlainDerived(c)` for some compute function `c`, with a set of dependencies `D: Set<IWatchable<unknown>>`:
+ * Invariants/properties of `w = new Derived(c)` for some compute function `c`, with a set of dependencies `D: Set<IWatchable<unknown>>`:
  * 1.  Transparency: At any given point `w.get() == c(...)`
  * 2.  Caching: Between any two internal calls to `c`, there is a `d` in `D` such that `d.dirty` was dispatched
  * 3.  Laziness: Any internal call to `c` is always followed by (completing) a call to `w.get`. I.e. `c` is never called if its value is not requested
  *
- * A derived value can be garbage collected only if:
- * 1. It can not be reached from the root of the application by anything other than its dependencies AND
- * 2. It has no (non-weak) listeners itself
+ * A derived value can be garbage collected only iff it can not be reached from the root of the application by anything other than its dependencies
  */
 export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspectable {
     protected compute: IDerivedCompute<T>;
@@ -28,7 +26,6 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
     protected computationID: number = 0; // USed to track what the last computation was
 
     protected initialized: boolean = false;
-    protected weak: boolean = true; // Whether the listeners are weak (not guaranteeing to keep this instance alive)
 
     /**
      * Creates a new derived value
@@ -51,16 +48,22 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
 
     /** Updates the current value if necessary */
     protected updateValueIfNecessary() {
-        const recompute = this.requiresRecompute();
-        this.dirty = false; // Needs to be set after determining whether to recompute
-        if (!recompute) return;
+        if (!this.dirty) return;
+        this.dirty = false;
+
+        if (!this.requiresRecompute()) {
+            // Resubscribe to dependencies, but don't recompute
+            this.dependencies = this.dependencies.map(({watchable, value}) =>
+                this.createDependency(watchable, value)
+            );
+            return;
+        }
 
         const computationID = ++this.computationID;
 
         /** Cleanup old dependencies */
-        let removes = this.dependencies.map(({remove}) => remove);
+        for (const {unsubChange} of this.dependencies) unsubChange?.();
         this.dependencies = []; // Set dependencies to empty list before removing dependencies to prevent unnecessary `updateDependenciesWeak` bubbling
-        for (const remove of removes) remove();
 
         /** Compute new value and register new dependencies */
         const foundDependencies = new Set<IWatchable<unknown>>();
@@ -90,7 +93,6 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
      */
     protected requiresRecompute(): boolean {
         if (!this.initialized) return true;
-        if (!this.dirty) return false;
 
         for (const {watchable, value} of this.dependencies)
             if (watchable.get() != value) return true;
@@ -107,59 +109,50 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
         watchable: IWatchable<unknown>,
         value: unknown
     ): IDependency {
-        const unsubDirty = watchable.onDirty(this.dirtyListener, this.weak);
-        const unsubChange = watchable.onChange(this.changeListener, this.weak);
+        const unsubDirty = watchable.onDirty(this.dirtyListener);
+        const unsubChange = watchable.onChange(this.changeListener);
         return {
             watchable,
             value,
-            remove: () => {
-                unsubDirty();
-                unsubChange();
-            },
+            unsubDirty,
+            unsubChange,
         };
     }
 
-    /**
-     * Updates whether dependencies contain a strong or weak reference, based on the number of listeners this derived value has
-     */
-    protected updateDependenciesWeak() {
-        const weak = this.dirtyListeners.size == 0 && this.changeListeners.size == 0;
-        if (this.weak == weak) return;
-        this.weak = weak;
-        this.dependencies = this.dependencies.map(dependency => {
-            dependency.remove();
-            return this.createDependency(dependency.watchable, dependency.value);
-        });
+    /** A strong reference to the dirty listener */
+    protected dirtyListener = funcWithSource(() => this.whenDirty(), this);
+
+    /** A strong reference to the change listener */
+    protected changeListener = funcWithSource(() => this.whenChange(), this);
+
+    /** The listener that is called when a dependency signals an observable value change */
+    protected whenDirty() {
+        this.unsubDirtyDependencies();
+        this.callDirtyListeners();
     }
 
-    /** The listener that is called when a dependency turns dirty */
-    protected dirtyListener = funcWithSource(() => this.callDirtyListeners(), this);
-
-    /** @override */
-    public onDirty(listener: IRunnable, weak?: boolean): IRunnable {
-        if (weak) return super.onDirty(listener, true);
-
-        const remove = super.onDirty(listener, false);
-        this.updateDependenciesWeak();
-        return () => {
-            remove();
-            this.updateDependenciesWeak();
-        };
+    /** Unsubscribes from all dirty events of dependencies */
+    protected unsubDirtyDependencies() {
+        if (this.dirty) return;
+        for (const dep of this.dependencies) {
+            dep.unsubDirty?.();
+            dep.unsubDirty = undefined;
+        }
     }
 
     /** The listener that is called when a dependency signals an observable value change */
-    protected changeListener = funcWithSource(() => this.callChangeListeners(), this);
+    protected whenChange() {
+        this.unsubChangeDependencies();
+        this.callChangeListeners();
+    }
 
-    /** @override */
-    public onChange(listener: IRunnable, weak?: boolean): IRunnable {
-        if (weak) return super.onChange(listener, true);
-
-        const remove = super.onChange(listener, false);
-        this.updateDependenciesWeak();
-        return () => {
-            remove();
-            this.updateDependenciesWeak();
-        };
+    /** Unsubscribes from all change events of dependencies */
+    protected unsubChangeDependencies() {
+        if (this.signaled) return;
+        for (const dep of this.dependencies) {
+            dep.unsubChange?.();
+            dep.unsubChange = undefined;
+        }
     }
 
     /** Custom console inspecting (note installDevtools has to be called) */
@@ -173,6 +166,7 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
             Object.defineProperty(long, "value", {get: () => this.get()});
             Object.defineProperty(long, "dependencies", {get: getDependencies});
         }
+
         return {
             ...(this.initialized
                 ? {
@@ -189,6 +183,8 @@ interface IDependency<T = unknown, W extends IWatchable<T> = IWatchable<T>> {
     watchable: W;
     /** The value of watchable when read */
     value: T;
-    /** The function to remove the dependency */
-    remove: () => void;
+    /** The function to unsubscribe from the dirty updates */
+    unsubDirty?: () => void;
+    /** The function to unsubscribe from the change updates */
+    unsubChange?: () => void;
 }
