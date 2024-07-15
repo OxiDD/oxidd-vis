@@ -1,5 +1,5 @@
-import {ViewState} from "../ViewState";
 import {ISettings} from "./SettingsState";
+import {ViewState} from "./views/ViewState";
 
 /** A dummy view state */
 export class DummyViewState extends ViewState {

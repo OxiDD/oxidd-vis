@@ -3,39 +3,28 @@ import {DefaultLayout} from "./layout/DefaultLayout";
 import {LayoutState} from "./layout/LayoutState";
 import {usePersistentMemo} from "./utils/usePersistentMemo";
 import {Constant} from "./watchables/Constant";
-import {VizTest} from "./VizTest";
 import {AppState} from "./state/AppState";
-import {IViewComponents} from "./state/_types/IViewComponents";
-import {DummyViewState} from "./state/views/types/DummyViewState";
 import {all} from "./watchables/mutator/all";
 import {chain} from "./watchables/mutator/chain";
 import {Derived} from "./watchables/Derived";
 import {Toggle} from "@fluentui/react";
 import {useWatch} from "./watchables/react/useWatch";
-import {LayoutWithClose} from "./LayoutWithClose";
+import {LayoutWithClose} from "./UI/LayoutWithClose";
+import {SettingsState} from "./state/SettingsState";
+import {IViewComponent} from "./state/_types/IViewComponent";
+import {Sidebar} from "./UI/SideBar";
+import {TabContextMenu} from "./UI/TabContextMenu";
+import {ThemeProvider as FluentThemeProvider} from "@fluentui/react";
+import {darkTheme, lightTheme} from "./theme";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
         const appState = new AppState();
         (window as any).app = appState;
         console.log(appState);
-        const configuration = appState.configuration;
 
-        const init = (loaded: boolean) =>
-            chain(push => {
-                if (loaded) return;
-                for (let i = 0; i < 5; i++) {
-                    const dummy = new DummyViewState(appState.settings);
-                    push(dummy.name.set("stuff " + i));
-                    push(appState.views.show(dummy));
-                }
-            });
-        configuration
-            .loadProfilesData()
-            .chain(s => appState.initSpecialViews().map(() => s))
-            .chain(init)
-            .commit();
-        // init(false).commit();
+        const configuration = appState.configuration;
+        configuration.loadProfilesData().commit();
 
         window.addEventListener("beforeunload", () =>
             appState.configuration.saveProfile().commit()
@@ -44,35 +33,65 @@ export const App: FC = () => {
     }, []);
 
     return (
-        <LayoutWithClose
-            panelClosable={
-                // new Derived(watch =>
-                //     watch(app.settings.layout.deleteUnusedPanels) ? "never" : "always"
-                // )
-                new Constant("whenEmpty")
-            }
-            state={app.views.layoutState}
-            getContent={id => app.views.getPanelUI(id, components)}
-        />
+        <ThemeProvider state={app}>
+            <div style={{display: "flex", height: "100%"}}>
+                <Sidebar state={app} projectUrl="https://google.com" />
+                <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
+                    <UserLayout state={app} />
+                </div>
+            </div>
+        </ThemeProvider>
     );
 };
 
-const components: IViewComponents = {
-    none: () => <div>Not found</div>,
-    dummy: ({view}: {view: DummyViewState}) => {
-        const watch = useWatch();
-        return (
-            <div>
-                Dummy
-                <Toggle
-                    checked={watch(view.settings.layout.deleteUnusedPanels)}
-                    onChange={(_, checked) =>
-                        view.settings.layout.deleteUnusedPanels
-                            .set(checked ?? false)
-                            .commit()
+const UserLayout: FC<{state: AppState}> = ({state}) => {
+    const watch = useWatch();
+    return (
+        <TabContextMenu state={state}>
+            {onContext => (
+                <LayoutWithClose
+                    key={watch(state.configuration.profileID)} // Reinitialize when layout is switched
+                    panelClosable={
+                        // new Derived(watch =>
+                        //     watch(app.settings.layout.deleteUnusedPanels) ? "never" : "always"
+                        // )
+                        new Constant("whenEmpty")
                     }
+                    state={state.views.layoutState}
+                    getContent={id => state.views.getPanelUI(id, Component, onContext)}
                 />
-            </div>
-        );
-    },
+            )}
+        </TabContextMenu>
+    );
+};
+
+const Component: IViewComponent = ({view}) => {
+    if (view instanceof SettingsState) return <SettingsView settings={view} />;
+
+    return <div>Not found</div>;
+};
+
+const ThemeProvider: FC<{state: AppState}> = ({state, children}) => {
+    const watch = useWatch();
+    return (
+        <FluentThemeProvider
+            theme={watch(state.settings.global).darkMode ? darkTheme : lightTheme}>
+            {children}
+        </FluentThemeProvider>
+    );
+};
+
+const SettingsView: FC<{settings: SettingsState}> = ({settings}) => {
+    const watch = useWatch();
+    return (
+        <div>
+            Delete unused panels:
+            <Toggle
+                checked={watch(settings.layout.deleteUnusedPanels)}
+                onChange={(_, checked) =>
+                    settings.layout.deleteUnusedPanels.set(checked ?? false).commit()
+                }
+            />
+        </div>
+    );
 };

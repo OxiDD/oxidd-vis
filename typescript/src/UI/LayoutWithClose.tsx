@@ -1,12 +1,12 @@
 import React, {FC, createContext, useContext} from "react";
-import {ILayoutProps} from "./layout/_types/ILayoutProps";
-import {ILayoutComponents} from "./layout/_types/ILayourComponents";
-import {DefaultLayout} from "./layout/DefaultLayout";
-import {IWatchable} from "./watchables/_types/IWatchable";
-import {Constant} from "./watchables/Constant";
-import {ITabsHeaderProps} from "./layout/_types/props/ITabsHeaderProps";
-import {useWatch} from "./watchables/react/useWatch";
-import {TabsHeader} from "./layout/styledComponents/Tabsheader";
+import {ILayoutProps} from "../layout/_types/ILayoutProps";
+import {ILayoutComponents} from "../layout/_types/ILayourComponents";
+import {DefaultLayout} from "../layout/DefaultLayout";
+import {IWatchable} from "../watchables/_types/IWatchable";
+import {Constant} from "../watchables/Constant";
+import {ITabsHeaderProps} from "../layout/_types/props/ITabsHeaderProps";
+import {useWatch} from "../watchables/react/useWatch";
+import {TabsHeader} from "../layout/styledComponents/Tabsheader";
 import {ActionButton, CommandButton, IconButton, useTheme} from "@fluentui/react";
 import {css} from "@emotion/css";
 
@@ -43,8 +43,9 @@ export const ClosableTabsHeader: FC<ITabsHeaderProps> = props => {
     const panelClosable = watch(useContext(panelClosableContext));
 
     const showClose =
-        panelClosable == "always" ||
-        (panelClosable == "whenEmpty" && props.tabs.length == 0);
+        props.onClose &&
+        (panelClosable == "always" ||
+            (panelClosable == "whenEmpty" && props.tabs.length == 0));
 
     return (
         <TabsHeader {...props} ExtraHeader={showClose ? CloseHeaderButton : undefined} />

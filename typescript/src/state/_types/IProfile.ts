@@ -5,5 +5,5 @@ export type IProfile = {
     id: string;
     name: string;
     layout: IPanelData;
-    views: IBaseViewSerialization[];
+    app: IBaseViewSerialization;
 };

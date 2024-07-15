@@ -5,7 +5,8 @@ import {IDragData} from "../IDragData";
 
 export type ITabsHeaderProps = {
     tabs: ITabData[];
-    onClose: () => void;
+    /** The onclose callback, which is undefined only for the root panel */
+    onClose?: () => void;
     dragging: boolean;
     onCloseTab: (id: string) => void;
     onSelectTab: (id: string) => void;

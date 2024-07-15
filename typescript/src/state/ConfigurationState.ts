@@ -12,30 +12,31 @@ import {v4 as uuid} from "uuid";
 /**
  * The state related to app configuration, allowing users to create different profiles each of which has associated settings and view layouts
  */
-export class ConfigurationState {
+export class ConfigurationState<X> {
     protected _profiles = new Field<Map<string, IProfile>>(new Map());
 
     protected _profileId = new Field<string>("default");
     protected _profileName = new Field<string>("default");
 
-    protected createView: (type: string) => ViewState;
     protected viewManager: IViewManager;
     protected storage: IStorage;
 
+    public readonly settings: Field<X>;
+
     /**
      * Creates a new configuration instance
-     * @param createView The function to determine how to create new views given their type name
      * @param viewManager The view manager to modify when changing profiles
      * @param storage The nonvolatile storage in which to save the configuration data
+     * @param globalSettingsInit The initialization function for the global state
      */
     public constructor(
-        createView: (type: string) => ViewState,
         viewManager: IViewManager,
-        storage: IStorage
+        storage: IStorage,
+        globalSettingsInit: X
     ) {
-        this.createView = createView;
         this.viewManager = viewManager;
         this.storage = storage;
+        this.settings = new Field(globalSettingsInit);
     }
 
     // Profile management
@@ -109,19 +110,9 @@ export class ConfigurationState {
             push(this._profileName.set(profile.name));
             push(this._profileId.set(profile.id));
 
-            for (const view of Object.values(this.viewManager.all.get()))
-                push(this.viewManager.remove(view));
-
             push(this.viewManager.loadLayout(profile.layout));
 
-            const viewsWithData = profile.views.map(data => {
-                const view = this.createView(data.type);
-                push(this.viewManager.add(view, data.id));
-                return {view, data};
-            });
-            for (const {view, data} of viewsWithData) {
-                push(view.deserialize(data));
-            }
+            push(this.viewManager.root.deserialize(profile.app));
         });
     }
 
@@ -133,9 +124,7 @@ export class ConfigurationState {
             name: this._profileName.get(),
             id: this._profileId.get(),
             layout: this.viewManager.layout.get(),
-            views: [...Object.values(this.viewManager.all.get())].map(view =>
-                view.serialize()
-            ),
+            app: this.viewManager.root.serialize(),
         };
     }
 
@@ -158,7 +147,11 @@ export class ConfigurationState {
     /** Saves the profiles to disk */
     protected saveProfilesData() {
         const profiles = [...this.profiles.get().values()];
-        const data = JSON.stringify({selected: this._profileId.get(), profiles});
+        const data = JSON.stringify({
+            selected: this._profileId.get(),
+            profiles,
+            settings: this.settings.get(),
+        });
         this.storage.save(data);
     }
 
@@ -168,23 +161,28 @@ export class ConfigurationState {
      */
     public loadProfilesData(): IMutator<boolean> {
         return chain(push => {
+            const initialData = this.getProfileData();
             try {
                 const dataText = this.storage.load();
                 if (!dataText) return false;
 
                 const data = JSON.parse(dataText);
+                push(this.settings.set(data.settings));
+
                 const map = new Map<string, IProfile>();
                 data.profiles.forEach((profile: IProfile) =>
                     map.set(profile.id, profile)
                 );
                 push(this._profiles.set(map));
+
                 const selectedProfile = data.profiles.find(
                     (profile: IProfile) => profile.id == data.selected
                 );
                 if (selectedProfile) push(this.loadProfile(selectedProfile));
                 return true;
             } catch (e) {
-                console.error(e);
+                console.error("Failed to load stored profiles: ", e);
+                push(this.loadProfile(initialData));
                 return false;
             }
         });

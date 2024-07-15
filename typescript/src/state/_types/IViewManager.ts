@@ -1,24 +1,13 @@
 import {IPanelData} from "../../layout/_types/IPanelData";
 import {TDeepReadonly} from "../../utils/_types/TDeepReadonly";
+import {Field} from "../../watchables/Field";
 import {IWatchable} from "../../watchables/_types/IWatchable";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {ViewState} from "../views/ViewState";
 
 export type IViewManager = {
-    /**
-     * Adds a new view to the layout
-     * @param view The view to be added
-     * @param id The ID that the view has/will have
-     * @returns The mutator to commit the change
-     */
-    add(view: ViewState, id?: string): IMutator;
-
-    /**
-     * Removes the given view from the layout
-     * @param view The view to be removed
-     * @returns The mutator to commit the change
-     */
-    remove(view: ViewState): IMutator;
+    /** The root view that determines all other views */
+    readonly root: ViewState;
 
     /** All of the added views */
     readonly all: IWatchable<Record<string, ViewState>>;

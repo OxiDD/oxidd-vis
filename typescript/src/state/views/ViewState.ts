@@ -3,30 +3,24 @@ import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
 import {Field} from "../../watchables/Field";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {all} from "../../watchables/mutator/all";
+import {IWatchable} from "../../watchables/_types/IWatchable";
+import {Derived} from "../../watchables/Derived";
+import {Constant} from "../../watchables/Constant";
 
 /**
  * The state associated to a single shown view
  */
 export abstract class ViewState {
-    protected id: string;
-
     /** Whether or not this panel should be able to be closed */
     public readonly canClose = new Field(true);
     /** The name of this panel */
     public readonly name = new Field("");
-    /** Whether this state should be deleted upon deletion */
-    public readonly deleteOnClose = new Field(true);
+    /** The ID of this view */
+    public readonly ID: string;
 
-    /** Creates a new instance of this tab, with the given ID */
-    public constructor(id: string = uuid()) {
-        this.id = id;
-    }
-
-    public readonly viewType: string = "none";
-
-    /** The ID of this panel */
-    public get ID() {
-        return this.id;
+    /** Creates a new view */
+    public constructor(ID: string = uuid()) {
+        this.ID = ID;
     }
 
     /**
@@ -35,11 +29,8 @@ export abstract class ViewState {
      */
     public serialize(): IBaseViewSerialization {
         return {
-            type: this.viewType,
-            id: this.id,
             name: this.name.get(),
             closable: this.canClose.get(),
-            deletable: this.deleteOnClose.get(),
         };
     }
 
@@ -49,11 +40,23 @@ export abstract class ViewState {
      * @returns The mutator to commit the changes
      */
     public deserialize(data: IBaseViewSerialization): IMutator {
-        this.id = data.id;
         return all([
             this.name.set(data.name), //
             this.canClose.set(data.closable), //
-            this.deleteOnClose.set(data.deletable),
         ]);
     }
+
+    /** The children of this view. Note that these views do not visually appear as children of this view */
+    public readonly children: IWatchable<ViewState[]> = new Constant([]);
+
+    /** All the descendant views of this view */
+    public readonly descendants: IWatchable<ViewState[]> = new Derived(watch => [
+        this,
+        ...watch(this.children).flatMap(child => {
+            return watch(child.descendants);
+        }),
+    ]);
+
+    /** A callback for when the UI for this view is fully closed */
+    public onCloseUI(): void {}
 }

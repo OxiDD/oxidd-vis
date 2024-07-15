@@ -29,6 +29,7 @@ export const LayoutPanel: FC<{
     panel: IPanelState;
     getContent: IContentGetter;
     components: ILayoutComponents;
+    isRoot?: boolean;
 }> = props => {
     if (props.panel.type == "split")
         return <LayoutSplitPanel {...props} panel={props.panel} />;
@@ -80,7 +81,8 @@ export const LayoutTabsPanel: FC<{
     panel: IPanelTabsState;
     getContent: IContentGetter;
     components: ILayoutComponents;
-}> = ({state, panel, getContent, components}) => {
+    isRoot?: boolean;
+}> = ({state, panel, getContent, components, isRoot: root}) => {
     const watch = useWatch();
     const isDragging = !!watch(state.draggingData);
     const orderedContents = panel.tabs
@@ -155,12 +157,17 @@ export const LayoutTabsPanel: FC<{
         <components.TabsContainer state={state}>
             <components.TabsHeader
                 tabs={tabData}
-                onClose={() => {
-                    chain(push => {
-                        for (const {id} of panel.tabs) push(state.closeTab(panel.id, id));
-                        push(state.removePanel(panel.id));
-                    }).commit();
-                }}
+                onClose={
+                    root
+                        ? undefined
+                        : () => {
+                              chain(push => {
+                                  for (const {id} of panel.tabs)
+                                      push(state.closeTab(panel.id, id));
+                                  push(state.removePanel(panel.id));
+                              }).commit();
+                          }
+                }
                 onSelectTab={id => state.selectTab(panel.id, id).commit()}
                 onCloseTab={id => state.closeTab(panel.id, id).commit()}
                 onDragStart={data =>

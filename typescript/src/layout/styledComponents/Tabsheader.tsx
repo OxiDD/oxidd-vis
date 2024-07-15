@@ -13,7 +13,7 @@ import {css} from "@emotion/css";
 import {useDragStart} from "../../utils/useDragStart";
 
 export const TabsHeader: FC<
-    ITabsHeaderProps & {ExtraHeader?: FC<{onClose: () => void}>}
+    ITabsHeaderProps & {ExtraHeader?: FC<{onClose?: () => void}>}
 > = ({
     onClose,
     tabs,
@@ -96,8 +96,8 @@ const getOverflowAndRemainder: (
     dragging: boolean,
     onDrop: () => void,
     empty: boolean,
-    onClose: () => void,
-    ExtraHeader?: FC<{onClose: () => void}>
+    onClose?: () => void,
+    ExtraHeader?: FC<{onClose?: () => void}>
 ) => FC<IButtonProps> = (dragging, onDrop, empty, onClose, ExtraHeader) => props =>
     (
         <>

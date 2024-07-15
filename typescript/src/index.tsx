@@ -8,9 +8,4 @@ import {installDevtools} from "./watchables/utils/devtools";
 installDevtools();
 initializeIcons();
 
-ReactDOM.render(
-    <FluentThemeProvider theme={darkTheme}>
-        <App />
-    </FluentThemeProvider>,
-    document.getElementById("root")
-);
+ReactDOM.render(<App />, document.getElementById("root"));
