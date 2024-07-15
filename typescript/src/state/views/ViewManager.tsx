@@ -21,10 +21,19 @@ export class ViewManager implements IViewManager {
     protected viewStates = new Field<Record<string, ViewState>>({});
 
     /** The entire layout state */
-    public readonly layoutState = new LayoutState();
+    public readonly layoutState: LayoutState;
 
     /** The ID of the view at the location to show the next revealed view */
     public readonly openAtTargetID = new Field<string | null>(null);
+
+    /**
+     * Creates a new view manager
+     * @param closeEmptyPanels Whether empty panels in the UI should automatically be closed
+     */
+    public constructor(closeEmptyPanels: IWatchable<boolean>) {
+        this.layoutState = new LayoutState(closeEmptyPanels);
+        this.layout = this.layoutState.layoutData;
+    }
 
     /**
      * Adds a new view to the manager, not showing it yet until showView is called, or the layout is manually modified
@@ -120,7 +129,7 @@ export class ViewManager implements IViewManager {
     }
 
     /** The current layout assigning views to tabs */
-    public readonly layout: IWatchable<IPanelData> = this.layoutState.layoutData;
+    public readonly layout: IWatchable<IPanelData>;
 
     /**
      * Retrieves the UI for a view with the given ID

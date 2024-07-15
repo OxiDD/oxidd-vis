@@ -1,3 +1,4 @@
+import {LayoutState} from "../../LayoutState";
 import {IContent} from "../IContentGetter";
 
 export type ITabsContentProps = {
@@ -5,4 +6,5 @@ export type ITabsContentProps = {
         selected: boolean;
         element: HTMLDivElement;
     })[];
+    state: LayoutState;
 };

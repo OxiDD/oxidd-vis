@@ -49,6 +49,7 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
     /** Updates the current value if necessary */
     protected updateValueIfNecessary() {
         if (!this.dirty) return;
+
         this.dirty = false;
 
         if (!this.requiresRecompute()) {
@@ -62,26 +63,37 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
         const computationID = ++this.computationID;
 
         /** Cleanup old dependencies */
+        // Note, if we are dirty, there is at least one dependency that signalled it's dirty. It might not have signaled change yet when this value is recomputed, but the first dirty dependency will be resubscribed to. Hence when this dependency signals change, we will observe it and also signal. Therefor no change events get lost, even though we may unsubscribe from the old dependency events before they signalled.
         for (const {unsubChange} of this.dependencies) unsubChange?.();
-        this.dependencies = []; // Set dependencies to empty list before removing dependencies to prevent unnecessary `updateDependenciesWeak` bubbling
+        this.dependencies = [];
 
         /** Compute new value and register new dependencies */
         const foundDependencies = new Set<IWatchable<unknown>>();
         const watch: IWatcher = dependency => {
-            const value = dependency.get();
+            try {
+                const value = dependency.get();
 
-            // In case the dependency is registered after a new value is computed, don't register it
-            const outdated = computationID != this.computationID;
-            if (outdated) return value;
+                // In case the dependency is registered after a new value is computed, don't register it
+                const outdated = computationID != this.computationID;
+                if (outdated) return value;
 
-            // If we already registered this dependency, continue
-            const alreadyRegistered = foundDependencies.has(dependency);
-            if (alreadyRegistered) return value;
+                // If we already registered this dependency, don't resubscribe
+                const alreadyRegistered = foundDependencies.has(dependency);
+                if (alreadyRegistered) return value;
 
-            // Subscribe to the new dependency
-            foundDependencies.add(dependency);
-            this.dependencies.push(this.createDependency(dependency, value));
-            return value;
+                // Subscribe to the new dependency
+                foundDependencies.add(dependency);
+                this.dependencies.push(this.createDependency(dependency, value));
+                return value;
+            } catch (e) {
+                console.error(
+                    "Error occurred for dependency ",
+                    dependency,
+                    " in derived ",
+                    this
+                );
+                throw e;
+            }
         };
         this.value = this.compute(watch, this.value);
         this.initialized = true;
@@ -142,7 +154,8 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
 
     /** The listener that is called when a dependency signals an observable value change */
     protected whenChange() {
-        this.unsubChangeDependencies();
+        // If we are not dirty, all dependencies are up to date and we should not unsubscribe
+        if (this.dirty) this.unsubChangeDependencies();
         this.callChangeListeners();
     }
 

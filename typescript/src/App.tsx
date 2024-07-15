@@ -10,6 +10,9 @@ import {DummyViewState} from "./state/views/types/DummyViewState";
 import {all} from "./watchables/mutator/all";
 import {chain} from "./watchables/mutator/chain";
 import {Derived} from "./watchables/Derived";
+import {Toggle} from "@fluentui/react";
+import {useWatch} from "./watchables/react/useWatch";
+import {LayoutWithClose} from "./LayoutWithClose";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -22,16 +25,17 @@ export const App: FC = () => {
             chain(push => {
                 if (loaded) return;
                 for (let i = 0; i < 5; i++) {
-                    const dummy = new DummyViewState();
+                    const dummy = new DummyViewState(appState.settings);
                     push(dummy.name.set("stuff " + i));
                     push(appState.views.show(dummy));
                 }
             });
-        // configuration
-        //     .loadProfilesData()
-        //     .chain(init)
-        //     .commit();
-        init(false).commit();
+        configuration
+            .loadProfilesData()
+            .chain(s => appState.initSpecialViews().map(() => s))
+            .chain(init)
+            .commit();
+        // init(false).commit();
 
         window.addEventListener("beforeunload", () =>
             appState.configuration.saveProfile().commit()
@@ -40,7 +44,13 @@ export const App: FC = () => {
     }, []);
 
     return (
-        <DefaultLayout
+        <LayoutWithClose
+            panelClosable={
+                // new Derived(watch =>
+                //     watch(app.settings.layout.deleteUnusedPanels) ? "never" : "always"
+                // )
+                new Constant("whenEmpty")
+            }
             state={app.views.layoutState}
             getContent={id => app.views.getPanelUI(id, components)}
         />
@@ -49,5 +59,20 @@ export const App: FC = () => {
 
 const components: IViewComponents = {
     none: () => <div>Not found</div>,
-    dummy: () => <div>Dummy</div>,
+    dummy: ({view}: {view: DummyViewState}) => {
+        const watch = useWatch();
+        return (
+            <div>
+                Dummy
+                <Toggle
+                    checked={watch(view.settings.layout.deleteUnusedPanels)}
+                    onChange={(_, checked) =>
+                        view.settings.layout.deleteUnusedPanels
+                            .set(checked ?? false)
+                            .commit()
+                    }
+                />
+            </div>
+        );
+    },
 };

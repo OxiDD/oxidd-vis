@@ -17,8 +17,8 @@ export function useWatch(): IWatcher {
         outWatch.current = watch;
         return (prev ?? 0) + 1;
     });
-    const [_, update] = useState({});
-    observer.current = new Observer(derived).add(() => update({}));
+    const [_, update] = useState(1);
+    observer.current = new Observer(derived).add(() => update(x => x + 1));
 
     useEffect(() => () => observer.current?.destroy(), []);
     return outWatch.current!;

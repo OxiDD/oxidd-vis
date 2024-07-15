@@ -1,9 +1,7 @@
 import React, {FC} from "react";
 import {IResizeHandleProps} from "../_types/props/IResizeHandleProps";
-import {useTheme} from "@fluentui/react";
 
 export const ResizeHandle: FC<IResizeHandleProps> = ({direction}) => {
-    const theme = useTheme();
     return (
         <div
             style={{

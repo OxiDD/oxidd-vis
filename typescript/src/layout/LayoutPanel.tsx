@@ -64,7 +64,10 @@ export const LayoutSplitPanel: FC<{
                 )),
                 i => (
                     <PanelResizeHandle key={panel.panels[i].content.id + "-sep"}>
-                        <components.ResizeHandle direction={panel.direction} />
+                        <components.ResizeHandle
+                            direction={panel.direction}
+                            state={state}
+                        />
                     </PanelResizeHandle>
                 )
             )}
@@ -101,7 +104,7 @@ export const LayoutTabsPanel: FC<{
     );
 
     const onDropTab = (beforeId: string) => {
-        chain(add => {
+        chain(push => {
             const dragging = state.draggingData.get();
             if (!dragging?.targetId) return;
             if (
@@ -110,8 +113,8 @@ export const LayoutTabsPanel: FC<{
             )
                 return; // Nothing should change
             if (dragging.removeFromPanelId)
-                add(state.closeTab(dragging.removeFromPanelId, dragging.targetId));
-            add(
+                push(state.closeTab(dragging.removeFromPanelId, dragging.targetId));
+            push(
                 state.openTab(
                     panel.id,
                     dragging.target ?? dragging.targetId,
@@ -119,12 +122,12 @@ export const LayoutTabsPanel: FC<{
                     beforeId
                 )
             );
-            add(state.selectTab(panel.id, dragging.targetId));
+            push(state.selectTab(panel.id, dragging.targetId));
         }).commit();
     };
 
     const onDropSide = (side: IDropPanelSide) => {
-        chain(add => {
+        chain(push => {
             const dragging = state.draggingData.get();
             if (!dragging?.targetId) return;
 
@@ -132,27 +135,32 @@ export const LayoutTabsPanel: FC<{
             if (side == "in") {
                 if (dragging.removeFromPanelId == panel.id) return; // Nothing should change
                 if (dragging.removeFromPanelId)
-                    add(state.closeTab(dragging.removeFromPanelId, dragging.targetId));
-                add(state.openTab(panel.id, dragging.target ?? dragging.targetId));
-                add(state.selectTab(panel.id, dragging.targetId));
+                    push(state.closeTab(dragging.removeFromPanelId, dragging.targetId));
+                push(state.openTab(panel.id, dragging.target ?? dragging.targetId));
+                push(state.selectTab(panel.id, dragging.targetId));
                 return;
             }
 
             // Or add a new panel
-            const targetPanelId = add(state.addPanel(panel.id, side));
+            const targetPanelId = push(state.addPanel(panel.id, side));
             if (targetPanelId) {
                 if (dragging.removeFromPanelId)
-                    add(state.closeTab(dragging.removeFromPanelId, dragging.targetId));
-                add(state.openTab(targetPanelId, dragging.target ?? dragging.targetId));
+                    push(state.closeTab(dragging.removeFromPanelId, dragging.targetId));
+                push(state.openTab(targetPanelId, dragging.target ?? dragging.targetId));
             }
         }).commit();
     };
 
     return (
-        <components.TabsContainer>
+        <components.TabsContainer state={state}>
             <components.TabsHeader
                 tabs={tabData}
-                onClose={() => {}}
+                onClose={() => {
+                    chain(push => {
+                        for (const {id} of panel.tabs) push(state.closeTab(panel.id, id));
+                        push(state.removePanel(panel.id));
+                    }).commit();
+                }}
                 onSelectTab={id => state.selectTab(panel.id, id).commit()}
                 onCloseTab={id => state.closeTab(panel.id, id).commit()}
                 onDragStart={data =>
@@ -175,8 +183,13 @@ export const LayoutTabsPanel: FC<{
                     selected: panel.selected == id,
                     ...rest,
                 }))}
+                state={state}
             />
-            <components.DropArea dragging={isDragging} onDrop={onDropSide} />
+            <components.DropArea
+                dragging={isDragging}
+                onDrop={onDropSide}
+                state={state}
+            />
         </components.TabsContainer>
     );
 };

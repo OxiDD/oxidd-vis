@@ -3,6 +3,7 @@ import {ILayoutProps} from "./_types/ILayoutProps";
 import {LayoutPanel} from "./LayoutPanel";
 import {TabsRenderer} from "./TabsRenderer";
 import {Watcher} from "../watchables/react/Watcher";
+import {useWatch} from "../watchables/react/useWatch";
 
 /**
  * The layout entry component, where styling components still have to be provided

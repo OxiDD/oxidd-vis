@@ -37,7 +37,7 @@ export function proxyObject<
                             const curTarget = watch(target);
                             if (!curTarget) return watch(defaultField);
 
-                            const field = watch(curTarget[key] as IField<any>);
+                            const field = curTarget[key] as IField<any>;
                             if (!field) return watch(defaultField);
 
                             return watch(field);
