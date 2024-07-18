@@ -7,7 +7,7 @@ import React, {
     useMemo,
 } from "react";
 import {AppState} from "../state/AppState";
-import {StyledContextMenu} from "../components/StyledContextMenu";
+import {StyledContextMenu} from "./components/StyledContextMenu";
 import {
     DefaultButton,
     Dialog,

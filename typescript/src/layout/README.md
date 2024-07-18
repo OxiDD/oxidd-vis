@@ -40,5 +40,5 @@ export const App: FC = () => {
 };
 ```
 
-You are responsible for providing sensible content, and creating tabs.
+You are responsible for providing the desired content, and creating tabs.
 This can be done by maintaining a mapping from tab ids to content, and adding the appropriate content when creating a new tab id.

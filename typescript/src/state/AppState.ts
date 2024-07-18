@@ -9,6 +9,7 @@ import {IMutator} from "../watchables/mutator/_types/IMutator";
 import {all} from "../watchables/mutator/all";
 import {chain} from "../watchables/mutator/chain";
 import {ConfigurationState} from "./ConfigurationState";
+import {DiagramCollectionState as DiagramsSourceState} from "./diagrams/DiagramCollectionState";
 import {SettingsState} from "./SettingsState";
 import {IAppSerialization} from "./_types/IAppSerialization";
 import {IBaseViewSerialization} from "./_types/IBaseViewSerialization";
@@ -38,8 +39,24 @@ export class AppState extends ViewState {
     /** The settings of the application */
     public readonly settings = new SettingsState(this.configuration.settings);
 
+    /** The diagrams visualized by the application */
+    public readonly diagrams = new DiagramsSourceState();
+
     /** The sidebar tabs to show, forming an entry to this */
     public readonly tabs: Readonly<ISidebarTab[]> = [
+        {
+            icon: "GitGraph",
+            name: "Diagrams",
+            view: this.diagrams,
+            openIn: "root",
+        },
+        {
+            icon: "Info",
+            name: "Info",
+            view: this,
+            openIn: "root",
+            skipSerialization: true,
+        },
         {
             icon: "Settings",
             name: "Settings",
@@ -48,28 +65,43 @@ export class AppState extends ViewState {
     ];
 
     /** @override */
-    public readonly children = new Constant<ViewState[]>([this.settings]);
+    public readonly children = new Constant<ViewState[]>(
+        this.tabs
+            .filter(({skipSerialization}) => !skipSerialization)
+            .map(({view}) => view)
+    );
 
     /** Creates a new app state */
     public constructor() {
-        super();
+        super("app");
+        this.name.set("Info").commit();
     }
 
     /** @override */
     public serialize(): IAppSerialization {
         return {
             ...super.serialize(),
-            tabs: this.children.get().map(tab => tab.serialize()),
+            tabs: Object.fromEntries(
+                this.tabs
+                    .filter(({skipSerialization}) => !skipSerialization)
+                    .map(tab => [tab.name, tab.view.serialize()])
+            ),
         };
     }
 
     /** @override */
     public deserialize(data: IAppSerialization): IMutator<unknown> {
-        const tabs = this.children.get();
         return super
             .deserialize(data)
             .chain(
-                all(data.tabs.map((tabData, index) => tabs[index].deserialize(tabData)))
+                all(
+                    Object.entries(data.tabs).map(
+                        ([dataName, data]) =>
+                            this.tabs
+                                .find(({name}) => name == dataName)
+                                ?.view.deserialize(data) ?? dummyMutator
+                    )
+                )
             );
     }
 

@@ -16,6 +16,11 @@ import {Sidebar} from "./UI/SideBar";
 import {TabContextMenu} from "./UI/TabContextMenu";
 import {ThemeProvider as FluentThemeProvider} from "@fluentui/react";
 import {darkTheme, lightTheme} from "./theme";
+import {Settings} from "./UI/views/settings/Settings";
+import {Info} from "./UI/views/info/Info";
+import {ViewContainer} from "./UI/components/ViewContainer";
+import {DiagramCollectionState} from "./state/diagrams/DiagramCollectionState";
+import {DiagramCollection} from "./UI/views/DiagramCollection";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -44,6 +49,15 @@ export const App: FC = () => {
     );
 };
 
+const Component: IViewComponent = ({view}) => {
+    if (view instanceof SettingsState) return <Settings settings={view} />;
+    if (view instanceof AppState) return <Info app={view} />;
+    if (view instanceof DiagramCollectionState)
+        return <DiagramCollection collection={view} />;
+
+    return <ViewContainer>Not found</ViewContainer>;
+};
+
 const UserLayout: FC<{state: AppState}> = ({state}) => {
     const watch = useWatch();
     return (
@@ -65,12 +79,6 @@ const UserLayout: FC<{state: AppState}> = ({state}) => {
     );
 };
 
-const Component: IViewComponent = ({view}) => {
-    if (view instanceof SettingsState) return <SettingsView settings={view} />;
-
-    return <div>Not found</div>;
-};
-
 const ThemeProvider: FC<{state: AppState}> = ({state, children}) => {
     const watch = useWatch();
     return (
@@ -78,20 +86,5 @@ const ThemeProvider: FC<{state: AppState}> = ({state, children}) => {
             theme={watch(state.settings.global).darkMode ? darkTheme : lightTheme}>
             {children}
         </FluentThemeProvider>
-    );
-};
-
-const SettingsView: FC<{settings: SettingsState}> = ({settings}) => {
-    const watch = useWatch();
-    return (
-        <div>
-            Delete unused panels:
-            <Toggle
-                checked={watch(settings.layout.deleteUnusedPanels)}
-                onChange={(_, checked) =>
-                    settings.layout.deleteUnusedPanels.set(checked ?? false).commit()
-                }
-            />
-        </div>
     );
 };
