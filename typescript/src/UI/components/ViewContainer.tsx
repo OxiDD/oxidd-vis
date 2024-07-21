@@ -5,12 +5,13 @@ import {useScrollbarStyle} from "../hooks/useScrollbarStyle";
 /** Standard styling for the panel contents container */
 export const ViewContainer = forwardRef<
     HTMLDivElement,
-    {className?: string; children: ReactNode}
->(({className, children}, ref) => {
+    React.HTMLAttributes<HTMLDivElement>
+>(({className, children, ...rest}, ref) => {
     const scrollbarStyle = useScrollbarStyle();
     return (
         <div
             ref={ref}
+            {...rest}
             className={`${css({
                 padding: 10,
                 boxSizing: "border-box",

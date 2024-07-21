@@ -1,10 +1,11 @@
 import {IBaseViewSerialization} from "../../_types/IBaseViewSerialization";
+import {IDiagramSerialization} from "./IDiagramSerialization";
 
 export type IDiagramCollectionSerialization = IBaseViewSerialization & {
-    diagrams: IDiagramSerialization[];
+    diagrams: IDiagramTypeSerialization[];
 };
-export type IDiagramSerialization = {
+export type IDiagramTypeSerialization = {
     type: string;
     source: unknown;
-    state: IBaseViewSerialization;
+    state: IDiagramSerialization;
 };

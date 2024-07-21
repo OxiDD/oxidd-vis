@@ -20,7 +20,11 @@ import {Settings} from "./UI/views/settings/Settings";
 import {Info} from "./UI/views/info/Info";
 import {ViewContainer} from "./UI/components/ViewContainer";
 import {DiagramCollectionState} from "./state/diagrams/DiagramCollectionState";
-import {DiagramCollection} from "./UI/views/DiagramCollection";
+import {DiagramCollection} from "./UI/views/diagramCollection/DiagramCollection";
+import {ThemeProvider} from "./UI/providers/ThemeProvider";
+import {LayoutStateProvider} from "./UI/providers/LayoutStateContext";
+import {DiagramVisualizationState} from "./state/diagrams/DiagramVisualizationState";
+import {DiagramVisualization} from "./UI/views/diagramVisualization/DiagramVisualization";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -39,12 +43,14 @@ export const App: FC = () => {
 
     return (
         <ThemeProvider state={app}>
-            <div style={{display: "flex", height: "100%"}}>
-                <Sidebar state={app} projectUrl="https://google.com" />
-                <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
-                    <UserLayout state={app} />
+            <LayoutStateProvider value={app.views.layoutState}>
+                <div style={{display: "flex", height: "100%"}}>
+                    <Sidebar state={app} projectUrl="https://google.com" />
+                    <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
+                        <UserLayout state={app} />
+                    </div>
                 </div>
-            </div>
+            </LayoutStateProvider>
         </ThemeProvider>
     );
 };
@@ -54,6 +60,8 @@ const Component: IViewComponent = ({view}) => {
     if (view instanceof AppState) return <Info app={view} />;
     if (view instanceof DiagramCollectionState)
         return <DiagramCollection collection={view} />;
+    if (view instanceof DiagramVisualizationState)
+        return <DiagramVisualization visualization={view} />;
 
     return <ViewContainer>Not found</ViewContainer>;
 };
@@ -76,15 +84,5 @@ const UserLayout: FC<{state: AppState}> = ({state}) => {
                 />
             )}
         </TabContextMenu>
-    );
-};
-
-const ThemeProvider: FC<{state: AppState}> = ({state, children}) => {
-    const watch = useWatch();
-    return (
-        <FluentThemeProvider
-            theme={watch(state.settings.global).darkMode ? darkTheme : lightTheme}>
-            {children}
-        </FluentThemeProvider>
     );
 };

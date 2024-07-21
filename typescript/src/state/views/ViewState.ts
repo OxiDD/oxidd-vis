@@ -6,6 +6,7 @@ import {all} from "../../watchables/mutator/all";
 import {IWatchable} from "../../watchables/_types/IWatchable";
 import {Derived} from "../../watchables/Derived";
 import {Constant} from "../../watchables/Constant";
+import {chain} from "../../watchables/mutator/chain";
 
 /**
  * The state associated to a single shown view
@@ -29,6 +30,7 @@ export abstract class ViewState {
      */
     public serialize(): IBaseViewSerialization {
         return {
+            ID: this.ID,
             name: this.name.get(),
             closable: this.canClose.get(),
         };
@@ -40,10 +42,11 @@ export abstract class ViewState {
      * @returns The mutator to commit the changes
      */
     public deserialize(data: IBaseViewSerialization): IMutator {
-        return all([
-            this.name.set(data.name), //
-            this.canClose.set(data.closable), //
-        ]);
+        return chain(push => {
+            (this as any).ID = data.ID;
+            push(this.name.set(data.name));
+            push(this.canClose.set(data.closable));
+        });
     }
 
     /** The children of this view. Note that these views do not visually appear as children of this view */

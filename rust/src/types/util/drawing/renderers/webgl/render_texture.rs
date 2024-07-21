@@ -127,6 +127,10 @@ impl ScreenTexture {
             color,
         }
     }
+    pub fn setSize(&mut self, width: usize, height: usize) {
+        self.width = width;
+        self.height = height;
+    }
 }
 impl RenderTarget for ScreenTexture {
     fn bind_buffer(&self, context: &Gl) {

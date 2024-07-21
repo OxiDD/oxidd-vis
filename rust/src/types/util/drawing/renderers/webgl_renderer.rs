@@ -19,7 +19,10 @@ use crate::{
         },
         edge_type::EdgeType,
     },
-    util::transformation::Transformation,
+    util::{
+        transformation::Transformation,
+        logging::console,
+    }
 };
 
 use super::webgl::{
@@ -109,6 +112,7 @@ impl<T: Tag> WebglRenderer<T> {
 
 impl<T: Tag> Renderer<T> for WebglRenderer<T> {
     fn set_transform(&mut self, transform: Transformation) {
+        self.screen_texture.setSize(transform.width as usize, transform.height as usize);
         let matrix = transform.get_matrix();
         self.node_renderer
             .set_transform(&self.webgl_context, &matrix);

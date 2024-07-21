@@ -167,7 +167,7 @@ export class ConfigurationState<X> {
                 if (!dataText) return false;
 
                 const data = JSON.parse(dataText);
-                push(this.settings.set(data.settings));
+                if (data.settings) push(this.settings.set(data.settings));
 
                 const map = new Map<string, IProfile>();
                 data.profiles.forEach((profile: IProfile) =>

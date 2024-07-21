@@ -4,6 +4,7 @@ import {ViewState} from "../../../state/views/ViewState";
 import {AppState} from "../../../state/AppState";
 import {css} from "@emotion/css";
 import {ViewContainer} from "../../components/ViewContainer";
+import {CenteredContainer} from "../../components/CenteredContainer";
 
 export const Info: FC<{app: AppState}> = ({app}) => {
     const theme = useTheme();
@@ -12,7 +13,7 @@ export const Info: FC<{app: AppState}> = ({app}) => {
     );
 
     return (
-        <Container>
+        <CenteredContainer>
             <h1 style={{color: theme.palette.themePrimary, fontSize: 40, marginTop: 10}}>
                 <Icon
                     iconName="GitGraph"
@@ -29,12 +30,6 @@ export const Info: FC<{app: AppState}> = ({app}) => {
                 and can be used for experimentation.
             </p>
             <p>Settings: {link("settings", app.settings)}</p>
-        </Container>
+        </CenteredContainer>
     );
 };
-
-const Container: FC = ({children}) => (
-    <ViewContainer className={css({display: "flex", justifyContent: "center"})}>
-        <div style={{maxWidth: 800, height: "fit-content"}}>{children}</div>
-    </ViewContainer>
-);

@@ -1,4 +1,6 @@
+import {Derived} from "../../watchables/Derived";
 import {PlainField} from "../../watchables/PlainField";
+import {IWatchable} from "../../watchables/_types/IWatchable";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
 import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
@@ -16,7 +18,7 @@ const sourceTypes: Record<string, IDiagramSourceType<unknown>> = {
  * The diagrams collection of the application
  */
 export class DiagramCollectionState extends ViewState {
-    protected readonly diagrams = new PlainField<DiagramState[]>([]);
+    protected readonly _diagrams = new PlainField<DiagramState[]>([]);
 
     /**
      * The collection of diagrams
@@ -26,14 +28,57 @@ export class DiagramCollectionState extends ViewState {
         this.name.set("Diagrams").commit();
     }
 
+    /** The current diagrams */
+    public readonly diagrams = this._diagrams.readonly();
+
+    /** @override */
+    public readonly children = new Derived(watch => watch(this.diagrams));
+
+    /**
+     * Creates a new diagram to store
+     * TODO: add different functions for different diagram source types
+     * @returns The mutator to commit the change, resulting in the created diagram
+     */
+    public addDiagram(): IMutator<DiagramState> {
+        return chain(push => {
+            const source = new FileSource();
+            const diagram = new DiagramState(source);
+            push(this._diagrams.set([...this.diagrams.get(), diagram]));
+            push(diagram.addVisualization());
+            return diagram;
+        });
+    }
+
+    /**
+     * Removes the given diagram
+     * @param diagram The diagram to be removed and disposed
+     * @returns The mutator to commit the change, resulting in whether the diagram was present and has now been disposed
+     */
+    public removeDiagram(diagram: DiagramState): IMutator<boolean> {
+        return chain(push => {
+            const diagrams = this._diagrams.get();
+            const index = diagrams.findIndex(v => v == diagram);
+            if (index == -1) return false;
+            push(
+                this._diagrams.set([
+                    ...diagrams.slice(0, index),
+                    ...diagrams.slice(index + 1),
+                ])
+            );
+            diagram.dispose();
+
+            return true;
+        });
+    }
+
     /** @override */
     public serialize(): IDiagramCollectionSerialization {
         return {
             ...super.serialize(),
-            diagrams: this.diagrams.get().map(diagram => ({
+            diagrams: this._diagrams.get().map(diagram => ({
                 type:
                     Object.entries(sourceTypes).find(
-                        ([typeName, type]) => diagram instanceof type
+                        ([typeName, type]) => diagram.source instanceof type
                     )?.[0] ?? "unknown",
                 source: diagram.source.serialize(),
                 state: diagram.serialize(),
@@ -60,7 +105,8 @@ export class DiagramCollectionState extends ViewState {
                 diagrams.push(diagram);
             }
 
-            push(this.diagrams.set(diagrams));
+            for (const diagram of this._diagrams.get()) diagram.dispose();
+            push(this._diagrams.set(diagrams));
         });
     }
 }

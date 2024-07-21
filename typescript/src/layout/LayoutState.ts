@@ -291,7 +291,7 @@ export class LayoutState {
      * Schedules a tab close call, if the tab hasn't reopened before the call
      * @param tabId The tab id for which to call
      */
-    public schedulePotentialCloseEvent(tabId: string) {
+    protected schedulePotentialCloseEvent(tabId: string) {
         setTimeout(() => {
             const stillExists = !!this.allTabs.get().find(({id}) => tabId == id);
             if (!stillExists) {
