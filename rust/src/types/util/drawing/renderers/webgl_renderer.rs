@@ -19,10 +19,7 @@ use crate::{
         },
         edge_type::EdgeType,
     },
-    util::{
-        transformation::Transformation,
-        logging::console,
-    }
+    util::{logging::console, transformation::Transformation},
 };
 
 use super::webgl::{
@@ -70,9 +67,10 @@ impl<T: Tag> WebglRenderer<T> {
                 &context,
                 LayerBgRenderer::new(&context),
                 // LayerLinesRenderer::new(&context),
+                screen_texture.get_size().1,
                 include_bytes!("../../../../../resources/Roboto-Bold.ttf").to_vec(),
                 TextRendererSettings::new()
-                    .resolution(screen_texture.get_size().1 as f32)
+                    .resolution(1.5)
                     .sample_distance(35.)
                     .scale_factor_group_size(3.0)
                     .scale_cache_size(10) // Very large, mostly for testing
@@ -112,14 +110,21 @@ impl<T: Tag> WebglRenderer<T> {
 
 impl<T: Tag> Renderer<T> for WebglRenderer<T> {
     fn set_transform(&mut self, transform: Transformation) {
-        self.screen_texture.setSize(transform.width as usize, transform.height as usize);
+        let height = transform.height as usize;
+        // if self.screen_texture.get_size().1 != height {
+        //     self.layer_renderer
+        //         .set_screen_height(&self.webgl_context, height);
+        // }
+
+        self.screen_texture
+            .setSize(transform.width as usize, height);
         let matrix = transform.get_matrix();
         self.node_renderer
             .set_transform(&self.webgl_context, &matrix);
         self.edge_renderer
             .set_transform(&self.webgl_context, &matrix);
         self.layer_renderer
-            .set_transform(&self.webgl_context, &matrix);
+            .set_transform_and_screen_height(&self.webgl_context, &matrix, height);
     }
     fn update_layout(&mut self, layout: &DiagramLayout<T>) {
         self.node_renderer.set_nodes(

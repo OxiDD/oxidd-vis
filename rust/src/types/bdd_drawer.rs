@@ -178,7 +178,7 @@ impl<
         };
         out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
-        // out.reveal_all(30000);
+        out.reveal_all(30000);
         out
     }
 

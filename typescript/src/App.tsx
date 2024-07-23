@@ -22,9 +22,9 @@ import {ViewContainer} from "./UI/components/ViewContainer";
 import {DiagramCollectionState} from "./state/diagrams/DiagramCollectionState";
 import {DiagramCollection} from "./UI/views/diagramCollection/DiagramCollection";
 import {ThemeProvider} from "./UI/providers/ThemeProvider";
-import {LayoutStateProvider} from "./UI/providers/LayoutStateContext";
 import {DiagramVisualizationState} from "./state/diagrams/DiagramVisualizationState";
 import {DiagramVisualization} from "./UI/views/diagramVisualization/DiagramVisualization";
+import {AppStateProvider} from "./UI/providers/AppStateContext";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -43,14 +43,14 @@ export const App: FC = () => {
 
     return (
         <ThemeProvider state={app}>
-            <LayoutStateProvider value={app.views.layoutState}>
+            <AppStateProvider value={app}>
                 <div style={{display: "flex", height: "100%"}}>
                     <Sidebar state={app} projectUrl="https://google.com" />
                     <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
                         <UserLayout state={app} />
                     </div>
                 </div>
-            </LayoutStateProvider>
+            </AppStateProvider>
         </ThemeProvider>
     );
 };

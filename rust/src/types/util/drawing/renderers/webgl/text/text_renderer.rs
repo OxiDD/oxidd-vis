@@ -42,6 +42,7 @@ pub struct TextRenderer {
     settings: TextRendererSettings,
     cur_scale_index: i32,
     cur_text: Vec<Text>,
+    screen_height: f32,
 
     // Font helpers
     _font_data: Box<[u8]>,
@@ -71,6 +72,7 @@ impl TextRenderer {
         context: &WebGl2RenderingContext,
         font_data: Vec<u8>,
         settings: TextRendererSettings,
+        screen_height: usize,
     ) -> TextRenderer {
         let vertex_renderer = VertexRenderer::new(
             context,
@@ -91,17 +93,7 @@ impl TextRenderer {
         let font = FontRef::from_index(&font_data_ref[..], 0).unwrap();
         // let charmap = CharmapProxy::from_font(&font).materialize(&font);
 
-        let mut scaler_context = Box::new(ScaleContext::new());
-        let scaler_context_ref = unsafe {
-            std::mem::transmute::<&mut ScaleContext, &'static mut ScaleContext>(
-                scaler_context.as_mut(),
-            )
-        };
-        let scaler = scaler_context_ref
-            .builder(font)
-            .size(settings.resolution * settings.scale_factor_group_size)
-            .build();
-
+        let (scaler_context, scaler) = create_scaler(screen_height, font, &settings);
         TextRenderer {
             vertex_renderer,
             char_renderer,
@@ -110,6 +102,7 @@ impl TextRenderer {
             settings,
             cur_scale_index: -20,
             cur_text: Vec::new(),
+            screen_height: screen_height as f32,
 
             _char_scaler_context: scaler_context,
             char_scaler: scaler,
@@ -127,7 +120,7 @@ impl TextRenderer {
         self.settings.text_size
     }
     fn get_atlas_resolution(&self) -> f32 {
-        self.settings.resolution * self.settings.scale_factor_group_size
+        self.screen_height * self.settings.resolution * self.settings.scale_factor_group_size
     }
     fn get_scale_index(&self, scale: f32) -> i32 {
         (scale.log2() / self.settings.scale_factor_group_size.log2()).floor() as i32
@@ -324,6 +317,9 @@ impl TextRenderer {
     }
 
     pub fn set_texts(&mut self, context: &WebGl2RenderingContext, texts: &Vec<Text>) {
+        if self.screen_height == 0. {
+            return;
+        }
         self.cur_text = texts.clone();
 
         // Obtain the character glyphs and position data, and ensure that these glyphs are on the atlas
@@ -496,7 +492,25 @@ impl TextRenderer {
         self.vertex_renderer.update_data(context);
     }
 
-    pub fn set_transform(&mut self, context: &WebGl2RenderingContext, transform: &Matrix4) {
+    pub fn set_transform_and_screen_height(
+        &mut self,
+        context: &WebGl2RenderingContext,
+        transform: &Matrix4,
+        screen_height: usize,
+    ) {
+        let height = screen_height as f32;
+        let height_change = self.screen_height != height;
+        if height_change {
+            self.atlases.clear();
+            let (scaler_context, scaler) = create_scaler(screen_height, self.font, &self.settings);
+            self.char_scaler = scaler;
+            self._char_scaler_context = scaler_context;
+            self.screen_height = height;
+        }
+        if self.screen_height == 0. {
+            return;
+        }
+
         self.vertex_renderer.set_uniform(context, "transform", |u| {
             context.uniform_matrix4fv_with_f32_array(u, true, &transform.0)
         });
@@ -510,7 +524,7 @@ impl TextRenderer {
         let scale_index = self.get_scale_index(exact_scale);
         let cur_index = self.cur_scale_index;
 
-        if cur_index != scale_index {
+        if cur_index != scale_index || height_change {
             self.cur_scale_index = scale_index;
 
             let charmap = self.font.charmap();
@@ -567,6 +581,17 @@ impl TextRenderer {
         }
     }
 
+    // pub fn set_screen_height(&mut self, context: &WebGl2RenderingContext, height: usize) {
+    //     let (scaler_context, scaler) = create_scaler(height, self.font, &self.settings);
+    //     self.char_scaler = scaler;
+    //     self._char_scaler_context = scaler_context;
+    //     self.screen_height = height as f32;
+
+    //     let chars = self.get_current_chars();
+    //     self.update_chars(context, chars.into_iter().collect());
+    //     self.set_texts(context, &self.cur_text.clone());
+    // }
+
     pub fn dispose(&mut self, context: &WebGl2RenderingContext) {
         self.vertex_renderer.dispose(context);
         self.char_renderer.dispose(context);
@@ -580,6 +605,7 @@ impl TextRenderer {
 
 type CharDataMap = HashMap<u16, ((f32, f32), Outline)>;
 
+#[derive(Clone)]
 pub struct TextRendererSettings {
     /// The screen height to base the atlas resolution on
     pub resolution: f32,
@@ -666,4 +692,20 @@ impl TextRendererSettings {
         self.rgb_color = color;
         self
     }
+}
+
+fn create_scaler(
+    screen_height: usize,
+    font: FontRef<'static>,
+    settings: &TextRendererSettings,
+) -> (Box<ScaleContext>, Scaler<'static>) {
+    let mut scaler_context = Box::new(ScaleContext::new());
+    let scaler_context_ref = unsafe {
+        std::mem::transmute::<&mut ScaleContext, &'static mut ScaleContext>(scaler_context.as_mut())
+    };
+    let scaler = scaler_context_ref
+        .builder(font)
+        .size(screen_height as f32 * settings.resolution * settings.scale_factor_group_size)
+        .build();
+    (scaler_context, scaler)
 }

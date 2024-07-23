@@ -29,7 +29,8 @@ export const DropArea: FC<IDropAreaProps> = ({dragging, onDrop}) => {
 
                         "& .drop:hover": {backgroundColor: dropColor},
                         ".background": {
-                            opacity: 0.7,
+                            // opacity: 0.7,
+                            opacity: 0.0,
                             backgroundColor: theme.palette.white,
                         },
                     })}>

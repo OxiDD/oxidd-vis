@@ -33,13 +33,14 @@ impl LayerRenderer {
     pub fn new<D: LayerDivisionRenderer + 'static>(
         context: &WebGl2RenderingContext,
         layer_divider: D,
+        screen_height: usize,
         font_data: Vec<u8>,
         font_settings: TextRendererSettings,
     ) -> LayerRenderer {
         LayerRenderer {
             division_renderer: Box::new(layer_divider),
             text_size: font_settings.text_size,
-            text_renderer: TextRenderer::new(context, font_data, font_settings),
+            text_renderer: TextRenderer::new(context, font_data, font_settings, screen_height),
         }
     }
 
@@ -67,16 +68,28 @@ impl LayerRenderer {
         );
     }
 
-    pub fn set_transform(&mut self, context: &WebGl2RenderingContext, transform: &Matrix4) {
+    pub fn set_transform_and_screen_height(
+        &mut self,
+        context: &WebGl2RenderingContext,
+        transform: &Matrix4,
+        screen_height: usize,
+    ) {
         self.division_renderer.set_transform(context, transform);
 
-        let margin = 0.5 * self.text_size * transform.0[0];
+        let margin = 0.5 * self.text_size;
         let modified_transform = &mut transform.clone();
-        modified_transform.0[3] = -0.5 + margin; // Shift by -1 on the x-axis + margin
-        modified_transform.0[7] += margin; // Shift up by margin
-        self.text_renderer
-            .set_transform(context, modified_transform);
+        modified_transform.0[3] = -0.5 + margin * transform.0[0]; // Shift by -1 on the x-axis + margin
+        modified_transform.0[7] += margin * transform.0[5]; // Shift up by margin
+        self.text_renderer.set_transform_and_screen_height(
+            context,
+            modified_transform,
+            screen_height,
+        );
     }
+
+    // pub fn set_screen_height(&mut self, context: &WebGl2RenderingContext, height: usize) {
+    //     self.text_renderer.set_screen_height(context, height);
+    // }
 
     pub fn render(
         &mut self,

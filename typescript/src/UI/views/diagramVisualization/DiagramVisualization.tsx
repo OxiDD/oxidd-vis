@@ -11,11 +11,13 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
     useEffect(() => {
         const el = ref.current;
         if (el) {
-            const observer = new ResizeObserver(() => {
+            const setSize = () => {
                 visualization.size.set({x: el.clientWidth, y: el.clientHeight}).commit();
-            });
-            observer.observe(el);
-            return () => observer.disconnect();
+            };
+            setSize();
+            const resizeObserver = new ResizeObserver(() => setTimeout(setSize)); // timeout used to prevent UI updates resulting from UI size change
+            resizeObserver.observe(el);
+            return () => resizeObserver.disconnect();
         }
     }, []);
     useEffect(() => {
@@ -36,5 +38,11 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
         }
     }, []);
     const moveListeners = useTransformCallbacks(visualization.transform);
-    return <ViewContainer ref={ref} {...moveListeners} className={css({padding: 0})} />;
+    return (
+        <ViewContainer
+            ref={ref}
+            {...moveListeners}
+            className={css({padding: 0, overflow: "hidden"})}
+        />
+    );
 };

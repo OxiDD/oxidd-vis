@@ -1,20 +1,20 @@
-import React, {FC} from "react";
+import React, {FC, useCallback} from "react";
 import {DiagramState} from "../../../state/diagrams/DiagramState";
 import {IconButton, Stack, useTheme} from "@fluentui/react";
 import {DiagramVisualizationState} from "../../../state/diagrams/DiagramVisualizationState";
 import {css} from "@emotion/css";
 import {useDragStart} from "../../../utils/useDragStart";
-import {useLayoutState} from "../../providers/LayoutStateContext";
 import {useWatch} from "../../../watchables/react/useWatch";
+import {useAppState} from "../../providers/AppStateContext";
 
 export const DiagramVisualizationSummary: FC<{
     visualization: DiagramVisualizationState;
     onDelete: () => void;
 }> = ({visualization, onDelete}) => {
     const theme = useTheme();
-    const layout = useLayoutState();
+    const app = useAppState();
     const ref = useDragStart((position, offset) => {
-        layout
+        app.views.layoutState
             .setDraggingData({
                 position,
                 offset,
@@ -23,6 +23,9 @@ export const DiagramVisualizationSummary: FC<{
             })
             .commit();
     });
+    const clickHeader = useCallback(() => {
+        app.open(visualization).commit();
+    }, []);
 
     return (
         <div
@@ -30,7 +33,7 @@ export const DiagramVisualizationSummary: FC<{
             style={{
                 backgroundColor: theme.palette.neutralLighter,
             }}>
-            <TitleBar visualization={visualization}>
+            <TitleBar visualization={visualization} onClick={clickHeader}>
                 <Stack.Item>
                     <IconButton
                         className={css({height: "100%"})}
@@ -46,7 +49,8 @@ export const DiagramVisualizationSummary: FC<{
 
 const TitleBar: FC<{
     visualization: DiagramVisualizationState;
-}> = ({visualization, children}) => {
+    onClick?: () => void;
+}> = ({visualization, children, onClick}) => {
     const theme = useTheme();
     const watch = useWatch();
     return (
@@ -56,6 +60,7 @@ const TitleBar: FC<{
                 backgroundColor: theme.palette.neutralLighter,
             })}>
             <Stack.Item
+                onClick={onClick}
                 grow
                 className={css({
                     padding: theme.spacing.s1,

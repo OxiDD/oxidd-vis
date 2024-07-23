@@ -547,17 +547,20 @@ impl<T: Tag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, 
     }
 
     fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID> {
-        self.group_by_id.get(&group).map_or_else(
-            || Vec::default().into_iter(),
-            |group| {
-                group
-                    .nodes
-                    .iter()
-                    .map(|&id| id)
-                    .collect::<Vec<NodeID>>()
-                    .into_iter()
-            },
-        )
+        self.group_by_id
+            .get(&group)
+            .map_or_else(
+                || Vec::default().into_iter(),
+                |group| {
+                    group
+                        .nodes
+                        .iter()
+                        .map(|&id| id)
+                        .collect::<Vec<NodeID>>()
+                        .into_iter()
+                },
+            )
+            .sorted()
     }
 
     fn get_group(&self, node: NodeID) -> NodeGroupID {
