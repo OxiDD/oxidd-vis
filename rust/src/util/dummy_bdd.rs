@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use oxidd::{util::Borrowed, Edge, InnerNode, Manager, ManagerRef};
 use oxidd::{BooleanFunction, Function};
 use oxidd_manager_index::node::fixed_arity::NodeWithLevel;
@@ -99,19 +100,21 @@ impl DummyFunction {
             let node_text = &data[data.find(".nodes").unwrap()..data.find(".end").unwrap()];
             let nodes_data = node_text.split("\n").filter_map(|node| {
                 let parts = node.trim().split(" ").collect::<Vec<&str>>();
-                if parts.len() == 4 {
+                if parts.len() >= 4 {
                     let id: NodeID = parts[0].parse().unwrap();
                     let level = parts[1].parse();
-                    let true_b: NodeID = parts[2].parse().unwrap();
-                    let false_b: NodeID = parts[3].parse().unwrap();
-                    Some((id, level, true_b, false_b))
+                    Some((
+                        id,
+                        level,
+                        parts[2..].iter().map(|v| v.parse().unwrap()).collect_vec(),
+                    ))
                 } else {
                     None
                 }
             });
             let mut root = Option::None;
             let mut max_level = 0;
-            for (_, level, _, _) in nodes_data.clone() {
+            for (_, level, _) in nodes_data.clone() {
                 let Ok(level) = level else { continue };
 
                 if level > max_level {
@@ -119,7 +122,7 @@ impl DummyFunction {
                 }
             }
 
-            for (id, level, _, _) in nodes_data.clone() {
+            for (id, level, _) in nodes_data.clone() {
                 manager.add_node_level(
                     id.clone(),
                     if let Ok(level) = level {
@@ -133,18 +136,17 @@ impl DummyFunction {
                 }
             }
 
-            for (id, level, true_b, false_b) in nodes_data {
+            for (id, level, children) in nodes_data {
                 let Ok(_) = level else { continue }; // Filter out terminals
 
                 // let is_terminal = |_: NodeID| false;
                 // let is_terminal = |to: NodeID| to == 1 || to == 2;
                 let is_terminal = |to: NodeID| to == 1; // Only filter connections to false
 
-                if !is_terminal(true_b) {
-                    manager.add_edge(id.clone(), true_b, manager_ref.clone());
-                }
-                if !is_terminal(false_b) {
-                    manager.add_edge(id.clone(), false_b, manager_ref.clone());
+                for child in children {
+                    if !is_terminal(child) {
+                        manager.add_edge(id.clone(), child, manager_ref.clone());
+                    }
                 }
             }
 
