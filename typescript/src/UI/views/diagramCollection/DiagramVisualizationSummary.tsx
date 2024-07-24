@@ -5,16 +5,16 @@ import {DiagramVisualizationState} from "../../../state/diagrams/DiagramVisualiz
 import {css} from "@emotion/css";
 import {useDragStart} from "../../../utils/useDragStart";
 import {useWatch} from "../../../watchables/react/useWatch";
-import {useAppState} from "../../providers/AppStateContext";
+import {useViewManager} from "../../providers/ViewManagerContext";
 
 export const DiagramVisualizationSummary: FC<{
     visualization: DiagramVisualizationState;
     onDelete: () => void;
 }> = ({visualization, onDelete}) => {
     const theme = useTheme();
-    const app = useAppState();
+    const viewManager = useViewManager();
     const ref = useDragStart((position, offset) => {
-        app.views.layoutState
+        viewManager.layoutState
             .setDraggingData({
                 position,
                 offset,
@@ -24,7 +24,7 @@ export const DiagramVisualizationSummary: FC<{
             .commit();
     });
     const clickHeader = useCallback(() => {
-        app.open(visualization).commit();
+        viewManager.open(visualization).commit();
     }, []);
 
     return (

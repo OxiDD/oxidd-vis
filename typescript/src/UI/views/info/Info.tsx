@@ -3,13 +3,13 @@ import React, {FC} from "react";
 import {ViewState} from "../../../state/views/ViewState";
 import {AppState} from "../../../state/AppState";
 import {css} from "@emotion/css";
-import {ViewContainer} from "../../components/ViewContainer";
-import {CenteredContainer} from "../../components/CenteredContainer";
+import {ViewContainer} from "../../components/layout/ViewContainer";
+import {CenteredContainer} from "../../components/layout/CenteredContainer";
 
 export const Info: FC<{app: AppState}> = ({app}) => {
     const theme = useTheme();
     const link = (text: string, openView: ViewState) => (
-        <Link onClick={() => app.open(openView).commit()}>{text}</Link>
+        <Link onClick={() => app.views.open(openView).commit()}>{text}</Link>
     );
 
     return (

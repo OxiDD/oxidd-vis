@@ -1,8 +1,8 @@
 import React, {FC} from "react";
 import {DiagramCollectionState} from "../../../state/diagrams/DiagramCollectionState";
-import {ViewContainer} from "../../components/ViewContainer";
+import {ViewContainer} from "../../components/layout/ViewContainer";
 import {useWatch} from "../../../watchables/react/useWatch";
-import {CenteredContainer} from "../../components/CenteredContainer";
+import {CenteredContainer} from "../../components/layout/CenteredContainer";
 import {DefaultButton, Stack, useTheme} from "@fluentui/react";
 import {DiagramSummary} from "./DiagramSummary";
 

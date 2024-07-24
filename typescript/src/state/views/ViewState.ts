@@ -55,10 +55,18 @@ export abstract class ViewState {
     /** All the descendant views of this view */
     public readonly descendants: IWatchable<ViewState[]> = new Derived(watch => [
         this,
-        ...watch(this.children).flatMap(child => {
-            return watch(child.descendants);
-        }),
+        ...watch(this.children).flatMap(child => watch(child.descendants)),
     ]);
+
+    /** The groups of views that should be shown together whenever possible */
+    public readonly groups: IWatchable<
+        {
+            /** The sources for which interaction should automatically focus the targets (default to the targets) */
+            sources?: string[];
+            /** The targets that should be revealed */
+            targets: string[];
+        }[]
+    > = new Derived(watch => watch(this.children).flatMap(child => watch(child.groups)));
 
     /** A callback for when the UI for this view is fully closed */
     public onCloseUI(): void {}

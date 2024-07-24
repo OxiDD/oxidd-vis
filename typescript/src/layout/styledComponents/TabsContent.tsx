@@ -1,4 +1,5 @@
-import React, {FC, useEffect, useMemo, useRef} from "react";
+import React, {FC, forwardRef, useEffect, useMemo, useRef} from "react";
+import {mergeRefs} from "react-merge-refs";
 import {ITabsContentProps} from "../_types/props/ITabsContentProps";
 import {css} from "@emotion/css";
 
@@ -10,21 +11,21 @@ export const TabsContent: FC<ITabsContentProps> = ({contents}) => (
     </>
 );
 
-export const TabTarget: FC<{selected: boolean; element: HTMLElement}> = ({
-    selected,
-    element,
-}) => {
-    const ref = useRef<HTMLDivElement>(null);
+export const TabTarget = forwardRef<
+    HTMLDivElement,
+    {selected: boolean; element: HTMLElement} & React.HTMLAttributes<HTMLDivElement>
+>(({selected, element, ...rest}, fRef) => {
+    const lRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
-        const el = ref.current;
+        const el = lRef.current;
         if (!el) return;
 
         el.appendChild(element);
-    }, []);
+    }, [lRef]);
 
     return (
         <div
-            ref={ref}
+            ref={mergeRefs([lRef, fRef])}
             className={css({
                 flexGrow: 1,
                 flexShrink: 1,
@@ -38,6 +39,7 @@ export const TabTarget: FC<{selected: boolean; element: HTMLElement}> = ({
                     minWidth: 0,
                 },
             })}
+            {...rest}
         />
     );
-};
+});

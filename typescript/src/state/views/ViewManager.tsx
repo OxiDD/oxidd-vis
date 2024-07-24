@@ -13,6 +13,8 @@ import {IViewManager} from "../_types/IViewManager";
 import {IContent} from "../../layout/_types/IContentGetter";
 import {PassiveDerived} from "../../watchables/PassiveDerived";
 import {Constant} from "../../watchables/Constant";
+import {IViewLocationHint} from "../_types/IViewLocationHint";
+import {IPanelTabsState} from "../../layout/_types/IPanelState";
 
 /**
  * The manager of all different views and the layout corresponding to them.
@@ -33,6 +35,20 @@ export class ViewManager implements IViewManager {
     /** All the views that are available from the root */
     protected readonly viewStates = new Derived(watch => watch(this.root.descendants));
 
+    /** All the groups that are present in the application, for showing all elements of the group at once */
+    protected readonly viewGroups = new Derived(watch => {
+        const groups = watch(this.root.groups);
+        const groupMap = new Map<string, Set<string>[]>();
+        for (const group of groups) {
+            const groupSet = new Set(group.targets);
+            for (const ID of group.sources ?? group.targets) {
+                const cur = groupMap.get(ID) ?? [];
+                groupMap.set(ID, [...cur, groupSet]);
+            }
+        }
+        return groupMap;
+    });
+
     /**
      * Creates a new view manager
      * @param root The root view of the application
@@ -42,37 +58,6 @@ export class ViewManager implements IViewManager {
         this.root = root;
         this.layoutState = new LayoutState(closeEmptyPanels);
         this.layout = this.layoutState.layoutData;
-    }
-
-    /**
-     * Reveals the given view, adding the view if not already present
-     * @param view The view to be shown
-     * @returns The mutator to commit the change
-     */
-    public show(view: ViewState): IMutator {
-        return chain(push => {
-            const panels = this.layoutState.allTabPanels.get();
-
-            const targetID = this.openAtTargetID.get();
-            const targetPanel =
-                panels.find(p => p.tabs.some(({id}) => id == targetID)) ?? panels[0];
-
-            const onClose = () => {
-                const stillShown = this.layoutState.allTabs.get().some(({id}) => view.ID);
-                if (stillShown) return;
-
-                view.onCloseUI();
-            };
-            push(
-                this.layoutState.openTab(
-                    targetPanel.id,
-                    view.ID,
-                    onClose,
-                    targetID ?? undefined
-                )
-            );
-            push(this.layoutState.selectTab(targetPanel.id, view.ID));
-        });
     }
 
     /**
@@ -131,6 +116,194 @@ export class ViewManager implements IViewManager {
                 content: <Component view={viewState} />,
                 forceOpen: !watch(viewState.canClose),
             };
+        });
+    }
+
+    /**
+     * Opens the given view, or focuses it if already opened
+     * @param view The view state
+     * @param locationHints A list of location hints, picking the first one for which the target was found
+     * @returns The mutator to commit the change
+     */
+    public open(view: ViewState, locationHints?: IViewLocationHint[]): IMutator {
+        const layout = this.layoutState;
+        const getContainer = (ID: string | null | undefined) =>
+            ID ? layout.allTabPanels.get().find(({id}) => id == ID) : undefined;
+
+        return chain(push => {
+            const defaultHint: IViewLocationHint = {createId: "default"};
+            const viewID = view.ID;
+            const existingContainer = this.getTabParent(viewID);
+            if (existingContainer) {
+                push(layout.selectTab(existingContainer.id, viewID));
+            } else {
+                // Find the location hinting based on what container can be found
+                const location = [...(locationHints ?? []), defaultHint].reduce(
+                    (cur, hint) => {
+                        if (cur) return cur;
+
+                        if (hint.targetId == undefined) return hint;
+                        if (!hint.targetType || hint.targetType == "view") {
+                            const container = this.getTabParent(hint.targetId);
+                            if (container)
+                                return {
+                                    ...hint,
+                                    targetId: container.id,
+                                    targetType: "panel",
+                                };
+                        }
+                        if (!hint.targetType || hint.targetType == "panel") {
+                            const container = getContainer(hint.targetId);
+                            if (container) return hint;
+                        }
+                        return null;
+                    },
+                    null
+                )!;
+
+                // Possibly create a new container relative to the target
+                const openSide = location?.side ?? "in";
+                const mainId = layout.layoutState.get().id;
+                const openRatio = location?.weightRatio ?? 1;
+                let openContainerID: string | null = null;
+                if (openSide == "in") {
+                    const exists = getContainer(location.targetId);
+                    if (exists) {
+                        openContainerID = location.targetId!;
+                    } else {
+                        openContainerID = push(
+                            layout.addPanel(
+                                mainId,
+                                "east",
+                                openRatio,
+                                location.createId ?? location.targetId
+                            )
+                        );
+                    }
+                } else {
+                    openContainerID = push(
+                        layout.addPanel(
+                            location.targetId ?? mainId,
+                            openSide,
+                            openRatio,
+                            location.createId
+                        )
+                    );
+                }
+                const openContainer = getContainer(openContainerID);
+                if (!openContainer) return;
+
+                // Find the tab index
+                let beforeTabID;
+                if (location?.tabIndex != undefined) {
+                    let index;
+                    if (typeof location.tabIndex.target == "number") {
+                        index = location.tabIndex.target;
+                    } else {
+                        index = openContainer.tabs.findIndex(
+                            ({id}) => id == location.tabIndex?.target
+                        );
+                    }
+
+                    if (index != undefined) {
+                        if (location.tabIndex.position == "after") index += 1;
+
+                        beforeTabID = openContainer.tabs[index]?.id;
+                    }
+                }
+
+                // Open and select the tab
+                const onClose = () => {
+                    const stillShown = this.layoutState.allTabs
+                        .get()
+                        .some(({id}) => id == view.ID);
+                    if (stillShown) return;
+
+                    view.onCloseUI();
+                };
+                push(layout.openTab(openContainer.id, viewID, onClose, beforeTabID));
+                push(layout.selectTab(openContainer.id, viewID));
+            }
+        });
+    }
+
+    /**
+     * Retrieves the parent container that has a given tab ID
+     * @param ID The ID of the tab
+     * @returns The container that was found
+     */
+    protected getTabParent(ID: string | undefined): IPanelTabsState | undefined {
+        if (!ID) return undefined;
+        return this.layoutState.allTabPanels
+            .get()
+            .find(({tabs}) => tabs.some(({id}) => id == ID));
+    }
+
+    /**
+     * Closes the given view
+     * @param view The view state to close
+     * @returns The mutator to commit changes
+     */
+    public close(view: ViewState): IMutator {
+        return chain(push => {
+            if (!view.canClose.get()) return;
+
+            const layout = this.layoutState;
+            const containers = layout.allTabPanels.get();
+            const viewID = view.ID;
+            const parent = containers.find(({tabs}) => tabs.some(({id}) => id == viewID));
+            if (parent) push(layout.closeTab(parent.id, viewID));
+        });
+    }
+
+    /**
+     * Checks whether the given view is opened
+     * @param view The view to check the opened state for
+     * @returns Whether the view is currently opened
+     */
+    public isOpen(view: ViewState | string): IWatchable<boolean> {
+        const viewID = typeof view == "string" ? view : view.ID;
+        return new PassiveDerived(watch => {
+            const layout = this.layoutState;
+            const containers = watch(layout.allTabPanels);
+            return containers.some(({tabs}) => tabs.some(({id}) => id == viewID));
+        });
+    }
+
+    /**
+     * Checks whether the given view is visible (opened and selected)
+     * @param view The view to check the visibility state for
+     * @param hook The hook to subscribe to changes
+     * @returns Whether the view is visible currently
+     */
+    public isVisible(view: ViewState | string): IWatchable<boolean> {
+        const viewID = typeof view == "string" ? view : view.ID;
+        return new PassiveDerived(watch => {
+            const layout = this.layoutState;
+            const containers = watch(layout.allTabPanels);
+            return containers.some(({selected}) => selected == viewID);
+        });
+    }
+
+    /**
+     * Focuses on the view if it's opened, as well as any groups it is part of
+     * @param view The view to be shown
+     * @returns A mutator to commit the change
+     */
+    public focus(view: ViewState | string): IMutator {
+        const viewID = typeof view == "string" ? view : view.ID;
+        return chain(push => {
+            const layout = this.layoutState;
+            const groups = this.viewGroups.get().get(viewID) ?? [];
+            const show = (ID: string) => {
+                if (this.isVisible(ID).get()) return;
+
+                const container = this.getTabParent(ID);
+                if (!container) return;
+                push(layout.selectTab(container.id, ID));
+            };
+            for (const group of groups) for (const ID of group) show(ID);
+            show(viewID);
         });
     }
 }

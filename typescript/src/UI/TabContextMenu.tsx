@@ -18,12 +18,13 @@ import {
     TextField,
 } from "@fluentui/react";
 import {ViewState} from "../state/views/ViewState";
+import {useViewManager} from "./providers/ViewManagerContext";
 
 export const TabContextMenu: FC<{
     children: (handler: (panel: ViewState, event: RMouseEvent) => void) => ReactNode;
-    state: AppState;
-}> = ({children, state}) => {
+}> = ({children}) => {
     const [targetPos, setTargetPos] = useState<MouseEvent | null>(null);
+    const viewManager = useViewManager();
     const [view, setPanel] = useState<ViewState | null>(null);
     const onShowContextMenu = useCallback((panel: ViewState, e: RMouseEvent) => {
         setPanel(panel);
@@ -38,7 +39,7 @@ export const TabContextMenu: FC<{
                 text: "Close tab",
                 iconProps: {iconName: "Cancel"},
                 onClick: () => {
-                    if (view) state.close(view).commit();
+                    if (view) viewManager.close(view).commit();
                 },
             },
             {
@@ -51,7 +52,7 @@ export const TabContextMenu: FC<{
                 },
             },
         ],
-        [state, view]
+        [viewManager, view]
     );
 
     const [isModalOpen, setModalOpen] = useState(false);

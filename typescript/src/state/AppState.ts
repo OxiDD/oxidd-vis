@@ -1,5 +1,3 @@
-import {DerivedField} from "../utils/DerivedField";
-import {proxy} from "../utils/proxyObject";
 import {Constant} from "../watchables/Constant";
 import {Derived} from "../watchables/Derived";
 import {PassiveDerived} from "../watchables/PassiveDerived";
@@ -17,6 +15,7 @@ import {IGlobalSettings} from "./_types/IGlobalSettings";
 import {ISidebarTab} from "./_types/ISidebarTab";
 import {ViewManager} from "./views/ViewManager";
 import {ViewState} from "./views/ViewState";
+import {IViewLocationHint} from "./_types/IViewLocationHint";
 
 const APP_STORAGE_NAME = "BDD-viewer";
 export class AppState extends ViewState {
@@ -103,98 +102,5 @@ export class AppState extends ViewState {
                     )
                 )
             );
-    }
-
-    // Special tabs interactions through the sidebar
-    /**
-     * Opens the given view
-     * @param view The view state
-     * @returns The mutator to commit the change
-     */
-    public open(view: ViewState): IMutator {
-        return chain(push => {
-            const layout = this.views.layoutState;
-            const containers = layout.allTabPanels.get();
-            const viewID = view.ID;
-            const container = containers.find(container =>
-                container.tabs.some(({id}) => id == viewID)
-            );
-            if (container) {
-                push(layout.selectTab(container.id, viewID));
-            } else {
-                let targetContainerID = "sidebar";
-
-                // Search for the panel id to open in
-                const data = this.tabs.find(({view: v}) => v == view);
-                if (data?.openIn) {
-                    const isContainer = containers.some(({id}) => id == data.openIn);
-                    if (isContainer) targetContainerID = data.openIn;
-                    else {
-                        const container = containers.find(({tabs}) =>
-                            tabs.some(({id}) => id == data.openIn)
-                        );
-                        if (container) targetContainerID = container.id;
-                    }
-                }
-
-                //Open in the panel
-                const targetContainer = containers.find(
-                    ({id}) => id == targetContainerID
-                );
-                if (!targetContainer) {
-                    const mainId = layout.layoutState.get().id;
-                    const parentId = push(
-                        layout.addPanel(mainId, "west", 0.6, targetContainerID)
-                    );
-                    if (!parentId) return;
-                }
-                push(layout.openTab(targetContainerID, viewID));
-                push(layout.selectTab(targetContainerID, viewID));
-            }
-        });
-    }
-
-    /**
-     * Closes the given view
-     * @param view The view state to close
-     * @returns The mutator to commit changes
-     */
-    public close(view: ViewState): IMutator {
-        return chain(push => {
-            if (!view.canClose.get()) return;
-
-            const layout = this.views.layoutState;
-            const containers = layout.allTabPanels.get();
-            const viewID = view.ID;
-            const parent = containers.find(({tabs}) => tabs.some(({id}) => id == viewID));
-            if (parent) push(layout.closeTab(parent.id, viewID));
-        });
-    }
-
-    /**
-     * Checks whether the given view is opened
-     * @param view The view to check the opened state for
-     * @returns Whether the view is currently opened
-     */
-    public isOpen(view: ViewState): IWatchable<boolean> {
-        return new PassiveDerived(watch => {
-            const layout = this.views.layoutState;
-            const containers = watch(layout.allTabPanels);
-            return containers.some(({tabs}) => tabs.some(({id}) => id == view.ID));
-        });
-    }
-
-    /**
-     * Checks whether the given view is visible (opened and selected)
-     * @param view The view to check the visibility state for
-     * @param hook The hook to subscribe to changes
-     * @returns Whether the view is visible currently
-     */
-    public isVisible(view: ViewState): IWatchable<boolean> {
-        return new PassiveDerived(watch => {
-            const layout = this.views.layoutState;
-            const containers = watch(layout.allTabPanels);
-            return containers.some(({selected}) => selected == view.ID);
-        });
     }
 }

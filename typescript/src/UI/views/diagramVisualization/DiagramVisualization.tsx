@@ -2,7 +2,7 @@ import React, {FC, useEffect, useRef} from "react";
 import {DiagramVisualizationState} from "../../../state/diagrams/DiagramVisualizationState";
 import {useTransformCallbacks} from "./useTransformCallbacks";
 import {css} from "@emotion/css";
-import {ViewContainer} from "../../components/ViewContainer";
+import {ViewContainer} from "../../components/layout/ViewContainer";
 
 export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}> = ({
     visualization,
@@ -42,7 +42,7 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
         <ViewContainer
             ref={ref}
             {...moveListeners}
-            className={css({padding: 0, overflow: "hidden"})}
+            css={{padding: 0, overflow: "hidden"}}
         />
     );
 };

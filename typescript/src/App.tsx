@@ -9,7 +9,7 @@ import {chain} from "./watchables/mutator/chain";
 import {Derived} from "./watchables/Derived";
 import {Toggle} from "@fluentui/react";
 import {useWatch} from "./watchables/react/useWatch";
-import {LayoutWithClose} from "./UI/LayoutWithClose";
+import {CustomLayout} from "./UI/components/layout/CustomLayout";
 import {SettingsState} from "./state/SettingsState";
 import {IViewComponent} from "./state/_types/IViewComponent";
 import {Sidebar} from "./UI/SideBar";
@@ -18,13 +18,13 @@ import {ThemeProvider as FluentThemeProvider} from "@fluentui/react";
 import {darkTheme, lightTheme} from "./theme";
 import {Settings} from "./UI/views/settings/Settings";
 import {Info} from "./UI/views/info/Info";
-import {ViewContainer} from "./UI/components/ViewContainer";
+import {ViewContainer} from "./UI/components/layout/ViewContainer";
 import {DiagramCollectionState} from "./state/diagrams/DiagramCollectionState";
 import {DiagramCollection} from "./UI/views/diagramCollection/DiagramCollection";
 import {ThemeProvider} from "./UI/providers/ThemeProvider";
 import {DiagramVisualizationState} from "./state/diagrams/DiagramVisualizationState";
 import {DiagramVisualization} from "./UI/views/diagramVisualization/DiagramVisualization";
-import {AppStateProvider} from "./UI/providers/AppStateContext";
+import {ViewManagerProvider} from "./UI/providers/ViewManagerContext";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -43,14 +43,14 @@ export const App: FC = () => {
 
     return (
         <ThemeProvider state={app}>
-            <AppStateProvider value={app}>
+            <ViewManagerProvider value={app.views}>
                 <div style={{display: "flex", height: "100%"}}>
                     <Sidebar state={app} projectUrl="https://google.com" />
                     <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
                         <UserLayout state={app} />
                     </div>
                 </div>
-            </AppStateProvider>
+            </ViewManagerProvider>
         </ThemeProvider>
     );
 };
@@ -69,9 +69,9 @@ const Component: IViewComponent = ({view}) => {
 const UserLayout: FC<{state: AppState}> = ({state}) => {
     const watch = useWatch();
     return (
-        <TabContextMenu state={state}>
+        <TabContextMenu>
             {onContext => (
-                <LayoutWithClose
+                <CustomLayout
                     key={watch(state.configuration.profileID)} // Reinitialize when layout is switched
                     panelClosable={
                         // new Derived(watch =>

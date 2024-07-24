@@ -34,6 +34,15 @@ export class DiagramCollectionState extends ViewState {
     /** @override */
     public readonly children = new Derived(watch => watch(this.diagrams));
 
+    // TODO: remove this after testing
+    /** @override */
+    public readonly groups = new Derived(watch => {
+        const targets = watch(this._diagrams).flatMap(diagram =>
+            watch(diagram.visualizations).flatMap(({ID}) => ID)
+        );
+        return [{sources: [this.ID], targets}];
+    });
+
     /**
      * Creates a new diagram to store
      * TODO: add different functions for different diagram source types

@@ -91,16 +91,24 @@ export const SidebarButton: FC<{
     name: string;
     icon: string;
     view: ViewState;
+    openIn?: string;
     appState: AppState;
-}> = ({name, icon, view, appState}) => {
+}> = ({name, icon, view, appState, openIn}) => {
     const theme = useTheme();
     const tooltipId = useId(name);
     const watch = useWatch();
+    const views = appState.views;
     const onClick = useCallback(() => {
-        if (appState.isVisible(view).get()) appState.close(view).commit();
-        else appState.open(view).commit();
+        if (views.isVisible(view).get()) views.close(view).commit();
+        else
+            views
+                .open(view, [
+                    {targetId: openIn ?? "sidebar", targetType: "panel"},
+                    {createId: openIn ?? "sidebar", weightRatio: 0.4, side: "west"},
+                ])
+                .commit();
     }, []);
-    const isVisible = watch(appState.isVisible(view));
+    const isVisible = watch(views.isVisible(view));
 
     const iconEl = (
         <IconEl
