@@ -15,14 +15,14 @@ import {PassiveDerived} from "../../watchables/PassiveDerived";
 import {Constant} from "../../watchables/Constant";
 import {IViewLocationHint} from "../_types/IViewLocationHint";
 import {IPanelTabsState} from "../../layout/_types/IPanelState";
+import {Observer} from "../../watchables/Observer";
+import {all} from "../../watchables/mutator/all";
 
 /**
  * The manager of all different views and the layout corresponding to them.
  * Note, views may exist without have an associated tab (hence without being visible).
  */
 export class ViewManager implements IViewManager {
-    // protected viewStates = new Field<Record<string, ViewState>>({});
-
     /** The entire layout state */
     public readonly layoutState: LayoutState;
 
@@ -49,15 +49,38 @@ export class ViewManager implements IViewManager {
         return groupMap;
     });
 
+    /** An observer of deleted views */
+    protected deletedViewObserver: Observer<ViewState[] | boolean>;
+
     /**
      * Creates a new view manager
      * @param root The root view of the application
      * @param closeEmptyPanels Whether empty panels in the UI should automatically be closed
+     * @param autoCloseDeleted Whether to automatically close panels of deleted views
      */
-    public constructor(root: ViewState, closeEmptyPanels: IWatchable<boolean>) {
+    public constructor(
+        root: ViewState,
+        closeEmptyPanels: IWatchable<boolean>,
+        autoCloseDeleted: IWatchable<boolean>
+    ) {
         this.root = root;
         this.layoutState = new LayoutState(closeEmptyPanels);
+        this.layoutState.loadLayout({type: "tabs", tabs: [], id: "default"}).commit();
         this.layout = this.layoutState.layoutData;
+
+        const viewDeleteSource = new Derived(watch =>
+            watch(autoCloseDeleted) ? watch(this.viewStates) : false
+        );
+        this.deletedViewObserver = new Observer(viewDeleteSource).add(
+            (newViews, oldViews) => {
+                if (typeof newViews == "boolean" || typeof oldViews == "boolean") return;
+
+                const removedViews = new Set(oldViews);
+                for (const ID of newViews) removedViews.delete(ID);
+
+                all([...removedViews].map(view => this.onDeleteView(view))).commit();
+            }
+        );
     }
 
     /**
@@ -119,6 +142,13 @@ export class ViewManager implements IViewManager {
         });
     }
 
+    /** A hook invoked when a view is deleted from the tree */
+    protected onDeleteView(view: ViewState): IMutator {
+        // We want to close associated UI for this view
+        return this.close(view);
+    }
+
+    // View display tools
     /**
      * Opens the given view, or focuses it if already opened
      * @param view The view state

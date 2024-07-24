@@ -14,10 +14,15 @@ export const DiagramVisualizationSummary: FC<{
     const theme = useTheme();
     const viewManager = useViewManager();
     const ref = useDragStart((position, offset) => {
-        viewManager.layoutState
+        const layout = viewManager.layoutState;
+        const container = layout.allTabPanels
+            .get()
+            .find(c => c.tabs.some(({id}) => id == visualization.ID));
+        layout
             .setDraggingData({
                 position,
                 offset,
+                removeFromPanelId: container?.id,
                 preview: <TitleBar visualization={visualization} />,
                 targetId: visualization.ID,
             })

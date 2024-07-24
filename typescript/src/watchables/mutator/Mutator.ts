@@ -122,7 +122,8 @@ export class Mutator<I = void, R = void> implements IMutator<R> {
 }
 
 /** A dummy mutator that can be used when a mutator return value is expected, but no mutation is necessary */
-export const dummyMutator = new Mutator(
-    () => {},
-    () => {}
-);
+export const dummyMutator = () =>
+    new Mutator(
+        () => {},
+        () => {}
+    );

@@ -16,13 +16,18 @@ import {ISidebarTab} from "./_types/ISidebarTab";
 import {ViewManager} from "./views/ViewManager";
 import {ViewState} from "./views/ViewState";
 import {IViewLocationHint} from "./_types/IViewLocationHint";
+import {Field} from "../watchables/Field";
 
 const APP_STORAGE_NAME = "BDD-viewer";
 export class AppState extends ViewState {
+    /** Whether to automatically close deleted. This has to be initialized to false to prevent the ViewManager from reading properties on the appState too early */
+    protected readonly autoCloseDeleted = new Field(false);
+
     /** The views that are shown in the application */
     public readonly views: ViewManager = new ViewManager(
         this,
-        new Derived(watch => watch(this.settings.layout.deleteUnusedPanels))
+        new Derived(watch => watch(this.settings.layout.deleteUnusedPanels)),
+        this.autoCloseDeleted
     );
 
     /** The user configuration manager */
@@ -47,13 +52,12 @@ export class AppState extends ViewState {
             icon: "GitGraph",
             name: "Diagrams",
             view: this.diagrams,
-            openIn: "root",
         },
         {
             icon: "Info",
             name: "Info",
             view: this,
-            openIn: "root",
+            openIn: "default",
             skipSerialization: true,
         },
         {
@@ -74,6 +78,8 @@ export class AppState extends ViewState {
     public constructor() {
         super("app");
         this.name.set("Info").commit();
+
+        this.autoCloseDeleted.set(true).commit(); // TODO: initialize to a setting value
     }
 
     /** @override */
@@ -98,7 +104,7 @@ export class AppState extends ViewState {
                         ([dataName, data]) =>
                             this.tabs
                                 .find(({name}) => name == dataName)
-                                ?.view.deserialize(data) ?? dummyMutator
+                                ?.view.deserialize(data) ?? dummyMutator()
                     )
                 )
             );

@@ -104,7 +104,7 @@ export const SidebarButton: FC<{
             views
                 .open(view, [
                     {targetId: openIn ?? "sidebar", targetType: "panel"},
-                    {createId: openIn ?? "sidebar", weightRatio: 0.4, side: "west"},
+                    {createId: openIn ?? "sidebar", weightRatio: 0.7, side: "west"},
                 ])
                 .commit();
     }, []);
