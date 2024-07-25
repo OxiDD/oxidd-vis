@@ -12,6 +12,7 @@ use crate::{
                 util::layered::layer_orderer::{EdgeMap, Order},
             },
         },
+        graph_structure::DrawTag,
         grouped_graph_structure::GroupedGraphStructure,
     },
     wasm_interface::NodeGroupID,
@@ -19,7 +20,7 @@ use crate::{
 
 pub struct DummyLayerPositioning;
 
-impl<T: Tag> NodePositioning<T> for DummyLayerPositioning {
+impl<T: DrawTag> NodePositioning<T> for DummyLayerPositioning {
     fn position_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T>,

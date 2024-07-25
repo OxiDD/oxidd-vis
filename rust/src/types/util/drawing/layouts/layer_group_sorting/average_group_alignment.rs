@@ -10,6 +10,7 @@ use crate::{
             layered_layout::LayerGroupSorting,
             util::layered::layer_orderer::{EdgeMap, Order},
         },
+        graph_structure::DrawTag,
         grouped_graph_structure::GroupedGraphStructure,
     },
     wasm_interface::NodeGroupID,
@@ -17,16 +18,16 @@ use crate::{
 
 pub struct AverageGroupAlignment;
 
-impl<T: Tag> LayerGroupSorting<T> for AverageGroupAlignment {
+impl<T: DrawTag> LayerGroupSorting<T> for AverageGroupAlignment {
     fn align_cross_layer_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T>,
+        _graph: &impl GroupedGraphStructure<T>,
         layers: &Vec<Order>,
-        edges: &EdgeMap,
+        _edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
-        dummy_group_start_id: NodeGroupID,
+        _dummy_group_start_id: NodeGroupID,
         // The ID such that any ID greater or equal represents a dummy node of an edge
-        dummy_edge_start_id: NodeGroupID,
+        _dummy_edge_start_id: NodeGroupID,
         // The owner of a given dummy node, such that multiple nodes derived from the same data can be considered as a group
         owners: &HashMap<NodeGroupID, NodeGroupID>,
     ) -> Vec<Order> {

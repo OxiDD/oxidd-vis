@@ -18,6 +18,7 @@ use crate::{
             layout_rules::LayoutRules,
         },
         edge_type::EdgeType,
+        graph_structure::DrawTag,
         group_manager::EdgeData,
         grouped_graph_structure::{EdgeCountData, GroupedGraphStructure, SourceReader},
     },
@@ -32,7 +33,7 @@ use super::util::{
 };
 
 /// The trait used to decide what ordering of nodes to use in the layout, including dummy nodes
-pub trait LayerOrdering<T: Tag> {
+pub trait LayerOrdering<T: DrawTag> {
     fn order_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T>,
@@ -48,7 +49,7 @@ pub trait LayerOrdering<T: Tag> {
 }
 
 /// The trait used to decide what positioning of nodes to use in the layout for the given node orders, including dummy nodes
-pub trait NodePositioning<T: Tag> {
+pub trait NodePositioning<T: DrawTag> {
     fn position_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T>,
@@ -64,7 +65,7 @@ pub trait NodePositioning<T: Tag> {
 }
 
 /// The trait used to decide what positioning of nodes to use in the layout for the given node orders, including dummy nodes
-pub trait LayerGroupSorting<T: Tag> {
+pub trait LayerGroupSorting<T: DrawTag> {
     fn align_cross_layer_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T>,
@@ -80,7 +81,7 @@ pub trait LayerGroupSorting<T: Tag> {
 }
 
 pub struct LayeredLayout<
-    T: Tag,
+    T: DrawTag,
     O: LayerOrdering<T>,
     G: LayerGroupSorting<T>,
     P: NodePositioning<T>,
@@ -92,7 +93,7 @@ pub struct LayeredLayout<
     tag: PhantomData<T>,
 }
 
-impl<T: Tag, O: LayerOrdering<T>, G: LayerGroupSorting<T>, P: NodePositioning<T>>
+impl<T: DrawTag, O: LayerOrdering<T>, G: LayerGroupSorting<T>, P: NodePositioning<T>>
     LayeredLayout<T, O, G, P>
 {
     pub fn new(
@@ -123,7 +124,7 @@ pub fn is_edge_dummy(node: NodeGroupID, dummy_edge_start_id: NodeGroupID) -> boo
 }
 
 impl<
-        T: Tag,
+        T: DrawTag,
         O: LayerOrdering<T>,
         S: LayerGroupSorting<T>,
         P: NodePositioning<T>,
@@ -217,7 +218,7 @@ fn add_to_edges(edges: &mut EdgeMap, from: NodeGroupID, to: NodeGroupID) {
         .insert(to);
 }
 
-fn add_groups_with_dummies<T: Tag>(
+fn add_groups_with_dummies<T: DrawTag>(
     graph: &impl GroupedGraphStructure<T>,
     layers: &mut Vec<Order>,
     edges: &mut EdgeMap,
@@ -256,7 +257,7 @@ fn add_groups_with_dummies<T: Tag>(
     (dummy_group_start_id, group_layers)
 }
 
-fn add_edges_with_dummies<T: Tag>(
+fn add_edges_with_dummies<T: DrawTag>(
     graph: &impl GroupedGraphStructure<T>,
     layers: &mut Vec<Order>,
     edges: &mut EdgeMap,
@@ -320,7 +321,7 @@ fn add_edges_with_dummies<T: Tag>(
     (edge_bend_nodes, edge_connection_nodes)
 }
 
-fn format_layout<T: Tag>(
+fn format_layout<T: DrawTag>(
     graph: &impl GroupedGraphStructure<T>,
     max_curve_offset: f32,
     node_positions: HashMap<usize, Point>,
@@ -392,6 +393,7 @@ fn format_layout<T: Tag>(
             .iter()
             .map(|&group_id| {
                 let (s, e) = graph.get_level_range(group_id);
+                console::log!(">-------");
                 (
                     group_id,
                     NodeGroupLayout {
@@ -408,18 +410,29 @@ fn format_layout<T: Tag>(
                         edges: graph
                             .get_children(group_id)
                             .into_iter()
-                            .group_by(
-                                |&EdgeCountData {
-                                     to,
-                                     from_level,
-                                     to_level,
-                                     edge_type,
-                                     count,
-                                 }| (to, from_level, to_level),
-                            )
+                            .enumerate()
+                            .map(|(index, ed)| {
+                                (
+                                    (
+                                        ed.to,
+                                        ed.from_level,
+                                        ed.to_level,
+                                        // An extra value such that grouping only occurs if the level delta is 1
+                                        if ed.to_level - ed.from_level == 1 {
+                                            0
+                                        } else {
+                                            index
+                                        },
+                                    ),
+                                    ed,
+                                )
+                            })
+                            .sorted_by_key(|(g, _ed)| *g)
+                            .group_by(|(g, _ed)| *g)
                             .into_iter()
-                            .flat_map(|(group, edge_datas)| {
-                                let edge_datas = edge_datas.collect_vec();
+                            .flat_map(|(_g, edge_datas)| {
+                                let edge_datas =
+                                    edge_datas.map(|(_g, ed)| ed).sorted().collect_vec();
                                 let len = edge_datas.len();
                                 edge_datas
                                     .iter()
@@ -455,7 +468,7 @@ fn format_layout<T: Tag>(
     }
 }
 
-fn format_edge<T: Tag>(
+fn format_edge<T: DrawTag>(
     edge: &EdgeCountData<T>,
     curve_offset: f32,
     group_id: NodeGroupID,

@@ -20,12 +20,12 @@ use crate::{
 };
 
 use super::{
-    graph_structure::GraphStructure,
+    graph_structure::{DrawTag, GraphStructure},
     grouped_graph_structure::{EdgeCountData, GroupedGraphStructure},
     source_tracker_manager::{SourceReader, SourceTrackerManager},
 };
 
-pub struct GroupManager<T: Tag, G: GraphStructure<T>> {
+pub struct GroupManager<T: DrawTag, G: GraphStructure<T>> {
     /// root: Rc<F>,
     /// node_by_id: HashMap<NodeID, F>,
     graph: G,
@@ -40,14 +40,14 @@ pub struct GroupManager<T: Tag, G: GraphStructure<T>> {
     sources: SourceTrackerManager,
 }
 
-#[derive(PartialEq, Eq, Clone)]
-pub struct EdgeData<T: Tag> {
+#[derive(PartialEq, Eq, Clone, Hash)]
+pub struct EdgeData<T: DrawTag> {
     pub to: NodeGroupID,
     pub from_level: LevelNo,
     pub to_level: LevelNo,
     pub edge_type: EdgeType<T>,
 }
-impl<T: Tag> EdgeData<T> {
+impl<T: DrawTag> EdgeData<T> {
     pub fn new(
         to: NodeGroupID,
         from_level: LevelNo,
@@ -62,24 +62,16 @@ impl<T: Tag> EdgeData<T> {
         }
     }
 }
-impl<T: Tag> Hash for EdgeData<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.to.hash(state);
-        self.from_level.hash(state);
-        self.to_level.hash(state);
-        self.edge_type.hash(state);
-    }
-}
 
-type EdgeCounts<T: Tag> = HashMap<EdgeData<T>, usize>;
-pub struct NodeGroup<T: Tag> {
+type EdgeCounts<T: DrawTag> = HashMap<EdgeData<T>, usize>;
+pub struct NodeGroup<T: DrawTag> {
     nodes: HashSet<NodeID>,
     out_edges: EdgeCounts<T>,
     in_edges: EdgeCounts<T>,
     layer_min: PriorityQueue<NodeID, Reverse<LevelNo>>,
     layer_max: PriorityQueue<NodeID, LevelNo>,
 }
-impl<T: Tag> Display for NodeGroup<T> {
+impl<T: DrawTag> Display for NodeGroup<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let min = self
             .layer_min
@@ -97,7 +89,7 @@ impl<T: Tag> Display for NodeGroup<T> {
 }
 
 // Helper methods
-impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
+impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
     fn get_node_group_mut(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<T> {
         self.group_by_id.get_mut(&group_id).unwrap()
     }
@@ -197,7 +189,7 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
 }
 
 // Main methods
-impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
+impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
     pub fn new(mut graph: G) -> GroupManager<T, G> {
         let root_id = graph.get_root();
         let root_level = graph.get_level(root_id);
@@ -461,7 +453,7 @@ impl<T: Tag, G: GraphStructure<T>> GroupManager<T, G> {
     }
 }
 
-impl<T: Tag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, G> {
+impl<T: DrawTag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, G> {
     type Tracker = SourceReader;
     fn get_root(&self) -> NodeGroupID {
         let root_node = &self.graph.get_root();

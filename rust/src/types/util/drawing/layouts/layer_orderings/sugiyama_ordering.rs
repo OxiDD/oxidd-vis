@@ -11,6 +11,7 @@ use crate::{
                 layer_orderer::{count_crossings, swap_edges, EdgeMap, LayerOrderer, Order},
             },
         },
+        graph_structure::DrawTag,
         grouped_graph_structure::GroupedGraphStructure,
     },
     util::logging::console,
@@ -44,7 +45,7 @@ impl SugiyamaOrdering {
     }
 }
 
-impl<T: Tag> LayerOrdering<T> for SugiyamaOrdering {
+impl<T: DrawTag> LayerOrdering<T> for SugiyamaOrdering {
     fn order_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T>,

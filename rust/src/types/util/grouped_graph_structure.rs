@@ -5,9 +5,9 @@ use oxidd_core::Tag;
 
 use crate::wasm_interface::{NodeGroupID, NodeID};
 
-use super::{edge_type::EdgeType, group_manager::EdgeData};
+use super::{edge_type::EdgeType, graph_structure::DrawTag, group_manager::EdgeData};
 
-pub trait GroupedGraphStructure<T: Tag> {
+pub trait GroupedGraphStructure<T: DrawTag> {
     type Tracker: SourceTracker;
     fn get_root(&self) -> NodeGroupID;
     fn get_all_groups(&self) -> Vec<NodeGroupID>;
@@ -22,15 +22,15 @@ pub trait GroupedGraphStructure<T: Tag> {
     fn get_source_reader(&mut self) -> Self::Tracker;
 }
 
-#[derive(PartialEq, Eq, Clone)]
-pub struct EdgeCountData<T: Tag> {
+#[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]
+pub struct EdgeCountData<T: DrawTag> {
     pub to: NodeGroupID,
     pub from_level: LevelNo,
     pub to_level: LevelNo,
     pub edge_type: EdgeType<T>,
     pub count: usize,
 }
-impl<T: Tag> EdgeCountData<T> {
+impl<T: DrawTag> EdgeCountData<T> {
     pub fn new(
         to: NodeGroupID,
         from_level: LevelNo,
@@ -56,7 +56,7 @@ impl<T: Tag> EdgeCountData<T> {
         }
     }
 }
-impl<T: Tag> Hash for EdgeCountData<T> {
+impl<T: DrawTag> Hash for EdgeCountData<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.to.hash(state);
         self.from_level.hash(state);

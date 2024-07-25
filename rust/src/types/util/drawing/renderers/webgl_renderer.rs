@@ -18,6 +18,7 @@ use crate::{
             },
         },
         edge_type::EdgeType,
+        graph_structure::DrawTag,
     },
     util::{logging::console, transformation::Transformation},
 };
@@ -35,7 +36,7 @@ use super::webgl::{
 };
 
 /// A simple renderer that uses webgl to draw nodes and edges
-pub struct WebglRenderer<T: Tag> {
+pub struct WebglRenderer<T: DrawTag> {
     webgl_context: WebGl2RenderingContext,
     node_renderer: NodeRenderer,
     edge_renderer: EdgeRenderer,
@@ -44,7 +45,7 @@ pub struct WebglRenderer<T: Tag> {
     screen_texture: ScreenTexture,
 }
 
-impl<T: Tag> WebglRenderer<T> {
+impl<T: DrawTag> WebglRenderer<T> {
     pub fn new(
         context: WebGl2RenderingContext,
         screen_texture: ScreenTexture,
@@ -108,7 +109,7 @@ impl<T: Tag> WebglRenderer<T> {
     }
 }
 
-impl<T: Tag> Renderer<T> for WebglRenderer<T> {
+impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
     fn set_transform(&mut self, transform: Transformation) {
         let height = transform.height as usize;
         // if self.screen_texture.get_size().1 != height {
@@ -185,7 +186,7 @@ impl<T: Tag> Renderer<T> for WebglRenderer<T> {
     }
 }
 
-impl<T: Tag> Drop for WebglRenderer<T> {
+impl<T: DrawTag> Drop for WebglRenderer<T> {
     fn drop(&mut self) {
         self.node_renderer.dispose(&self.webgl_context);
         self.edge_renderer.dispose(&self.webgl_context);

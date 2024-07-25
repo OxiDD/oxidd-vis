@@ -8,13 +8,14 @@ use crate::{
             layered_layout::LayerOrdering,
             util::layered::layer_orderer::{EdgeMap, Order},
         },
+        graph_structure::DrawTag,
         grouped_graph_structure::GroupedGraphStructure,
     },
     wasm_interface::NodeGroupID,
 };
 
 pub struct DummyLayerOrdering;
-impl<T: Tag> LayerOrdering<T> for DummyLayerOrdering {
+impl<T: DrawTag> LayerOrdering<T> for DummyLayerOrdering {
     fn order_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T>,

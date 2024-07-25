@@ -18,6 +18,7 @@ use crate::{
                 },
             },
         },
+        graph_structure::DrawTag,
         grouped_graph_structure::GroupedGraphStructure,
     },
     util::logging::console,
@@ -26,7 +27,7 @@ use crate::{
 
 pub struct BrandesKopfPositioning;
 
-impl<T: Tag> NodePositioning<T> for BrandesKopfPositioning {
+impl<T: DrawTag> NodePositioning<T> for BrandesKopfPositioning {
     fn position_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T>,

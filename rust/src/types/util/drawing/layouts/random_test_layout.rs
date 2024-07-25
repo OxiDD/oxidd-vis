@@ -12,13 +12,14 @@ use crate::types::util::{
         },
         layout_rules::LayoutRules,
     },
+    graph_structure::DrawTag,
     group_manager::GroupManager,
     grouped_graph_structure::{GroupedGraphStructure, SourceReader},
 };
 
 pub struct RandomTestLayout;
 
-impl<T: Tag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for RandomTestLayout {
+impl<T: DrawTag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for RandomTestLayout {
     fn layout(
         &mut self,
         graph: &G,

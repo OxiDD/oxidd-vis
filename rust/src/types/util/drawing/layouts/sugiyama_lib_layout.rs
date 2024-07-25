@@ -7,6 +7,7 @@ use crate::{
             diagram_layout::{DiagramLayout, Point},
             layout_rules::LayoutRules,
         },
+        graph_structure::DrawTag,
         grouped_graph_structure::{GroupedGraphStructure, SourceReader},
     },
     util::logging::console,
@@ -22,10 +23,10 @@ use super::{
     util::layered::layer_orderer::{EdgeMap, Order},
 };
 
-pub struct SugiyamaLibLayout<T: Tag> {
+pub struct SugiyamaLibLayout<T: DrawTag> {
     layout: LayeredLayout<T, DummyLayerOrdering, AverageGroupAlignment, SugiyamaLibPositioning>,
 }
-impl<T: Tag> SugiyamaLibLayout<T> {
+impl<T: DrawTag> SugiyamaLibLayout<T> {
     pub fn new(max_curve_offset: f32) -> SugiyamaLibLayout<T> {
         SugiyamaLibLayout {
             layout: LayeredLayout::new(
@@ -38,7 +39,7 @@ impl<T: Tag> SugiyamaLibLayout<T> {
     }
 }
 
-impl<T: Tag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for SugiyamaLibLayout<T> {
+impl<T: DrawTag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for SugiyamaLibLayout<T> {
     fn layout(
         &mut self,
         graph: &G,
@@ -50,7 +51,7 @@ impl<T: Tag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for SugiyamaLibLayou
     }
 }
 struct SugiyamaLibPositioning;
-impl<T: Tag> NodePositioning<T> for SugiyamaLibPositioning {
+impl<T: DrawTag> NodePositioning<T> for SugiyamaLibPositioning {
     fn position_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T>,

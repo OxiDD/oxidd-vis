@@ -267,7 +267,10 @@ impl TextRenderer {
                 })
                 .collect_vec()
         };
-        let grouped_glyphs = glyphs.iter().group_by(|(_, (_, _, index))| *index);
+        let grouped_glyphs = glyphs
+            .iter()
+            .sorted_by_key(|(_, (_, _, index))| *index)
+            .group_by(|(_, (_, _, index))| *index);
 
         for (index, group) in grouped_glyphs.into_iter() {
             let texture_size = self.get_cur_atlas().textures.get(index).unwrap().get_size();

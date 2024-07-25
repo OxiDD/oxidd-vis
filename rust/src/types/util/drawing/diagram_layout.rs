@@ -9,7 +9,7 @@ use oxidd::LevelNo;
 use oxidd_core::Tag;
 
 use crate::{
-    types::util::{edge_type::EdgeType, group_manager::EdgeData},
+    types::util::{edge_type::EdgeType, graph_structure::DrawTag, group_manager::EdgeData},
     util::rectangle::Rectangle,
     wasm_interface::{NodeGroupID, NodeID},
 };
@@ -152,14 +152,14 @@ impl<R: Clone, T: Mul<R, Output = T>> Mul<R> for Transition<T> {
 }
 
 #[derive(Clone)]
-pub struct NodeGroupLayout<T: Tag> {
+pub struct NodeGroupLayout<T: DrawTag> {
     pub position: Transition<Point>, // Bottom left point
     pub size: Transition<Point>,
     pub label: String,
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
     pub edges: HashMap<EdgeData<T>, EdgeLayout>,
 }
-impl<T: Tag> NodeGroupLayout<T> {
+impl<T: DrawTag> NodeGroupLayout<T> {
     // TODO: possibly consider the selection time? (animations should be quick and not have a huge effect however)
     pub fn get_rect(&self) -> Rectangle {
         let width = self.size.new.x;
@@ -197,7 +197,7 @@ pub struct LayerLayout {
 }
 
 #[derive(Clone)]
-pub struct DiagramLayout<T: Tag> {
+pub struct DiagramLayout<T: DrawTag> {
     pub groups: HashMap<NodeGroupID, NodeGroupLayout<T>>,
     /// Note: this vector has to be sorted in increasing order of start_layer
     pub layers: Vec<LayerLayout>,

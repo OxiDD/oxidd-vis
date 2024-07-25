@@ -19,6 +19,7 @@ use crate::{
             layout_rules::LayoutRules,
         },
         edge_type::EdgeType,
+        graph_structure::DrawTag,
         group_manager::{EdgeData, GroupManager},
         grouped_graph_structure::{GroupedGraphStructure, SourceReader},
     },
@@ -30,7 +31,7 @@ use crate::{
 /// A layout builder that takes another layout approach, and applies transitioning to it.
 /// This will make layout changes smoothly transition from the previous state to the new state.
 ///
-pub struct TransitionLayout<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> {
+pub struct TransitionLayout<T: DrawTag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> {
     layout: L,
     duration: u32,
     // TODO: see if these generics and  phantom data is even needed
@@ -38,7 +39,7 @@ pub struct TransitionLayout<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<
     graph: PhantomData<G>,
 }
 
-impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> TransitionLayout<T, G, L> {
+impl<T: DrawTag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> TransitionLayout<T, G, L> {
     pub fn new(layout: L) -> TransitionLayout<T, G, L> {
         TransitionLayout {
             layout,
@@ -49,7 +50,7 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> TransitionLayout
     }
 }
 
-impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G>
+impl<T: DrawTag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G>
     for TransitionLayout<T, G, L>
 {
     fn layout(
@@ -285,7 +286,7 @@ impl<T: Tag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G
     }
 }
 
-fn relate_elements<T: Tag, G: GroupedGraphStructure<T>>(
+fn relate_elements<T: DrawTag, G: GroupedGraphStructure<T>>(
     graph: &G,
     old: &DiagramLayout<T>,
     new: &DiagramLayout<T>,
@@ -489,105 +490,8 @@ fn transition_layers(
         transition_out(&old_layer, &mut out);
     }
 
-    console::log!(
-        "layers: {}",
-        out.iter()
-            .map(|layer| format!(
-                "([{}], [{}], [{}])",
-                layer.label.replace("\n", ""),
-                layer.exists,
-                layer.index
-            ))
-            .join(",\n ")
-    );
-
     out
 }
-// fn transition_layers(
-//     old: &Vec<LayerLayout>,
-//     new: &Vec<LayerLayout>,
-//     duration: u32,
-//     old_time: u32,
-//     get_current_float: &impl Fn(Transition<f32>) -> f32,
-// ) -> Vec<LayerLayout> {
-//     let prev_bottom = old
-//         .iter()
-//         .last()
-//         .map(|last_old| get_current_float(last_old.bottom));
-
-//     let boundaries = old
-//         .iter()
-//         .flat_map(|layer| [layer.start_layer, layer.end_layer + 1])
-//         .chain(
-//             new.iter()
-//                 .flat_map(|layer| [layer.start_layer, layer.end_layer + 1]),
-//         )
-//         .sorted()
-//         .dedup();
-
-//     let mut old_iter = old.iter().peekable();
-//     let mut new_iter = old.iter().peekable();
-//     for (start_layer_no, end_layer_no) in boundaries.clone().zip(boundaries.skip(1)) {
-//         // Progress to the right layer
-//         while let Some(old) = old_iter.peek() {
-//             if old.end_layer >= start_layer_no {
-//                 break;
-//             }
-//             old_iter.next();
-//         }
-//         while let Some(new) = new_iter.peek() {
-//             if new.end_layer >= start_layer_no {
-//                 break;
-//             }
-//             new_iter.next();
-//         }
-
-//         // Match new case
-//         match (old_iter.peek(), new_iter.peek()) {
-//             (Some(old), Some(new)) => {
-//                 let old_longer
-//             }
-//             _ => {}
-//         }
-//     }
-
-//     let mut out = Vec::new();
-
-//     let mut old_layers = old.iter().peekable();
-//     for new_layer in new {
-//         if let Some(old_layer) = old_layers.peek() {
-//             let in_old = new_layer.end_layer <= old_layer.end_layer;
-//             let in_new = old_layer.end_layer <= new_layer.end_layer;
-//             match (in_old, in_new) {
-//                 (true, true) => {}
-//                 (_, _) => {}
-//             }
-//         } else {
-//             out.push(LayerLayout {
-//                 top: Transition {
-//                     old_time,
-//                     duration,
-//                     old: prev_bottom.unwrap_or(new_layer.top.new),
-//                     new: new_layer.top.new,
-//                 },
-//                 bottom: Transition {
-//                     old_time,
-//                     duration,
-//                     old: prev_bottom.unwrap_or(new_layer.bottom.new),
-//                     new: new_layer.bottom.new,
-//                 },
-//                 exists: Transition {
-//                     old_time,
-//                     duration,
-//                     old: 0.,
-//                     new: new_layer.exists.new,
-//                 },
-//                 ..new_layer.clone()
-//             });
-//         }
-//     }
-//     out
-// }
 
 fn transition_layers_shift(
     old: &Vec<LayerLayout>,

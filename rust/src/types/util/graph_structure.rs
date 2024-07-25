@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    hash::Hash,
     iter::{self, FromIterator},
     rc::Rc,
 };
@@ -12,7 +13,7 @@ use crate::{util::logging::console, wasm_interface::NodeID};
 use super::edge_type::EdgeType;
 
 /// A graph structure trait used as the data to visualize
-pub trait GraphStructure<T: Tag> {
+pub trait GraphStructure<T: DrawTag> {
     fn get_root(&self) -> NodeID;
     /// Only returns connections that have already been discovered by calling get_children
     fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)>;
@@ -22,7 +23,10 @@ pub trait GraphStructure<T: Tag> {
     fn get_level_label(&self, level: LevelNo) -> String;
 }
 
-pub struct OxiddGraphStructure<T: Tag, F: Function>
+pub trait DrawTag: Tag + Hash + Ord {}
+impl DrawTag for () {}
+
+pub struct OxiddGraphStructure<T: DrawTag, F: Function>
 where
     for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
 {
@@ -31,7 +35,7 @@ where
     node_parents: HashMap<NodeID, HashSet<(EdgeType<T>, NodeID)>>,
 }
 
-impl<T: Tag, F: Function> OxiddGraphStructure<T, F>
+impl<T: DrawTag, F: Function> OxiddGraphStructure<T, F>
 where
     for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
 {
@@ -67,7 +71,7 @@ where
 }
 
 impl<
-        ET: Tag + 'static,
+        ET: DrawTag + 'static,
         T: 'static,
         E: Edge<Tag = ET> + 'static,
         N: InnerNode<E> + HasLevel + 'static,

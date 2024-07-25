@@ -54,6 +54,7 @@ use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::edge_type::EdgeType;
+use super::util::graph_structure::DrawTag;
 use super::util::graph_structure::GraphStructure;
 use super::util::graph_structure::OxiddGraphStructure;
 use super::util::group_manager::GroupManager;
@@ -130,7 +131,7 @@ where
 }
 
 pub struct BDDDiagramDrawer<
-    T: Tag,
+    T: DrawTag,
     G: GraphStructure<T>,
     R: Renderer<T>,
     L: LayoutRules<T, GroupManager<T, G>>,
@@ -140,7 +141,7 @@ pub struct BDDDiagramDrawer<
 }
 
 impl<
-        T: Tag + 'static,
+        T: DrawTag + 'static,
         G: GraphStructure<T> + 'static,
         R: Renderer<T>,
         L: LayoutRules<T, GroupManager<T, G>>,
@@ -200,7 +201,7 @@ impl<
     }
 }
 
-impl<T: Tag, G: GraphStructure<T>, R: Renderer<T>, L: LayoutRules<T, GroupManager<T, G>>>
+impl<T: DrawTag, G: GraphStructure<T>, R: Renderer<T>, L: LayoutRules<T, GroupManager<T, G>>>
     DiagramDrawer for BDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
