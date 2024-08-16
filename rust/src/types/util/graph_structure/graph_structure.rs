@@ -15,6 +15,7 @@ use crate::{util::logging::console, wasm_interface::NodeID};
 /// A graph structure trait used as the data to visualize
 pub trait GraphStructure<T: DrawTag, NL: Clone, LL: Clone> {
     fn get_root(&self) -> NodeID;
+    fn get_terminals(&self) -> Vec<NodeID>;
     /// Only returns connections that have already been discovered by calling get_children
     fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)>;
     /// This is only supported for nodeIDs that have been obtained from this interface before
@@ -34,12 +35,25 @@ pub trait GraphStructure<T: DrawTag, NL: Clone, LL: Clone> {
 pub type GraphListener = dyn Fn(&Vec<Change>) -> ();
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum Change {
-    NodeLabelChange { node: NodeID },
-    LevelChange { node: NodeID },
-    LevelLabelChange { level: LevelNo },
-    NodeConnectionsChange { node: NodeID },
-    NodeRemoval { node: NodeID },
-    NodeInsertion { node: NodeID },
+    NodeLabelChange {
+        node: NodeID,
+    },
+    LevelChange {
+        node: NodeID,
+    },
+    LevelLabelChange {
+        level: LevelNo,
+    },
+    NodeConnectionsChange {
+        node: NodeID,
+    },
+    NodeRemoval {
+        node: NodeID,
+    },
+    NodeInsertion {
+        node: NodeID,
+        source: Option<NodeID>,
+    },
 }
 
 pub trait DrawTag: Tag + Hash + Ord {}
@@ -47,8 +61,8 @@ impl DrawTag for () {}
 
 #[derive(Eq, PartialEq, Copy, Clone, PartialOrd, Ord, Hash)]
 pub struct EdgeType<T: DrawTag> {
-    tag: T,
-    index: i32,
+    pub tag: T,
+    pub index: i32,
 }
 impl<T: DrawTag> EdgeType<T> {
     pub fn new(tag: T, index: i32) -> EdgeType<T> {

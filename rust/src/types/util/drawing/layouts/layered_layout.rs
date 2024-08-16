@@ -8,6 +8,7 @@ use itertools::Itertools;
 use num_rational::Ratio;
 use oxidd::{LevelNo, NodeID};
 use oxidd_core::Tag;
+use wasm_bindgen::UnwrapThrowExt;
 
 use crate::{
     types::util::{
@@ -322,7 +323,7 @@ fn add_edges_with_dummies<T: DrawTag, GL, LL>(
 
             let to_group_connection = *group_layers
                 .get(&to_group)
-                .unwrap()
+                .expect(&format!("Unknown: {} to {}", group, to_group)[..])
                 .get(&edge_end_level)
                 .unwrap();
             edge_connection_nodes

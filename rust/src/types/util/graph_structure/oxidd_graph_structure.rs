@@ -83,6 +83,11 @@ where
             .with_manager_shared(|manager, edge| edge.node_id())
     }
 
+    fn get_terminals(&self) -> Vec<NodeID> {
+        self.root
+            .with_manager_shared(|manager, edge| manager.terminals().map(|t| t.node_id()).collect())
+    }
+
     fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<ET>, NodeID)> {
         if let Some(edges) = self.node_parents.get(&node) {
             return Vec::from_iter(edges.iter().map(|&r| r));
@@ -123,7 +128,8 @@ where
     fn get_level(&mut self, node_id: NodeID) -> LevelNo {
         if let Some(node) = self.get_node_by_id(node_id) {
             return node.with_manager_shared(|manager, edge| {
-                manager.get_node(edge).unwrap_inner().level()
+                // manager.get_node(edge).unwrap_inner().level()
+                manager.get_node(edge).level()
             });
         }
         0

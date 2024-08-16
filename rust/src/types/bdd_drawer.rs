@@ -133,7 +133,7 @@ where
 
 pub struct BDDDiagramDrawer<
     T: DrawTag,
-    G: GraphStructure<T, NodeLabel<String>, String>,
+    G: GraphStructure<T, NodeLabel<String>, String> + 'static,
     R: Renderer<T>,
     L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
 > {
@@ -203,8 +203,8 @@ impl<
 }
 
 impl<
-        T: DrawTag,
-        G: GraphStructure<T, NodeLabel<String>, String>,
+        T: DrawTag + 'static,
+        G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
         L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
     > DiagramDrawer for BDDDiagramDrawer<T, G, R, L>

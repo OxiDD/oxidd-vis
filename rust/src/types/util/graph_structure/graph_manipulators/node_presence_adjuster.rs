@@ -15,7 +15,7 @@ use crate::{
     types::util::graph_structure::graph_structure::{
         Change, DrawTag, EdgeType, GraphListener, GraphStructure,
     },
-    util::free_id_manager::FreeIdManager,
+    util::{free_id_manager::FreeIdManager, logging::console},
 };
 
 use super::util::graph_listener_manager::GraphListenerManager;
@@ -47,6 +47,7 @@ struct NodeData<T: DrawTag + 'static> {
     images: MultiMap<NodeID, NodeID>, // Maps the left source nodeID to all of the corresponding right source node IDs
     // node_group: HashMap<NodeID, PresenceGroup>, // Maps the left source nodeID to the presence group it represents
     replacements: HashMap<(NodeID, EdgeConstraint<T>, NodeID), NodeID>, // For a combination of parent output nodeID and a child left source nodeID, the replacement child right source nodeID
+    parent_nodes: HashMap<NodeID, HashSet<NodeID>>, // The parent nodes (output node IDs) of a right source nodeID.
     known_parents: HashMap<NodeID, Vec<(EdgeType<T>, NodeID)>>, // The parents (output node IDs) and edge type of a right source nodeID. Note that these are the known parents, because we may for sure these are the only parents that can exist for the created node, but can not be sure these are the only edge types.
     children: HashMap<NodeID, Vec<(EdgeType<T>, NodeID)>>, // The children (output node IDs) and edge type of a output nodeID
     free_id: FreeIdManager<usize>,
@@ -60,6 +61,19 @@ pub struct PresenceGroups<T: DrawTag> {
     // The way to handle how the presence for any parent node in any of the above defined groups
     remainder: PresenceRemainder,
 }
+impl<T: DrawTag> PresenceGroups<T> {
+    pub fn new(
+        groups: Vec<Vec<(EdgeConstraint<T>, NodeID)>>,
+        remainder: PresenceRemainder,
+    ) -> PresenceGroups<T> {
+        PresenceGroups { groups, remainder }
+    }
+
+    pub fn remainder(remainder: PresenceRemainder) -> PresenceGroups<T> {
+        PresenceGroups::new(Vec::new(), remainder)
+    }
+}
+
 // #[derive(Eq, PartialEq, Clone)]
 // pub enum PresenceGroup {
 //     SharedRemainder,      // The original graph's node is used
@@ -131,6 +145,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 sources: HashMap::new(),
                 images: MultiMap::new(),
                 replacements: HashMap::new(),
+                parent_nodes: HashMap::new(),
                 known_parents: HashMap::new(),
                 children: HashMap::new(),
                 free_id: FreeIdManager::new(0),
@@ -189,11 +204,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
         // Create events for addition of new node (connections) and images
         if presence.remainder == PresenceRemainder::Show {
-            self.add_insert_node_events(owner_out);
+            self.add_insert_node_events(owner_out, owner_out);
         }
         if let Some(images) = maybe_images {
             for image in images {
-                self.add_insert_node_events(from_sourced(Either::Right(image)));
+                self.add_insert_node_events(from_sourced(Either::Right(image)), owner_out);
             }
         }
 
@@ -232,10 +247,15 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                         .into_iter()
                         .map(|node| Change::NodeRemoval { node })
                         .collect_vec(),
-                    Change::NodeInsertion { node } => get_all_copies((*node_data).borrow(), *node)
-                        .into_iter()
-                        .map(|node| Change::NodeInsertion { node })
-                        .collect_vec(),
+                    Change::NodeInsertion { node, source } => {
+                        get_all_copies((*node_data).borrow(), *node)
+                            .into_iter()
+                            .map(|node| Change::NodeInsertion {
+                                node,
+                                source: source.clone(),
+                            })
+                            .collect_vec()
+                    }
                 })
                 .collect_vec();
 
@@ -264,11 +284,14 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         listeners.add_change(Change::NodeRemoval { node: out_node });
     }
 
-    fn add_insert_node_events(&mut self, out_node: NodeID) {
+    fn add_insert_node_events(&mut self, out_node: NodeID, source: NodeID) {
         self.add_neighbor_connection_change_events(out_node);
 
         let listeners = &mut (*self.node_data).borrow_mut().listeners;
-        listeners.add_change(Change::NodeInsertion { node: out_node });
+        listeners.add_change(Change::NodeInsertion {
+            node: out_node,
+            source: Some(source),
+        });
     }
 
     fn get_owner_id(&self, id: NodeID) -> NodeID {
@@ -300,6 +323,10 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 data.replacements
                     .insert((*parent, constraint.clone(), child_to_be_replaced), id);
             }
+
+            // Store the parents
+            data.parent_nodes
+                .insert(id, parents.iter().map(|(_, parent)| *parent).collect());
 
             id
         };
@@ -333,26 +360,53 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
         }
         data.children.remove(&node);
+        data.parent_nodes.remove(&node);
         data.known_parents.remove(&node);
         data.free_id.make_available(node);
     }
 
     fn update_parents(&mut self, right_node_id: NodeID) {
         let source_id = self.get_owner_id(from_sourced(Either::Right(right_node_id)));
+
+        let parent_images: MultiMap<NodeID, NodeID> = {
+            let data = (*self.node_data).borrow();
+            let parent_nodes = data.parent_nodes.get(&right_node_id).unwrap();
+            parent_nodes
+                .iter()
+                .map(|&parent| (self.get_owner_id(parent), parent))
+                .sorted()
+                .dedup()
+                .collect()
+        };
+
         let mut data = (*self.node_data).borrow_mut();
         let source_parents = self.graph.get_known_parents(source_id);
         let mut out_parents = Vec::new();
-        for (edge, parent) in source_parents {
-            if data
-                .replacements
-                .contains_key(&(parent, EdgeConstraint::Exact(edge), source_id))
-                || data
+        for (edge, source_parent) in source_parents {
+            let Some(parent_images) = parent_images.get_vec(&source_parent) else {
+                continue;
+            };
+            for &parent in parent_images {
+                if data
                     .replacements
-                    .contains_key(&(parent, EdgeConstraint::Any, source_id))
-            {
-                out_parents.push((edge, parent));
+                    .get(&(parent, EdgeConstraint::Exact(edge), source_id))
+                    == Some(&right_node_id)
+                    || data
+                        .replacements
+                        .get(&(parent, EdgeConstraint::Any, source_id))
+                        == Some(&right_node_id)
+                {
+                    out_parents.push((edge, parent));
+                }
             }
         }
+
+        console::log!(
+            "update parents for {}: {}",
+            right_node_id,
+            out_parents.iter().map(|(_, k)| k.to_string()).join(", ")
+        );
+
         data.known_parents.insert(right_node_id, out_parents);
     }
 
@@ -365,6 +419,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         let mut out = Vec::new();
         // Analyze the children and store them for future use
         for (edge_type, child) in children {
+            let out_child = from_sourced(Either::Left(child));
             let remainder = {
                 let data = (*self.node_data).borrow();
                 if let Some(&replacement) =
@@ -388,57 +443,71 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 }
 
                 let Some(adjustment) = data.adjustments.get(&child) else {
-                    out.push((edge_type, child));
+                    out.push((edge_type, out_child));
                     continue;
                 };
                 adjustment.remainder.clone()
             };
 
             match remainder {
-                PresenceRemainder::Show => out.push((edge_type, child)),
+                PresenceRemainder::Show => out.push((edge_type, out_child)),
                 PresenceRemainder::Hide => {}
                 PresenceRemainder::Duplicate => out.push((
                     edge_type,
-                    self.create_replacement(
+                    from_sourced(Either::Right(self.create_replacement(
                         Vec::from([(EdgeConstraint::Exact(edge_type), out_node_id)]),
                         child,
-                    ),
+                    ))),
                 )),
                 PresenceRemainder::DuplicateParent => out.push((
                     edge_type,
-                    self.create_replacement(Vec::from([(EdgeConstraint::Any, out_node_id)]), child),
+                    from_sourced(Either::Right(self.create_replacement(
+                        Vec::from([(EdgeConstraint::Any, out_node_id)]),
+                        child,
+                    ))),
                 )),
             }
         }
 
+        let has0 = out.iter().find(|p| p.1 == 0);
+        if has0.is_some() {
+            console::log!("node0: {} ", out_node_id);
+        }
         let mut data = (*self.node_data).borrow_mut();
         data.children.insert(out_node_id, out);
     }
 }
 
 #[derive(PartialEq, Eq, Clone)]
-struct AdjustmentLabel<LL> {
+pub struct PresenceLabel<LL> {
     original_label: LL,
     original_id: NodeID,
 }
 
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    GraphStructure<T, AdjustmentLabel<NL>, LL> for NodePresenceAdjuster<T, NL, LL, G>
+    GraphStructure<T, PresenceLabel<NL>, LL> for NodePresenceAdjuster<T, NL, LL, G>
 {
-    fn get_root(&self) -> crate::wasm_interface::NodeID {
-        self.graph.get_root()
+    fn get_root(&self) -> NodeID {
+        from_sourced(Either::Left(self.graph.get_root()))
+    }
+    fn get_terminals(&self) -> Vec<NodeID> {
+        self.graph
+            .get_terminals()
+            .iter()
+            .flat_map(|t| get_all_copies((*self.node_data).borrow(), *t))
+            .collect()
     }
 
     fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
-        match to_sourced(node) {
+        let parents = match to_sourced(node) {
             Either::Left(id) => {
                 let data = (*self.node_data).borrow();
                 let known_parents = self.graph.get_known_parents(id);
                 // Filter parents to remove any parents that use a replacement node instead
                 known_parents
                     .into_iter()
-                    .filter(|(edge, parent)| {
-                        let out_parent = from_sourced(Either::Left(*parent));
+                    .map(|(edge, parent)| (edge, from_sourced(Either::Left(parent))))
+                    .filter(|&(edge, out_parent)| {
                         let replaced = data.replacements.contains_key(&(
                             out_parent,
                             EdgeConstraint::Exact(edge.clone()),
@@ -454,16 +523,27 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
             Either::Right(id) => {
                 let data = (*self.node_data).borrow();
-                data.children
+                data.known_parents
                     .get(&id)
                     .cloned()
                     .unwrap_or_else(|| Vec::new())
             }
-        }
+        };
+        // console::log!(
+        //     "{} parents: {}",
+        //     node,
+        //     parents.iter().map(|(_, v)| v.to_string()).join(", ")
+        // );
+        parents
     }
 
     fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
         if let Some(children) = (*self.node_data).borrow().children.get(&node) {
+            // console::log!(
+            //     "{} children: {}",
+            //     node,
+            //     children.iter().map(|(_, v)| v.to_string()).join(", ")
+            // );
             return children.clone();
         }
 
@@ -472,6 +552,16 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 self.update_children(node);
 
                 let data = (*self.node_data).borrow();
+                console::log!(
+                    "{} children: {}",
+                    node,
+                    data.children
+                        .get(&node)
+                        .unwrap()
+                        .iter()
+                        .map(|(_, v)| v.to_string())
+                        .join(", ")
+                );
                 return data.children.get(&node).cloned().unwrap();
             }
             Either::Right(_) => {
@@ -483,12 +573,28 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
     fn get_level(&mut self, node: NodeID) -> LevelNo {
         let id = self.get_owner_id(node);
+        if self.graph.get_level(id) == 0 {
+            console::log!(
+                "node: {}, id: {}, level: {}",
+                node,
+                id,
+                self.graph.get_level(id)
+            );
+        }
+        // if let Either::Right(_) = to_sourced(node) {
+        //     console::log!(
+        //         "node: {}, id: {}, level: {}",
+        //         node,
+        //         id,
+        //         self.graph.get_level(id)
+        //     );
+        // }
         self.graph.get_level(id)
     }
 
-    fn get_node_label(&self, node: NodeID) -> AdjustmentLabel<NL> {
+    fn get_node_label(&self, node: NodeID) -> PresenceLabel<NL> {
         let id = self.get_owner_id(node);
-        AdjustmentLabel {
+        PresenceLabel {
             original_id: id,
             original_label: self.graph.get_node_label(id),
         }

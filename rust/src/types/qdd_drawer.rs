@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use oxidd_core::DiagramRules;
 use std::borrow::Borrow;
 use std::borrow::BorrowMut;
@@ -14,6 +15,8 @@ use web_sys::console::log;
 
 use crate::traits::Diagram;
 use crate::traits::DiagramDrawer;
+use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceGroups;
+use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder;
 use crate::util::free_id_manager::FreeIdManager;
 use crate::util::logging::console;
 use crate::util::rc_refcell::MutRcRefCell;
@@ -50,6 +53,8 @@ use super::util::drawing::layouts::transition_layout::TransitionLayout;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
+use super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
+use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
 use super::util::graph_structure::graph_structure::DrawTag;
 use super::util::graph_structure::graph_structure::EdgeType;
 use super::util::graph_structure::graph_structure::GraphStructure;
@@ -138,25 +143,41 @@ where
 }
 
 pub struct QDDDiagramDrawer<
-    T: DrawTag,
-    G: GraphStructure<T, NodeLabel<String>, String>,
+    T: DrawTag + 'static,
+    G: GraphStructure<T, NodeLabel<String>, String> + 'static,
     R: Renderer<T>,
-    L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+    L: LayoutRules<T, String, String, GM<T, G>>,
 > {
-    group_manager: MutRcRefCell<GroupManager<T, NodeLabel<String>, String, G>>,
-    drawer: Drawer<T, R, L, GroupManager<T, NodeLabel<String>, String, G>>,
+    group_manager: MutRcRefCell<GM<T, G>>,
+    drawer: Drawer<T, R, L, GM<T, G>>,
 }
+type GM<T, G> = GroupManager<T, PresenceLabel<NodeLabel<String>>, String, MGraph<T, G>>;
+type MGraph<T, G> = NodePresenceAdjuster<T, NodeLabel<String>, String, G>;
 
 impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+        L: LayoutRules<T, String, String, GM<T, G>>,
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
-        let root = graph.get_root();
-        let group_manager = MutRcRefCell::new(GroupManager::new(graph));
+        let mut modified_graph = NodePresenceAdjuster::new(graph);
+        // modified_graph.set_node_presence(out_node, presence)
+        // console::log!(
+        //     "Terminals: {}",
+        //     modified_graph
+        //         .get_terminals()
+        //         .iter()
+        //         .map(|t| t.to_string())
+        //         .join(",")
+        // );
+        for terminal in modified_graph.get_terminals() {
+            modified_graph
+                .set_node_presence(terminal, PresenceGroups::remainder(PresenceRemainder::Show))
+        }
+        let root = modified_graph.get_root();
+        let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph));
         let mut out = QDDDiagramDrawer {
             group_manager: group_manager.clone(),
             drawer: Drawer::new(renderer, layout, group_manager),
@@ -186,20 +207,13 @@ impl<
 }
 
 impl<
-        T: DrawTag,
-        G: GraphStructure<T, NodeLabel<String>, String>,
+        T: DrawTag + 'static,
+        G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+        L: LayoutRules<T, String, String, GM<T, G>>,
     > DiagramDrawer for QDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
-        // let children = self.get_children(&self.root);
-        // for (_, child) in children {
-        //     let c: F = child;
-
-        //     let level = c.with_manager_shared(|mgr, f| mgr.get_node(f).unwrap_inner().level());
-        //     console::log!("{}", level);
-        // }
         self.drawer.render(time, selected_ids, hovered_ids);
     }
 

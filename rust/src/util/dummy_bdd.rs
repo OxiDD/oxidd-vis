@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use oxidd::util::OutOfMemory;
 use oxidd::{util::Borrowed, Edge, InnerNode, Manager, ManagerRef};
 use oxidd::{BooleanFunction, Function};
 use oxidd_manager_index::node::fixed_arity::NodeWithLevel;
@@ -97,6 +98,7 @@ impl DummyFunction {
     pub fn from_dddmp(manager_ref: &mut DummyManagerRef, data: &str) -> DummyFunction {
         manager_ref.with_manager_exclusive(|manager| {
             console::log!("Started loading graph");
+            let mut terminals = Vec::new();
             let node_text = &data[data.find(".nodes").unwrap()..data.find(".end").unwrap()];
             let nodes_data = node_text.split("\n").filter_map(|node| {
                 let parts = node.trim().split(" ").collect::<Vec<&str>>();
@@ -135,6 +137,10 @@ impl DummyFunction {
                     },
                 );
 
+                if level_num.is_err() {
+                    terminals.push(DummyEdge::new(Arc::new(id), manager_ref.clone()))
+                }
+
                 if level_num == Ok(0) {
                     root = Some(id);
                 }
@@ -155,6 +161,8 @@ impl DummyFunction {
                     }
                 }
             }
+
+            manager.init_terminals(terminals);
 
             console::log!("Loaded graph!");
             DummyFunction(DummyEdge::new(Arc::new(root.unwrap()), manager_ref.clone()))
@@ -283,16 +291,19 @@ impl Edge for DummyEdge {
 /// clone and drop edges.
 // #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct DummyManager(BTreeMap<NodeID, DummyNode>);
+pub struct DummyManager(BTreeMap<NodeID, DummyNode>, Vec<DummyEdge>);
 impl DummyManager {
     pub fn new() -> DummyManager {
-        DummyManager(BTreeMap::new())
+        DummyManager(BTreeMap::new(), Vec::new())
+    }
+    fn init_terminals(&mut self, terminals: Vec<DummyEdge>) {
+        self.1.extend(terminals);
     }
 }
 
 /// Dummy diagram rules
 pub struct DummyRules;
-impl DiagramRules<DummyEdge, DummyNode, String> for DummyRules {
+impl DiagramRules<DummyEdge, DummyNode, u8> for DummyRules {
     // type Cofactors<'a> = Iter<'a, Borrowed<'a, DummyEdge>>;
     type Cofactors<'a> = <DummyNode as InnerNode<DummyEdge>>::ChildrenIter<'a> where DummyNode: 'a, DummyEdge: 'a;
 
@@ -341,9 +352,9 @@ unsafe impl Manager for DummyManager {
     type Edge = DummyEdge;
     type EdgeTag = ();
     type InnerNode = DummyNode;
-    type Terminal = String;
-    type TerminalRef<'a> = &'a String;
-    type TerminalIterator<'a> = std::iter::Empty<DummyEdge> where Self: 'a;
+    type Terminal = u8;
+    type TerminalRef<'a> = &'a u8;
+    type TerminalIterator<'a> = std::vec::IntoIter<DummyEdge> where Self: 'a;
     type Rules = DummyRules;
     type NodeSet = HashSet<NodeID>;
     type LevelView<'a> = DummyLevelView where Self: 'a;
@@ -392,16 +403,21 @@ unsafe impl Manager for DummyManager {
         std::iter::empty()
     }
 
-    fn get_terminal(&self, _terminal: Self::Terminal) -> AllocResult<Self::Edge> {
-        unimplemented!()
+    fn get_terminal(&self, terminal: Self::Terminal) -> AllocResult<Self::Edge> {
+        let index = usize::from(terminal);
+        if index < self.1.len() {
+            AllocResult::Ok(self.1.get(index).unwrap().clone())
+        } else {
+            AllocResult::Err(OutOfMemory)
+        }
     }
 
     fn num_terminals(&self) -> usize {
-        0
+        self.1.len()
     }
 
     fn terminals(&self) -> Self::TerminalIterator<'_> {
-        std::iter::empty()
+        self.1.clone().into_iter()
     }
 
     fn gc(&self) -> usize {
