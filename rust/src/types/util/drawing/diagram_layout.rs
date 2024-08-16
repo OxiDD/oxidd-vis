@@ -9,7 +9,7 @@ use oxidd::LevelNo;
 use oxidd_core::Tag;
 
 use crate::{
-    types::util::{edge_type::EdgeType, graph_structure::DrawTag, group_manager::EdgeData},
+    types::util::graph_structure::{graph_structure::DrawTag, grouped_graph_structure::EdgeData},
     util::rectangle::Rectangle,
     wasm_interface::{NodeGroupID, NodeID},
 };

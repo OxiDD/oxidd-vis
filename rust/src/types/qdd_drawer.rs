@@ -50,12 +50,13 @@ use super::util::drawing::layouts::transition_layout::TransitionLayout;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
-use super::util::edge_type::EdgeType;
-use super::util::graph_structure::DrawTag;
-use super::util::graph_structure::GraphStructure;
-use super::util::graph_structure::OxiddGraphStructure;
+use super::util::graph_structure::graph_structure::DrawTag;
+use super::util::graph_structure::graph_structure::EdgeType;
+use super::util::graph_structure::graph_structure::GraphStructure;
+use super::util::graph_structure::grouped_graph_structure::GroupedGraphStructure;
+use super::util::graph_structure::oxidd_graph_structure::NodeLabel;
+use super::util::graph_structure::oxidd_graph_structure::OxiddGraphStructure;
 use super::util::group_manager::GroupManager;
-use super::util::grouped_graph_structure::GroupedGraphStructure;
 
 pub struct QDDDiagram<MR: ManagerRef, F: Function<ManagerRef = MR> + 'static>
 where
@@ -78,7 +79,7 @@ where
 }
 
 impl<
-        T: 'static,
+        T: ToString + Clone + 'static,
         E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
         R: DiagramRules<E, N, T> + 'static,
@@ -130,7 +131,7 @@ where
             0.3,
         );
         let layout = TransitionLayout::new(layout);
-        let graph = OxiddGraphStructure::new(self.root.clone());
+        let graph = OxiddGraphStructure::new(self.root.clone(), |t| t.to_string());
         let diagram = QDDDiagramDrawer::new(graph, renderer, layout);
         Box::new(diagram)
     }
@@ -138,19 +139,19 @@ where
 
 pub struct QDDDiagramDrawer<
     T: DrawTag,
-    G: GraphStructure<T>,
+    G: GraphStructure<T, NodeLabel<String>, String>,
     R: Renderer<T>,
-    L: LayoutRules<T, GroupManager<T, G>>,
+    L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
 > {
-    group_manager: MutRcRefCell<GroupManager<T, G>>,
-    drawer: Drawer<T, R, L, GroupManager<T, G>>,
+    group_manager: MutRcRefCell<GroupManager<T, NodeLabel<String>, String, G>>,
+    drawer: Drawer<T, R, L, GroupManager<T, NodeLabel<String>, String, G>>,
 }
 
 impl<
         T: DrawTag + 'static,
-        G: GraphStructure<T> + 'static,
+        G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, GroupManager<T, G>>,
+        L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
@@ -184,8 +185,12 @@ impl<
     }
 }
 
-impl<T: DrawTag, G: GraphStructure<T>, R: Renderer<T>, L: LayoutRules<T, GroupManager<T, G>>>
-    DiagramDrawer for QDDDiagramDrawer<T, G, R, L>
+impl<
+        T: DrawTag,
+        G: GraphStructure<T, NodeLabel<String>, String>,
+        R: Renderer<T>,
+        L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+    > DiagramDrawer for QDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         // let children = self.get_children(&self.root);

@@ -4,20 +4,19 @@ use oxidd_core::Tag;
 
 use crate::types::util::{
     drawing::{diagram_layout::DiagramLayout, layout_rules::LayoutRules},
-    graph_structure::DrawTag,
-    grouped_graph_structure::GroupedGraphStructure,
+    graph_structure::{graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure},
 };
 
 ///
 /// A higher level layout that toggles between a set of other layout types, every time that the layout function is called. Intended for testing/demoing purposes
 ///
-pub struct ToggleLayout<T: DrawTag, G: GroupedGraphStructure<T>> {
-    layouts: Vec<Box<dyn LayoutRules<T, G>>>,
+pub struct ToggleLayout<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> {
+    layouts: Vec<Box<dyn LayoutRules<T, GL, LL, G>>>,
     current: usize,
 }
 
-impl<T: DrawTag, G: GroupedGraphStructure<T>> ToggleLayout<T, G> {
-    pub fn new(layouts: Vec<Box<dyn LayoutRules<T, G>>>) -> ToggleLayout<T, G> {
+impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> ToggleLayout<T, GL, LL, G> {
+    pub fn new(layouts: Vec<Box<dyn LayoutRules<T, GL, LL, G>>>) -> ToggleLayout<T, GL, LL, G> {
         ToggleLayout {
             layouts,
             current: 0,
@@ -25,7 +24,9 @@ impl<T: DrawTag, G: GroupedGraphStructure<T>> ToggleLayout<T, G> {
     }
 }
 
-impl<T: DrawTag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for ToggleLayout<T, G> {
+impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> LayoutRules<T, GL, LL, G>
+    for ToggleLayout<T, GL, LL, G>
+{
     fn layout(
         &mut self,
         graph: &G,

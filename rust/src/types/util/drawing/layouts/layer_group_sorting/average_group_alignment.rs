@@ -10,18 +10,19 @@ use crate::{
             layered_layout::LayerGroupSorting,
             util::layered::layer_orderer::{EdgeMap, Order},
         },
-        graph_structure::DrawTag,
-        grouped_graph_structure::GroupedGraphStructure,
+        graph_structure::{
+            graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
+        },
     },
     wasm_interface::NodeGroupID,
 };
 
 pub struct AverageGroupAlignment;
 
-impl<T: DrawTag> LayerGroupSorting<T> for AverageGroupAlignment {
+impl<T: DrawTag, GL, LL> LayerGroupSorting<T, GL, LL> for AverageGroupAlignment {
     fn align_cross_layer_nodes(
         &self,
-        _graph: &impl GroupedGraphStructure<T>,
+        _graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         _edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group

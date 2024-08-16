@@ -13,9 +13,11 @@ use web_sys::WebGl2RenderingContext;
 
 use crate::{
     types::util::{
-        graph_structure::DrawTag,
+        graph_structure::{
+            graph_structure::DrawTag,
+            grouped_graph_structure::{GroupedGraphStructure, SourceReader, SourceTracker},
+        },
         group_manager::GroupManager,
-        grouped_graph_structure::{GroupedGraphStructure, SourceReader, SourceTracker},
     },
     util::{
         logging::console,
@@ -31,7 +33,12 @@ use super::{
     renderer::Renderer,
 };
 
-pub struct Drawer<T: DrawTag, R: Renderer<T>, L: LayoutRules<T, G>, G: GroupedGraphStructure<T>> {
+pub struct Drawer<
+    T: DrawTag,
+    R: Renderer<T>,
+    L: LayoutRules<T, String, String, G>,
+    G: GroupedGraphStructure<T, String, String>,
+> {
     renderer: R,
     layout_rules: L,
     layout: DiagramLayout<T>,
@@ -40,8 +47,12 @@ pub struct Drawer<T: DrawTag, R: Renderer<T>, L: LayoutRules<T, G>, G: GroupedGr
     transform: Transformation,
 }
 
-impl<T: DrawTag, R: Renderer<T>, L: LayoutRules<T, G>, G: GroupedGraphStructure<T>>
-    Drawer<T, R, L, G>
+impl<
+        T: DrawTag,
+        R: Renderer<T>,
+        L: LayoutRules<T, String, String, G>,
+        G: GroupedGraphStructure<T, String, String>,
+    > Drawer<T, R, L, G>
 {
     pub fn new(renderer: R, layout_rules: L, graph: MutRcRefCell<G>) -> Drawer<T, R, L, G> {
         Drawer {

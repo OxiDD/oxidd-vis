@@ -11,15 +11,17 @@ use priority_queue::PriorityQueue;
 use crate::{
     types::util::{
         drawing::diagram_layout::{LayerLayout, Point, Transition},
-        graph_structure::DrawTag,
-        grouped_graph_structure::GroupedGraphStructure,
+        graph_structure::{
+            graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
+        },
     },
     util::{logging::console, rectangle::Rectangle},
 };
 
 pub fn compute_layers_layout<
     T: DrawTag,
-    G: GroupedGraphStructure<T>,
+    GL,
+    G: GroupedGraphStructure<T, GL, String>,
     I: Iterator<Item = (usize, Rectangle)>,
 >(
     graph: &G,

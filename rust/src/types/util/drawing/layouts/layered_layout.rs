@@ -17,10 +17,10 @@ use crate::{
             },
             layout_rules::LayoutRules,
         },
-        edge_type::EdgeType,
-        graph_structure::DrawTag,
-        group_manager::EdgeData,
-        grouped_graph_structure::{EdgeCountData, GroupedGraphStructure, SourceReader},
+        graph_structure::{
+            graph_structure::DrawTag,
+            grouped_graph_structure::{EdgeCountData, EdgeData, GroupedGraphStructure},
+        },
     },
     util::{logging::console, rectangle::Rectangle},
     wasm_interface::NodeGroupID,
@@ -33,10 +33,10 @@ use super::util::{
 };
 
 /// The trait used to decide what ordering of nodes to use in the layout, including dummy nodes
-pub trait LayerOrdering<T: DrawTag> {
+pub trait LayerOrdering<T: DrawTag, GL, LL> {
     fn order_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
@@ -49,10 +49,10 @@ pub trait LayerOrdering<T: DrawTag> {
 }
 
 /// The trait used to decide what positioning of nodes to use in the layout for the given node orders, including dummy nodes
-pub trait NodePositioning<T: DrawTag> {
+pub trait NodePositioning<T: DrawTag, GL, LL> {
     fn position_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
@@ -65,10 +65,10 @@ pub trait NodePositioning<T: DrawTag> {
 }
 
 /// The trait used to decide what positioning of nodes to use in the layout for the given node orders, including dummy nodes
-pub trait LayerGroupSorting<T: DrawTag> {
+pub trait LayerGroupSorting<T: DrawTag, GL, LL> {
     fn align_cross_layer_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
@@ -82,32 +82,44 @@ pub trait LayerGroupSorting<T: DrawTag> {
 
 pub struct LayeredLayout<
     T: DrawTag,
-    O: LayerOrdering<T>,
-    G: LayerGroupSorting<T>,
-    P: NodePositioning<T>,
+    GL,
+    LL,
+    O: LayerOrdering<T, GL, LL>,
+    G: LayerGroupSorting<T, GL, LL>,
+    P: NodePositioning<T, GL, LL>,
 > {
     ordering: O,
     group_aligning: G,
     positioning: P,
     max_curve_offset: f32,
     tag: PhantomData<T>,
+    group_label: PhantomData<GL>,
+    level_label: PhantomData<LL>,
 }
 
-impl<T: DrawTag, O: LayerOrdering<T>, G: LayerGroupSorting<T>, P: NodePositioning<T>>
-    LayeredLayout<T, O, G, P>
+impl<
+        T: DrawTag,
+        GL,
+        LL,
+        O: LayerOrdering<T, GL, LL>,
+        G: LayerGroupSorting<T, GL, LL>,
+        P: NodePositioning<T, GL, LL>,
+    > LayeredLayout<T, GL, LL, O, G, P>
 {
     pub fn new(
         ordering: O,
         group_aligning: G,
         positioning: P,
         max_curve_offset: f32,
-    ) -> LayeredLayout<T, O, G, P> {
+    ) -> LayeredLayout<T, GL, LL, O, G, P> {
         LayeredLayout {
             ordering,
             group_aligning,
             positioning,
             max_curve_offset,
             tag: PhantomData,
+            group_label: PhantomData,
+            level_label: PhantomData,
         }
     }
 }
@@ -125,11 +137,12 @@ pub fn is_edge_dummy(node: NodeGroupID, dummy_edge_start_id: NodeGroupID) -> boo
 
 impl<
         T: DrawTag,
-        O: LayerOrdering<T>,
-        S: LayerGroupSorting<T>,
-        P: NodePositioning<T>,
-        G: GroupedGraphStructure<T>,
-    > LayoutRules<T, G> for LayeredLayout<T, O, S, P>
+        GL,
+        O: LayerOrdering<T, GL, String>,
+        S: LayerGroupSorting<T, GL, String>,
+        P: NodePositioning<T, GL, String>,
+        G: GroupedGraphStructure<T, GL, String>,
+    > LayoutRules<T, GL, String, G> for LayeredLayout<T, GL, String, O, S, P>
 {
     fn layout(
         &mut self,
@@ -218,8 +231,8 @@ fn add_to_edges(edges: &mut EdgeMap, from: NodeGroupID, to: NodeGroupID) {
         .insert(to);
 }
 
-fn add_groups_with_dummies<T: DrawTag>(
-    graph: &impl GroupedGraphStructure<T>,
+fn add_groups_with_dummies<T: DrawTag, GL, LL>(
+    graph: &impl GroupedGraphStructure<T, GL, LL>,
     layers: &mut Vec<Order>,
     edges: &mut EdgeMap,
     dummy_owners: &mut HashMap<NodeGroupID, NodeGroupID>,
@@ -257,8 +270,8 @@ fn add_groups_with_dummies<T: DrawTag>(
     (dummy_group_start_id, group_layers)
 }
 
-fn add_edges_with_dummies<T: DrawTag>(
-    graph: &impl GroupedGraphStructure<T>,
+fn add_edges_with_dummies<T: DrawTag, GL, LL>(
+    graph: &impl GroupedGraphStructure<T, GL, LL>,
     layers: &mut Vec<Order>,
     edges: &mut EdgeMap,
     dummy_owners: &mut HashMap<NodeGroupID, NodeGroupID>,
@@ -321,8 +334,8 @@ fn add_edges_with_dummies<T: DrawTag>(
     (edge_bend_nodes, edge_connection_nodes)
 }
 
-fn format_layout<T: DrawTag>(
-    graph: &impl GroupedGraphStructure<T>,
+fn format_layout<T: DrawTag, GL>(
+    graph: &impl GroupedGraphStructure<T, GL, String>,
     max_curve_offset: f32,
     node_positions: HashMap<usize, Point>,
     layer_positions: HashMap<LevelNo, f32>,

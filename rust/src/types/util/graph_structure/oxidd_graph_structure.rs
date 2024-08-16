@@ -1,45 +1,38 @@
 use std::{
+    borrow::Borrow,
     collections::{HashMap, HashSet},
-    hash::Hash,
-    iter::{self, FromIterator},
+    iter::FromIterator,
+    marker::PhantomData,
     rc::Rc,
 };
 
-use oxidd::{Edge, Function, InnerNode, LevelNo, Manager};
-use oxidd_core::{DiagramRules, HasLevel, Node, Tag};
+use oxidd::{Edge, Function, InnerNode, LevelNo, Manager, NodeID};
+use oxidd_core::{DiagramRules, HasLevel, Node};
 
-use crate::{util::logging::console, wasm_interface::NodeID};
+use super::graph_structure::{DrawTag, EdgeType, GraphListener, GraphStructure};
 
-use super::edge_type::EdgeType;
-
-/// A graph structure trait used as the data to visualize
-pub trait GraphStructure<T: DrawTag> {
-    fn get_root(&self) -> NodeID;
-    /// Only returns connections that have already been discovered by calling get_children
-    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)>;
-    /// This is only supported for nodeIDs that have been obtained from this interface before
-    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)>;
-    fn get_level(&mut self, node: NodeID) -> LevelNo;
-    fn get_level_label(&self, level: LevelNo) -> String;
-}
-
-pub trait DrawTag: Tag + Hash + Ord {}
-impl DrawTag for () {}
-
-pub struct OxiddGraphStructure<T: DrawTag, F: Function>
+pub struct OxiddGraphStructure<DT: DrawTag, F: Function, T, S: Fn(&T) -> String>
 where
-    for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
+    for<'id> F::Manager<'id>: Manager<EdgeTag = DT>,
 {
     root: F,
     node_by_id: HashMap<NodeID, F>,
-    node_parents: HashMap<NodeID, HashSet<(EdgeType<T>, NodeID)>>,
+    node_parents: HashMap<NodeID, HashSet<(EdgeType<DT>, NodeID)>>,
+    terminal_to_string: S,
+    terminal: PhantomData<T>,
 }
 
-impl<T: DrawTag, F: Function> OxiddGraphStructure<T, F>
+#[derive(Clone)]
+pub enum NodeLabel<T> {
+    Inner(String),
+    Terminal(T),
+}
+
+impl<DT: DrawTag, F: Function, T, S: Fn(&T) -> String> OxiddGraphStructure<DT, F, T, S>
 where
-    for<'id> F::Manager<'id>: Manager<EdgeTag = T>,
+    for<'id> F::Manager<'id>: Manager<EdgeTag = DT, Terminal = T>,
 {
-    pub fn new(root: F) -> OxiddGraphStructure<T, F> {
+    pub fn new(root: F, terminal_to_string: S) -> OxiddGraphStructure<DT, F, T, S> {
         OxiddGraphStructure {
             node_by_id: HashMap::from([(
                 root.with_manager_shared(|manager, edge| edge.node_id()),
@@ -47,6 +40,8 @@ where
             )]),
             root,
             node_parents: HashMap::new(),
+            terminal_to_string,
+            terminal: PhantomData,
         }
     }
 
@@ -61,7 +56,7 @@ where
         return self.node_by_id.get(&id);
     }
 
-    fn add_parent(&mut self, node: NodeID, parent: NodeID, edge_type: EdgeType<T>) {
+    fn add_parent(&mut self, node: NodeID, parent: NodeID, edge_type: EdgeType<DT>) {
         let parents = self
             .node_parents
             .entry(node)
@@ -72,12 +67,13 @@ where
 
 impl<
         ET: DrawTag + 'static,
-        T: 'static,
+        T: Clone + 'static,
         E: Edge<Tag = ET> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
         R: DiagramRules<E, N, T> + 'static,
         F: Function + 'static,
-    > GraphStructure<ET> for OxiddGraphStructure<ET, F>
+        S: Fn(&T) -> String,
+    > GraphStructure<ET, NodeLabel<String>, String> for OxiddGraphStructure<ET, F, T, S>
 where
     for<'id> F::Manager<'id>:
         Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
@@ -95,8 +91,8 @@ where
     }
 
     fn get_children(&mut self, node_id: NodeID) -> Vec<(EdgeType<ET>, NodeID)> {
-        let root_node = &self.get_node_by_id(node_id);
-        if let Some(node) = root_node {
+        let opt_node = &self.get_node_by_id(node_id);
+        if let Some(node) = opt_node {
             let cofactors = node.with_manager_shared(move |manager, edge| {
                 let tag = edge.tag();
                 let internal_node = manager.get_node(edge);
@@ -136,5 +132,22 @@ where
     fn get_level_label(&self, level: LevelNo) -> String {
         // TODO: get actual level vars
         level.to_string()
+    }
+
+    fn on_change(&mut self, listener: Box<GraphListener>) -> usize {
+        // This diagram never changes
+        0
+    }
+    fn off_change(&mut self, listener: usize) {}
+
+    fn get_node_label(&self, node: NodeID) -> NodeLabel<String> {
+        if let Some(node) = self.get_node_by_id(node) {
+            return node.with_manager_shared(|manager, edge| match manager.get_node(edge) {
+                Node::Inner(n) => NodeLabel::Inner(edge.node_id().to_string()),
+                Node::Terminal(t) => NodeLabel::Terminal((&self.terminal_to_string)(t.borrow())),
+            });
+        } else {
+            NodeLabel::Inner("Not found".to_string())
+        }
     }
 }

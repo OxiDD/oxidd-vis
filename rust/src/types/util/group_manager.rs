@@ -1,9 +1,11 @@
 use std::{
+    cell::RefCell,
     cmp::Reverse,
     collections::{HashMap, HashSet, LinkedList},
     fmt::Display,
     hash::Hash,
     iter::FromIterator,
+    marker::PhantomData,
     rc::Rc,
     vec::IntoIter,
 };
@@ -14,20 +16,137 @@ use oxidd_core::{DiagramRules, Node, Tag};
 use priority_queue::PriorityQueue;
 
 use crate::{
-    types::util::edge_type::EdgeType,
     util::{free_id_manager::FreeIdManager, logging::console},
     wasm_interface::{NodeGroupID, NodeID, TargetID, TargetIDType},
 };
 
 use super::{
-    graph_structure::{DrawTag, GraphStructure},
-    grouped_graph_structure::{EdgeCountData, GroupedGraphStructure},
+    graph_structure::{
+        graph_structure::{Change, DrawTag, EdgeType, GraphStructure},
+        grouped_graph_structure::{EdgeCountData, EdgeData, GroupedGraphStructure},
+    },
     source_tracker_manager::{SourceReader, SourceTrackerManager},
 };
 
-pub struct GroupManager<T: DrawTag, G: GraphStructure<T>> {
-    /// root: Rc<F>,
-    /// node_by_id: HashMap<NodeID, F>,
+pub struct GroupManager<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> {
+    // This wrapper is required for the listener to have access to the internal functions
+    inner: Rc<RefCell<InnerGroupManager<T, NL, LL, G>>>,
+    listener_handle: Option<usize>,
+}
+
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManager<T, NL, LL, G> {
+    pub fn new(mut graph: G) -> GroupManager<T, NL, LL, G> {
+        let mut group_manager = GroupManager {
+            inner: Rc::new(RefCell::new(InnerGroupManager::new(graph))),
+            listener_handle: None,
+        };
+        group_manager.setup_listener();
+        group_manager
+    }
+
+    pub fn set_group(
+        &mut self,
+        from: Vec<crate::wasm_interface::TargetID>,
+        to: crate::wasm_interface::NodeGroupID,
+    ) -> bool {
+        (*self.inner).borrow_mut().set_group(from, to)
+    }
+
+    pub fn create_group(
+        &mut self,
+        from: Vec<crate::wasm_interface::TargetID>,
+    ) -> crate::wasm_interface::NodeGroupID {
+        (*self.inner).borrow_mut().create_group(from)
+    }
+
+    pub fn split_edges(&mut self, group_id: NodeGroupID, fully: bool) {
+        (*self.inner).borrow_mut().split_edges(group_id, fully)
+    }
+
+    pub fn setup_listener(&mut self) {
+        let inner = self.inner.clone();
+        self.listener_handle = Some((*self.inner).borrow_mut().graph.on_change(Box::new(
+            move |events| {
+                for event in events {
+                    match event {
+                        Change::NodeLabelChange { node } => {}
+                        Change::LevelChange { node } => {}
+                        Change::LevelLabelChange { level } => {}
+                        Change::NodeConnectionsChange { node } => {
+                            // TODO: handle connection changes, node removals, and node insertions
+                        }
+                        Change::NodeRemoval { node } => todo!(),
+                        Change::NodeInsertion { node } => todo!(),
+                    }
+                }
+            },
+        )));
+    }
+}
+
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> Drop
+    for GroupManager<T, NL, LL, G>
+{
+    fn drop(&mut self) {
+        if let Some(listener_handle) = self.listener_handle {
+            (*self.inner).borrow_mut().graph.off_change(listener_handle);
+        }
+    }
+}
+
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
+    GroupedGraphStructure<T, String, LL> for GroupManager<T, NL, LL, G>
+{
+    type Tracker = SourceReader;
+
+    fn get_root(&self) -> NodeGroupID {
+        (*self.inner).borrow().get_root()
+    }
+
+    fn get_all_groups(&self) -> Vec<NodeGroupID> {
+        (*self.inner).borrow().get_all_groups()
+    }
+
+    fn get_hidden(&self) -> Option<NodeGroupID> {
+        (*self.inner).borrow().get_hidden()
+    }
+
+    fn get_group(&self, node: NodeID) -> NodeGroupID {
+        (*self.inner).borrow().get_group(node)
+    }
+
+    fn get_group_label(&self, node: NodeID) -> String {
+        (*self.inner).borrow().get_group_label(node)
+    }
+
+    fn get_parents(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>> {
+        (*self.inner).borrow().get_parents(group)
+    }
+
+    fn get_children(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>> {
+        (*self.inner).borrow().get_children(group)
+    }
+
+    fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID> {
+        (*self.inner).borrow().get_nodes_of_group(group)
+    }
+
+    fn get_level_range(&self, group: NodeGroupID) -> (LevelNo, LevelNo) {
+        (*self.inner).borrow().get_level_range(group)
+    }
+
+    fn get_level_label(&self, level: LevelNo) -> LL {
+        (*self.inner).borrow().get_level_label(level)
+    }
+
+    fn get_source_reader(&mut self) -> Self::Tracker {
+        (*self.inner).borrow_mut().get_source_reader()
+    }
+}
+
+pub struct InnerGroupManager<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> {
+    node_label: PhantomData<NL>,
+    level_label: PhantomData<LL>,
     graph: G,
     /// Nodes are implicitly in group 0 by default, I.e either:
     /// - group_by_id[group_id_by_node[node]].nodes.contains(node)
@@ -40,32 +159,24 @@ pub struct GroupManager<T: DrawTag, G: GraphStructure<T>> {
     sources: SourceTrackerManager,
 }
 
-#[derive(PartialEq, Eq, Clone, Hash)]
-pub struct EdgeData<T: DrawTag> {
-    pub to: NodeGroupID,
-    pub from_level: LevelNo,
-    pub to_level: LevelNo,
-    pub edge_type: EdgeType<T>,
+type EdgeCounts<T: DrawTag> = HashMap<EdgeData<T>, usize>;
+
+#[derive(Clone)]
+struct ConnectionData<T: DrawTag> {
+    parents: HashSet<(EdgeType<T>, NodeID)>,
+    children: HashSet<(EdgeType<T>, NodeID)>,
 }
-impl<T: DrawTag> EdgeData<T> {
-    pub fn new(
-        to: NodeGroupID,
-        from_level: LevelNo,
-        to_level: LevelNo,
-        edge_type: EdgeType<T>,
-    ) -> EdgeData<T> {
-        EdgeData {
-            to,
-            from_level,
-            to_level,
-            edge_type,
+impl<T: DrawTag> ConnectionData<T> {
+    pub fn new() -> ConnectionData<T> {
+        ConnectionData {
+            parents: HashSet::new(),
+            children: HashSet::new(),
         }
     }
 }
 
-type EdgeCounts<T: DrawTag> = HashMap<EdgeData<T>, usize>;
 pub struct NodeGroup<T: DrawTag> {
-    nodes: HashSet<NodeID>,
+    nodes: HashMap<NodeID, ConnectionData<T>>,
     out_edges: EdgeCounts<T>,
     in_edges: EdgeCounts<T>,
     layer_min: PriorityQueue<NodeID, Reverse<LevelNo>>,
@@ -81,7 +192,7 @@ impl<T: DrawTag> Display for NodeGroup<T> {
         write!(
             f,
             "group(nodes: [{}], levels: ({}, {})",
-            self.nodes.iter().join(", "),
+            self.nodes.keys().join(", "),
             min,
             max
         )
@@ -89,7 +200,9 @@ impl<T: DrawTag> Display for NodeGroup<T> {
 }
 
 // Helper methods
-impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
+    InnerGroupManager<T, NL, LL, G>
+{
     fn get_node_group_mut(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<T> {
         self.group_by_id.get_mut(&group_id).unwrap()
     }
@@ -137,25 +250,34 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
     fn remove_edges(
         &mut self,
         from: NodeGroupID,
-        from_level: LevelNo,
+        from_source: NodeID,
         to: NodeGroupID,
-        to_level: LevelNo,
+        to_source: NodeID,
         edge_type: EdgeType<T>,
         count: usize,
     ) {
+        let from_level = self.graph.get_level(from_source);
+        let to_level = self.graph.get_level(to_source);
+
         let from_group = self.get_node_group_mut(from);
-        GroupManager::<T, G>::remove_edges_to_set(
+        InnerGroupManager::<T, NL, LL, G>::remove_edges_to_set(
             &mut from_group.out_edges,
             EdgeData::new(to, from_level, to_level, edge_type),
             count,
         );
+        from_group.nodes.entry(from_source).and_modify(|cd| {
+            cd.children.remove(&(edge_type, to_source));
+        });
 
         let to_group = self.get_node_group_mut(to);
-        GroupManager::<T, G>::remove_edges_to_set(
+        InnerGroupManager::<T, NL, LL, G>::remove_edges_to_set(
             &mut to_group.in_edges,
             EdgeData::new(from, to_level, from_level, edge_type),
             count,
         );
+        to_group.nodes.entry(to_source).and_modify(|cd| {
+            cd.parents.remove(&(edge_type, to_source));
+        });
     }
 
     fn add_edges_to_set(edges: &mut EdgeCounts<T>, edge_data: EdgeData<T>, count: usize) {
@@ -166,40 +288,59 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
     fn add_edges(
         &mut self,
         from: NodeGroupID,
-        from_level: LevelNo,
+        from_source: NodeID,
         to: NodeGroupID,
-        to_level: LevelNo,
+        to_source: NodeID,
         edge_type: EdgeType<T>,
         count: usize,
     ) {
+        let from_level = self.graph.get_level(from_source);
+        let to_level = self.graph.get_level(to_source);
+
         let from_group = self.get_node_group_mut(from);
-        GroupManager::<T, G>::add_edges_to_set(
+        InnerGroupManager::<T, NL, LL, G>::add_edges_to_set(
             &mut from_group.out_edges,
             EdgeData::new(to, from_level, to_level, edge_type),
             count,
         );
+        from_group
+            .nodes
+            .entry(from_source)
+            .or_insert_with(|| ConnectionData::new())
+            .children
+            .insert((edge_type, to_source));
 
         let to_group = self.get_node_group_mut(to);
-        GroupManager::<T, G>::add_edges_to_set(
+        InnerGroupManager::<T, NL, LL, G>::add_edges_to_set(
             &mut to_group.in_edges,
             EdgeData::new(from, to_level, from_level, edge_type),
             count,
         );
+        to_group
+            .nodes
+            .entry(to_source)
+            .or_insert_with(|| ConnectionData::new())
+            .parents
+            .insert((edge_type, from_source));
     }
 }
 
 // Main methods
-impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
-    pub fn new(mut graph: G) -> GroupManager<T, G> {
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
+    InnerGroupManager<T, NL, LL, G>
+{
+    pub fn new(mut graph: G) -> InnerGroupManager<T, NL, LL, G> {
         let root_id = graph.get_root();
         let root_level = graph.get_level(root_id);
-        GroupManager {
+        InnerGroupManager {
+            level_label: PhantomData,
+            node_label: PhantomData,
             graph,
             group_id_by_node: HashMap::new(),
             group_by_id: HashMap::from([(
                 0,
                 NodeGroup {
-                    nodes: HashSet::from([root_id]),
+                    nodes: HashMap::from([(root_id, ConnectionData::new())]),
                     out_edges: HashMap::new(),
                     in_edges: HashMap::new(),
                     layer_min: {
@@ -242,14 +383,14 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
 
                 // Remove from old
                 let cur_group = self.get_node_group_mut(cur_group_id);
-                let contained = cur_group.nodes.remove(&from_id);
+                let contained = cur_group.nodes.remove(&from_id).is_some();
                 cur_group.layer_min.remove(&from_id);
                 cur_group.layer_max.remove(&from_id);
 
                 // Add to new
                 self.group_id_by_node.insert(from_id, to);
                 let new_group = self.get_node_group_mut(to);
-                new_group.nodes.insert(from_id);
+                new_group.nodes.insert(from_id, ConnectionData::new());
                 new_group.layer_min.push(from_id, Reverse(from_level));
                 new_group.layer_max.push(from_id, from_level);
 
@@ -261,21 +402,22 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
                     if contained && cur_group_id != child_group_id {
                         self.remove_edges(
                             cur_group_id,
-                            from_level,
+                            from_id,
                             child_group_id,
-                            child_level,
+                            child_id,
                             edge_type,
                             1,
                         );
                     }
                     if to != child_group_id {
-                        self.add_edges(to, from_level, child_group_id, child_level, edge_type, 1);
+                        self.add_edges(to, from_id, child_group_id, child_id, edge_type, 1);
                     }
 
-                    // Ensure the child id is in there
+                    // Ensure the child id is in there, which may not have been the case initially for the initial group 0
                     if child_group_id == 0 {
                         let child_group = self.get_node_group_mut(child_group_id);
-                        if child_group.nodes.insert(child_id) {
+                        if !child_group.nodes.contains_key(&child_id) {
+                            child_group.nodes.insert(child_id, ConnectionData::new());
                             child_group.layer_min.push(child_id, Reverse(child_level));
                             child_group.layer_max.push(child_id, child_level);
                         }
@@ -289,15 +431,15 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
                     if contained && parent_group_id != cur_group_id {
                         self.remove_edges(
                             parent_group_id,
-                            parent_level,
+                            parent_id,
                             cur_group_id,
-                            from_level,
+                            from_id,
                             edge_type,
                             1,
                         );
                     }
                     if parent_group_id != to {
-                        self.add_edges(parent_group_id, parent_level, to, from_level, edge_type, 1);
+                        self.add_edges(parent_group_id, parent_id, to, from_id, edge_type, 1);
                     }
                 }
 
@@ -311,9 +453,9 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
             } else if from_id == to {
                 continue;
             } else if from_id == 0 {
-                let init_nodes = self.get_node_group_mut(from_id).nodes.clone();
-                let mut found: HashSet<NodeID> = init_nodes.clone().into_iter().collect();
-                let mut queue: LinkedList<NodeID> = init_nodes.into_iter().collect();
+                let init_nodes = self.get_node_group_mut(from_id).nodes.keys();
+                let mut found: HashSet<NodeID> = init_nodes.clone().cloned().collect();
+                let mut queue: LinkedList<NodeID> = init_nodes.cloned().collect();
 
                 while !queue.is_empty() {
                     let node_id = queue.pop_front().unwrap();
@@ -336,48 +478,58 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
                 );
             } else if let Some(_) = self.group_by_id.get(&from_id) {
                 let from_group = &self.get_node_group(from_id);
-                let out_edges = from_group.out_edges.clone();
-                let in_edges = from_group.in_edges.clone();
-                let from_nodes = from_group.nodes.clone();
-                let layer_min: Vec<(NodeID, Reverse<LevelNo>)> =
-                    from_group.layer_min.iter().map(|(&n, &i)| (n, i)).collect();
-                let layer_max: Vec<(NodeID, LevelNo)> =
-                    from_group.layer_max.iter().map(|(&n, &i)| (n, i)).collect();
+                self.set_group(
+                    from_group
+                        .nodes
+                        .keys()
+                        .map(|id| TargetID(TargetIDType::NodeID, *id))
+                        .collect(),
+                    to,
+                );
 
-                for edge_data in out_edges.keys() {
-                    let count = out_edges[edge_data];
-                    let EdgeData {
-                        to: edge_to,
-                        from_level,
-                        to_level,
-                        edge_type,
-                    } = *edge_data;
+                // let from_group = &self.get_node_group(from_id);
+                // let out_edges = from_group.out_edges.clone();
+                // let in_edges = from_group.in_edges.clone();
+                // let from_nodes = from_group.nodes.clone();
+                // let layer_min: Vec<(NodeID, Reverse<LevelNo>)> =
+                //     from_group.layer_min.iter().map(|(&n, &i)| (n, i)).collect();
+                // let layer_max: Vec<(NodeID, LevelNo)> =
+                //     from_group.layer_max.iter().map(|(&n, &i)| (n, i)).collect();
 
-                    self.remove_edges(from_id, from_level, edge_to, to_level, edge_type, count);
-                    self.add_edges(to, from_level, edge_to, to_level, edge_type, count);
-                }
-                for edge_data in in_edges.keys() {
-                    let count = in_edges[edge_data];
-                    let EdgeData {
-                        to: edge_to,
-                        from_level,
-                        to_level,
-                        edge_type,
-                    } = *edge_data;
+                // for edge_data in out_edges.keys() {
+                //     let count = out_edges[edge_data];
+                //     let EdgeData {
+                //         to: edge_to,
+                //         from_level,
+                //         to_level,
+                //         edge_type,
+                //     } = *edge_data;
 
-                    self.remove_edges(edge_to, to_level, from_id, from_level, edge_type, count);
-                    self.add_edges(edge_to, to_level, to, from_level, edge_type, count);
-                }
+                //     self.remove_edges(from_id, from_level, edge_to, to_level, edge_type, count);
+                //     self.add_edges(to, from_level, edge_to, to_level, edge_type, count);
+                // }
+                // for edge_data in in_edges.keys() {
+                //     let count = in_edges[edge_data];
+                //     let EdgeData {
+                //         to: edge_to,
+                //         from_level,
+                //         to_level,
+                //         edge_type,
+                //     } = *edge_data;
 
-                for from_node in &from_nodes {
-                    self.group_id_by_node.insert(*from_node, to);
-                }
-                let to_group = self.get_node_group_mut(to);
-                to_group.nodes.extend(&from_nodes);
-                to_group.layer_min.extend(layer_min);
-                to_group.layer_max.extend(layer_max);
+                //     self.remove_edges(edge_to, to_level, from_id, from_level, edge_type, count);
+                //     self.add_edges(edge_to, to_level, to, from_level, edge_type, count);
+                // }
 
-                self.remove_group(from_id);
+                // for from_node in from_nodes.keys() {
+                //     self.group_id_by_node.insert(*from_node, to);
+                // }
+                // let to_group = self.get_node_group_mut(to);
+                // to_group.nodes.extend(from_nodes);
+                // to_group.layer_min.extend(layer_min);
+                // to_group.layer_max.extend(layer_max);
+
+                // self.remove_group(from_id);
             } else {
                 return false;
             }
@@ -401,7 +553,7 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
         self.group_by_id.insert(
             new_id,
             NodeGroup {
-                nodes: HashSet::new(),
+                nodes: HashMap::new(),
                 in_edges: HashMap::new(),
                 out_edges: HashMap::new(),
                 layer_min: PriorityQueue::new(),
@@ -417,7 +569,12 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
 
     pub fn split_edges(&mut self, group_id: NodeGroupID, fully: bool) {
         // TODO: rethink this entire approach, one nodeID can end up in multiple splits atm
-        let group_nodes = &self.get_node_group(group_id).nodes.clone();
+        let group_nodes = &self
+            .get_node_group(group_id)
+            .nodes
+            .keys()
+            .cloned()
+            .collect_vec();
         let mut splits: HashMap<(EdgeType<T>, NodeGroupID), HashSet<NodeID>> = HashMap::new();
         for &node in group_nodes {
             let children = &self.graph.get_children(node);
@@ -453,7 +610,9 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupManager<T, G> {
     }
 }
 
-impl<T: DrawTag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager<T, G> {
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
+    GroupedGraphStructure<T, String, LL> for InnerGroupManager<T, NL, LL, G>
+{
     type Tracker = SourceReader;
     fn get_root(&self) -> NodeGroupID {
         let root_node = &self.graph.get_root();
@@ -543,14 +702,7 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager
             .get(&group)
             .map_or_else(
                 || Vec::default().into_iter(),
-                |group| {
-                    group
-                        .nodes
-                        .iter()
-                        .map(|&id| id)
-                        .collect::<Vec<NodeID>>()
-                        .into_iter()
-                },
+                |group| group.nodes.keys().cloned().collect_vec().into_iter(),
             )
             .sorted()
     }
@@ -563,7 +715,11 @@ impl<T: DrawTag, G: GraphStructure<T>> GroupedGraphStructure<T> for GroupManager
         self.sources.get_reader()
     }
 
-    fn get_level_label(&self, level: LevelNo) -> String {
+    fn get_level_label(&self, level: LevelNo) -> LL {
         self.graph.get_level_label(level)
+    }
+
+    fn get_group_label(&self, node: NodeID) -> String {
+        todo!()
     }
 }

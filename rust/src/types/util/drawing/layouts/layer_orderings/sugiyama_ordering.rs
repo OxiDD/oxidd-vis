@@ -11,8 +11,9 @@ use crate::{
                 layer_orderer::{count_crossings, swap_edges, EdgeMap, LayerOrderer, Order},
             },
         },
-        graph_structure::DrawTag,
-        grouped_graph_structure::GroupedGraphStructure,
+        graph_structure::{
+            graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
+        },
     },
     util::logging::console,
     wasm_interface::{NodeGroupID, NodeID},
@@ -45,10 +46,10 @@ impl SugiyamaOrdering {
     }
 }
 
-impl<T: DrawTag> LayerOrdering<T> for SugiyamaOrdering {
+impl<T: DrawTag, GL, LL> LayerOrdering<T, GL, LL> for SugiyamaOrdering {
     fn order_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,

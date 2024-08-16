@@ -3,16 +3,17 @@ use oxidd_core::Tag;
 
 use crate::{
     types::util::{
-        graph_structure::DrawTag,
+        graph_structure::{
+            graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
+        },
         group_manager::GroupManager,
-        grouped_graph_structure::{GroupedGraphStructure, SourceReader},
     },
     wasm_interface::NodeGroupID,
 };
 
 use super::diagram_layout::DiagramLayout;
 
-pub trait LayoutRules<T: DrawTag, G: GroupedGraphStructure<T>> {
+pub trait LayoutRules<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> {
     fn layout(
         &mut self,
         graph: &G,

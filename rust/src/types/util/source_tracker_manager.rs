@@ -70,7 +70,7 @@ pub struct SourceReader {
     shared: MutRcRefCell<SharedData>,
     id: usize,
 }
-impl super::grouped_graph_structure::SourceReader for SourceReader {
+impl super::graph_structure::grouped_graph_structure::SourceReader for SourceReader {
     fn get_source(&self, group: NodeGroupID) -> NodeGroupID {
         let shared = self.shared.read();
         let nodes = shared.readers.get(&self.id).unwrap();
@@ -87,7 +87,7 @@ impl super::grouped_graph_structure::SourceReader for SourceReader {
         nodes.0.keys().cloned().collect()
     }
 }
-impl super::grouped_graph_structure::SourceTracker for SourceReader {
+impl super::graph_structure::grouped_graph_structure::SourceTracker for SourceReader {
     fn delete_source(&mut self, group: NodeGroupID) -> () {
         let mut shared = self.shared.get();
         let nodes = shared.readers.get_mut(&self.id).unwrap();

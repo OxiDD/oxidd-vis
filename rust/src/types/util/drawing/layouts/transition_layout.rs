@@ -18,10 +18,10 @@ use crate::{
             },
             layout_rules::LayoutRules,
         },
-        edge_type::EdgeType,
-        graph_structure::DrawTag,
-        group_manager::{EdgeData, GroupManager},
-        grouped_graph_structure::{GroupedGraphStructure, SourceReader},
+        graph_structure::{
+            graph_structure::DrawTag,
+            grouped_graph_structure::{EdgeData, GroupedGraphStructure, SourceReader},
+        },
     },
     util::logging::console,
     wasm_interface::NodeGroupID,
@@ -31,27 +31,39 @@ use crate::{
 /// A layout builder that takes another layout approach, and applies transitioning to it.
 /// This will make layout changes smoothly transition from the previous state to the new state.
 ///
-pub struct TransitionLayout<T: DrawTag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> {
+pub struct TransitionLayout<
+    T: DrawTag,
+    GL,
+    LL,
+    G: GroupedGraphStructure<T, GL, LL>,
+    L: LayoutRules<T, GL, LL, G>,
+> {
     layout: L,
     duration: u32,
+    group_label: PhantomData<GL>,
+    level_label: PhantomData<LL>,
     // TODO: see if these generics and  phantom data is even needed
     tag: PhantomData<T>,
     graph: PhantomData<G>,
 }
 
-impl<T: DrawTag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> TransitionLayout<T, G, L> {
-    pub fn new(layout: L) -> TransitionLayout<T, G, L> {
+impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, GL, LL, G>>
+    TransitionLayout<T, GL, LL, G, L>
+{
+    pub fn new(layout: L) -> TransitionLayout<T, GL, LL, G, L> {
         TransitionLayout {
             layout,
             duration: 1000,
             tag: PhantomData,
             graph: PhantomData,
+            group_label: PhantomData,
+            level_label: PhantomData,
         }
     }
 }
 
-impl<T: DrawTag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<T, G>
-    for TransitionLayout<T, G, L>
+impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, GL, LL, G>>
+    LayoutRules<T, GL, LL, G> for TransitionLayout<T, GL, LL, G, L>
 {
     fn layout(
         &mut self,
@@ -286,7 +298,7 @@ impl<T: DrawTag, G: GroupedGraphStructure<T>, L: LayoutRules<T, G>> LayoutRules<
     }
 }
 
-fn relate_elements<T: DrawTag, G: GroupedGraphStructure<T>>(
+fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
     graph: &G,
     old: &DiagramLayout<T>,
     new: &DiagramLayout<T>,

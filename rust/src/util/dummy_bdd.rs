@@ -102,12 +102,9 @@ impl DummyFunction {
                 let parts = node.trim().split(" ").collect::<Vec<&str>>();
                 if parts.len() >= 4 {
                     let id: NodeID = parts[0].parse().unwrap();
-                    let level = parts[1].parse();
-                    Some((
-                        id,
-                        level,
-                        parts[2..].iter().map(|v| v.parse().unwrap()).collect_vec(),
-                    ))
+                    let level = parts[1];
+                    let children = parts[2..].iter().map(|v| v.parse().unwrap()).collect_vec();
+                    Some((id, level, children))
                 } else {
                     None
                 }
@@ -115,33 +112,42 @@ impl DummyFunction {
             let mut root = Option::None;
             let mut max_level = 0;
             for (_, level, _) in nodes_data.clone() {
-                let Ok(level) = level else { continue };
+                let Ok(level) = level.parse() else { continue };
 
                 if level > max_level {
                     max_level = level;
                 }
             }
 
-            for (id, level, _) in nodes_data.clone() {
+            for (id, level, children) in nodes_data.clone() {
+                let level_num = level.parse();
                 manager.add_node_level(
                     id.clone(),
-                    if let Ok(level) = level {
+                    if let Ok(level) = level_num {
                         level
                     } else {
                         max_level + 1 // Terminal nodes don't define a level, we have to assign it
                     },
+                    if level_num.is_ok() {
+                        None
+                    } else {
+                        Some(level.to_string())
+                    },
                 );
-                if level == Ok(0) {
+
+                if level_num == Ok(0) {
                     root = Some(id);
                 }
             }
 
             for (id, level, children) in nodes_data {
-                let Ok(_) = level else { continue }; // Filter out terminals
+                if level.parse::<i32>().is_err() {
+                    continue;
+                }; // Filter out terminals
 
-                // let is_terminal = |_: NodeID| false;
+                let is_terminal = |_: NodeID| false;
                 // let is_terminal = |to: NodeID| to == 1 || to == 2;
-                let is_terminal = |to: NodeID| to == 1; // Only filter connections to false
+                // let is_terminal = |to: NodeID| to == 1; // Only filter connections to false
 
                 for child in children {
                     if !is_terminal(child) {
@@ -286,7 +292,7 @@ impl DummyManager {
 
 /// Dummy diagram rules
 pub struct DummyRules;
-impl DiagramRules<DummyEdge, DummyNode, ()> for DummyRules {
+impl DiagramRules<DummyEdge, DummyNode, String> for DummyRules {
     // type Cofactors<'a> = Iter<'a, Borrowed<'a, DummyEdge>>;
     type Cofactors<'a> = <DummyNode as InnerNode<DummyEdge>>::ChildrenIter<'a> where DummyNode: 'a, DummyEdge: 'a;
 
@@ -307,13 +313,22 @@ impl DiagramRules<DummyEdge, DummyNode, ()> for DummyRules {
 }
 
 impl DummyManager {
-    fn add_node_level(&mut self, from: NodeID, level: LevelNo) -> &mut DummyNode {
-        self.0
-            .entry(from)
-            .or_insert_with(|| DummyNode::new(level, Vec::new()))
+    fn add_node_level(
+        &mut self,
+        from: NodeID,
+        level: LevelNo,
+        terminal: Option<String>,
+    ) -> &mut DummyNode {
+        self.0.entry(from).or_insert_with(|| {
+            if terminal.is_some() {
+                DummyNode(level, Vec::new(), terminal)
+            } else {
+                DummyNode::new(level, Vec::new())
+            }
+        })
     }
     fn add_node(&mut self, from: NodeID) -> &mut DummyNode {
-        self.add_node_level(from, from.try_into().unwrap())
+        self.add_node_level(from, from.try_into().unwrap(), None)
     }
     fn add_edge(&mut self, from: NodeID, to: NodeID, mr: DummyManagerRef) {
         let from_children = &mut self.0.get_mut(&from).unwrap().1;
@@ -326,8 +341,8 @@ unsafe impl Manager for DummyManager {
     type Edge = DummyEdge;
     type EdgeTag = ();
     type InnerNode = DummyNode;
-    type Terminal = ();
-    type TerminalRef<'a> = &'a ();
+    type Terminal = String;
+    type TerminalRef<'a> = &'a String;
     type TerminalIterator<'a> = std::iter::Empty<DummyEdge> where Self: 'a;
     type Rules = DummyRules;
     type NodeSet = HashSet<NodeID>;
@@ -460,7 +475,7 @@ unsafe impl LevelView<DummyEdge, DummyNode> for DummyLevelView {
 
 /// Dummy node
 #[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
-pub struct DummyNode(LevelNo, Vec<DummyEdge>);
+pub struct DummyNode(LevelNo, Vec<DummyEdge>, Option<String>);
 
 impl DropWith<DummyEdge> for DummyNode {
     fn drop_with(self, _drop_edge: impl Fn(DummyEdge)) {
@@ -487,7 +502,7 @@ impl InnerNode<DummyEdge> for DummyNode {
     type ChildrenIter<'a> = BorrowedEdgeIter<'a, DummyEdge, Iter<'a, DummyEdge>> where Self: 'a;
 
     fn new(level: LevelNo, children: impl IntoIterator<Item = DummyEdge>) -> Self {
-        DummyNode(level, children.into_iter().collect())
+        DummyNode(level, children.into_iter().collect(), None)
     }
 
     fn check_level(&self, _check: impl FnOnce(LevelNo) -> bool) -> bool {

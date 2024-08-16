@@ -17,8 +17,7 @@ use crate::{
                 vertex_renderer::VertexRenderer,
             },
         },
-        edge_type::EdgeType,
-        graph_structure::DrawTag,
+        graph_structure::graph_structure::{DrawTag, EdgeType},
     },
     util::{logging::console, transformation::Transformation},
 };

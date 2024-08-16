@@ -7,8 +7,9 @@ use crate::{
             diagram_layout::{DiagramLayout, Point},
             layout_rules::LayoutRules,
         },
-        graph_structure::DrawTag,
-        grouped_graph_structure::{GroupedGraphStructure, SourceReader},
+        graph_structure::{
+            graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
+        },
     },
     util::logging::console,
     wasm_interface::NodeGroupID,
@@ -23,11 +24,12 @@ use super::{
     util::layered::layer_orderer::{EdgeMap, Order},
 };
 
-pub struct SugiyamaLibLayout<T: DrawTag> {
-    layout: LayeredLayout<T, DummyLayerOrdering, AverageGroupAlignment, SugiyamaLibPositioning>,
+pub struct SugiyamaLibLayout<T: DrawTag, GL, LL> {
+    layout:
+        LayeredLayout<T, GL, LL, DummyLayerOrdering, AverageGroupAlignment, SugiyamaLibPositioning>,
 }
-impl<T: DrawTag> SugiyamaLibLayout<T> {
-    pub fn new(max_curve_offset: f32) -> SugiyamaLibLayout<T> {
+impl<T: DrawTag, GL, LL> SugiyamaLibLayout<T, GL, LL> {
+    pub fn new(max_curve_offset: f32) -> SugiyamaLibLayout<T, GL, LL> {
         SugiyamaLibLayout {
             layout: LayeredLayout::new(
                 DummyLayerOrdering,
@@ -39,7 +41,9 @@ impl<T: DrawTag> SugiyamaLibLayout<T> {
     }
 }
 
-impl<T: DrawTag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for SugiyamaLibLayout<T> {
+impl<T: DrawTag, GL, G: GroupedGraphStructure<T, GL, String>> LayoutRules<T, GL, String, G>
+    for SugiyamaLibLayout<T, GL, String>
+{
     fn layout(
         &mut self,
         graph: &G,
@@ -51,10 +55,10 @@ impl<T: DrawTag, G: GroupedGraphStructure<T>> LayoutRules<T, G> for SugiyamaLibL
     }
 }
 struct SugiyamaLibPositioning;
-impl<T: DrawTag> NodePositioning<T> for SugiyamaLibPositioning {
+impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for SugiyamaLibPositioning {
     fn position_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,

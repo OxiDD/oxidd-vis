@@ -5,21 +5,45 @@ use oxidd_core::Tag;
 
 use crate::wasm_interface::{NodeGroupID, NodeID};
 
-use super::{edge_type::EdgeType, graph_structure::DrawTag, group_manager::EdgeData};
+use super::graph_structure::{DrawTag, EdgeType};
 
-pub trait GroupedGraphStructure<T: DrawTag> {
+pub trait GroupedGraphStructure<T: DrawTag, GL, LL> {
     type Tracker: SourceTracker;
     fn get_root(&self) -> NodeGroupID;
     fn get_all_groups(&self) -> Vec<NodeGroupID>;
     fn get_hidden(&self) -> Option<NodeGroupID>;
     fn get_group(&self, node: NodeID) -> NodeGroupID;
+    fn get_group_label(&self, node: NodeID) -> GL;
     fn get_parents(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>>;
     fn get_children(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>>;
     fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID>;
     fn get_level_range(&self, group: NodeGroupID) -> (LevelNo, LevelNo);
-    fn get_level_label(&self, level: LevelNo) -> String;
+    fn get_level_label(&self, level: LevelNo) -> LL;
     /// Retrieves a source reader, which can be used to animate creation of new groups
     fn get_source_reader(&mut self) -> Self::Tracker;
+}
+
+#[derive(PartialEq, Eq, Clone, Hash)]
+pub struct EdgeData<T: DrawTag> {
+    pub to: NodeGroupID,
+    pub from_level: LevelNo,
+    pub to_level: LevelNo,
+    pub edge_type: EdgeType<T>,
+}
+impl<T: DrawTag> EdgeData<T> {
+    pub fn new(
+        to: NodeGroupID,
+        from_level: LevelNo,
+        to_level: LevelNo,
+        edge_type: EdgeType<T>,
+    ) -> EdgeData<T> {
+        EdgeData {
+            to,
+            from_level,
+            to_level,
+            edge_type,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]

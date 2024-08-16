@@ -18,8 +18,9 @@ use crate::{
                 },
             },
         },
-        graph_structure::DrawTag,
-        grouped_graph_structure::GroupedGraphStructure,
+        graph_structure::{
+            graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
+        },
     },
     util::logging::console,
     wasm_interface::NodeGroupID,
@@ -27,10 +28,10 @@ use crate::{
 
 pub struct BrandesKopfPositioning;
 
-impl<T: DrawTag> NodePositioning<T> for BrandesKopfPositioning {
+impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
     fn position_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T>,
+        graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,

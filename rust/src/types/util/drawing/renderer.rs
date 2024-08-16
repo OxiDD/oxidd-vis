@@ -1,6 +1,8 @@
 use oxidd_core::Tag;
 
-use crate::{types::util::graph_structure::DrawTag, util::transformation::Transformation};
+use crate::{
+    types::util::graph_structure::graph_structure::DrawTag, util::transformation::Transformation,
+};
 
 use super::diagram_layout::DiagramLayout;
 
