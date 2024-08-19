@@ -1,4 +1,4 @@
-use crate::types::util::drawing::diagram_layout::Point;
+use crate::{types::util::drawing::diagram_layout::Point, util::logging::console};
 
 pub fn remove_redundant_bendpoints(points: &Vec<Point>) -> Vec<Point> {
     if points.len() <= 2 {
@@ -11,7 +11,7 @@ pub fn remove_redundant_bendpoints(points: &Vec<Point>) -> Vec<Point> {
         let p0 = points[i - 1];
         let p1 = points[i];
         let p2 = points[i + 1];
-        if colinear(p0, p1, p2) {
+        if collinear(p0, p1, p2) {
             continue;
         }
         out.push(p1);
@@ -21,7 +21,7 @@ pub fn remove_redundant_bendpoints(points: &Vec<Point>) -> Vec<Point> {
     out
 }
 
-fn colinear(a: Point, b: Point, c: Point) -> bool {
-    let double_area = a.x * b.y + b.x * c.y + c.x * a.y - b.x * a.y - a.x * c.y - c.x * b.y;
-    double_area < 1.0e-5
+fn collinear(a: Point, b: Point, c: Point) -> bool {
+    let double_area = a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y);
+    double_area.abs() < 1.0e-5
 }

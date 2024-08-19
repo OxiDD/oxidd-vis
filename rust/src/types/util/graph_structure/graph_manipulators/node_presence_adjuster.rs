@@ -333,7 +333,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
         // Calculate the connections
         self.update_parents(id);
-        self.update_children(id);
+        self.update_children(from_sourced(Either::Right(id)));
 
         id
     }
@@ -401,11 +401,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
         }
 
-        console::log!(
-            "update parents for {}: {}",
-            right_node_id,
-            out_parents.iter().map(|(_, k)| k.to_string()).join(", ")
-        );
+        // console::log!(
+        //     "update parents for {}: {}",
+        //     right_node_id,
+        //     out_parents.iter().map(|(_, k)| k.to_string()).join(", ")
+        // );
 
         data.known_parents.insert(right_node_id, out_parents);
     }
@@ -469,10 +469,10 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
         }
 
-        let has0 = out.iter().find(|p| p.1 == 0);
-        if has0.is_some() {
-            console::log!("node0: {} ", out_node_id);
-        }
+        // let has0 = out.iter().find(|p| p.1 == 0);
+        // if has0.is_some() {
+        //     console::log!("node0: {} ", out_node_id);
+        // }
         let mut data = (*self.node_data).borrow_mut();
         data.children.insert(out_node_id, out);
     }
@@ -544,6 +544,19 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             //     node,
             //     children.iter().map(|(_, v)| v.to_string()).join(", ")
             // );
+            // if let Either::Left(_) = to_sourced(node) {
+            //     let data = (*self.node_data).borrow();
+            //     console::log!(
+            //         "{} children: {}",
+            //         node,
+            //         data.children
+            //             .get(&node)
+            //             .unwrap()
+            //             .iter()
+            //             .map(|(_, v)| v.to_string())
+            //             .join(", ")
+            //     );
+            // }
             return children.clone();
         }
 
@@ -552,16 +565,16 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 self.update_children(node);
 
                 let data = (*self.node_data).borrow();
-                console::log!(
-                    "{} children: {}",
-                    node,
-                    data.children
-                        .get(&node)
-                        .unwrap()
-                        .iter()
-                        .map(|(_, v)| v.to_string())
-                        .join(", ")
-                );
+                // console::log!(
+                //     "{} children: {}",
+                //     node,
+                //     data.children
+                //         .get(&node)
+                //         .unwrap()
+                //         .iter()
+                //         .map(|(_, v)| v.to_string())
+                //         .join(", ")
+                // );
                 return data.children.get(&node).cloned().unwrap();
             }
             Either::Right(_) => {
@@ -573,14 +586,14 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
     fn get_level(&mut self, node: NodeID) -> LevelNo {
         let id = self.get_owner_id(node);
-        if self.graph.get_level(id) == 0 {
-            console::log!(
-                "node: {}, id: {}, level: {}",
-                node,
-                id,
-                self.graph.get_level(id)
-            );
-        }
+        // if self.graph.get_level(id) == 0 {
+        //     console::log!(
+        //         "node: {}, id: {}, level: {}",
+        //         node,
+        //         id,
+        //         self.graph.get_level(id)
+        //     );
+        // }
         // if let Either::Right(_) = to_sourced(node) {
         //     console::log!(
         //         "node: {}, id: {}, level: {}",
@@ -589,6 +602,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         //         self.graph.get_level(id)
         //     );
         // }
+
+        // TODO: store custom levels for terminals
         self.graph.get_level(id)
     }
 

@@ -42,6 +42,7 @@ use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 use super::util::drawing::drawer::Drawer;
 use super::util::drawing::layout_rules::LayoutRules;
 use super::util::drawing::layouts::layer_group_sorting::average_group_alignment::AverageGroupAlignment;
+use super::util::drawing::layouts::layer_group_sorting::ordering_group_alignment::OrderingGroupAlignment;
 use super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaOrdering;
 use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
 use super::util::drawing::layouts::layer_positionings::dummy_layer_positioning::DummyLayerPositioning;
@@ -131,8 +132,10 @@ where
         .unwrap();
         let layout = LayeredLayout::new(
             SugiyamaOrdering::new(1, 1),
-            AverageGroupAlignment,
+            // AverageGroupAlignment,
+            OrderingGroupAlignment,
             BrandesKopfPositioning,
+            // DummyLayerPositioning,
             0.3,
         );
         let layout = TransitionLayout::new(layout);
@@ -173,8 +176,10 @@ impl<
         //         .join(",")
         // );
         for terminal in modified_graph.get_terminals() {
-            modified_graph
-                .set_node_presence(terminal, PresenceGroups::remainder(PresenceRemainder::Show))
+            modified_graph.set_node_presence(
+                terminal,
+                PresenceGroups::remainder(PresenceRemainder::Duplicate),
+            )
         }
         let root = modified_graph.get_root();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph));

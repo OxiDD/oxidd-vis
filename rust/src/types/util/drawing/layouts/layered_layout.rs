@@ -501,57 +501,60 @@ fn format_edge<T: DrawTag>(
     } = edge;
     let edge_data = edge.drop_count();
 
-    let (start_offset, end_offset) = edge_connection_nodes
+    let (start_pos, end_pos) = edge_connection_nodes
         .get(&(group_id, edge_data.clone()))
         .map_or_else(
-            || (Point { x: 0.0, y: 0.0 }, Point { x: 0.0, y: 0.0 }),
+            || (None, None),
             |(start_id, end_id)| {
                 (
-                    node_positions.get(&start_id).map_or_else(
-                        || Point { x: 0.0, y: 0.0 },
-                        |start_point| {
-                            bottom_node_positions.get(&group_id).map_or_else(
-                                || Point { x: 0., y: 0. },
-                                |center_point| *start_point - *center_point,
-                            )
-                        },
-                    ),
-                    node_positions.get(&end_id).map_or_else(
-                        || Point { x: 0.0, y: 0.0 },
-                        |end_point| {
-                            bottom_node_positions.get(&to).map_or_else(
-                                || Point { x: 0., y: 0. },
-                                |center_point| *end_point - *center_point,
-                            )
-                        },
-                    ),
+                    node_positions.get(&start_id).cloned(),
+                    node_positions.get(&end_id).cloned(),
                 )
             },
         );
 
-    let edge_offset = Point {
+    let start_offset = start_pos
+        .and_then(|start_point| {
+            bottom_node_positions
+                .get(&group_id)
+                .map(|base_point| start_point - *base_point)
+        })
+        .unwrap_or_default();
+
+    let end_offset = end_pos
+        .and_then(|end_point| {
+            bottom_node_positions
+                .get(&to)
+                .map(|base_point| end_point - *base_point)
+        })
+        .unwrap_or_default();
+
+    let edge_center_offset = Point {
         x: node_size,
         y: node_size,
     } * 0.5;
 
     EdgeLayout {
-        start_offset: Transition::plain(start_offset + edge_offset),
-        end_offset: Transition::plain(end_offset + edge_offset),
+        start_offset: Transition::plain(start_offset + edge_center_offset),
+        end_offset: Transition::plain(end_offset + edge_center_offset),
         points: edge_bend_nodes.get(&(group_id, edge_data)).map_or_else(
             || Vec::new(),
             |nodes| {
-                remove_redundant_bendpoints(
-                    &nodes
-                        .iter()
-                        .map(|dummy_id| *node_positions.get(&dummy_id).unwrap() + edge_offset)
-                        .collect(),
-                )
-                .iter()
-                .map(|&point| EdgePoint {
-                    point: Transition::plain(point),
-                    exists: Transition::plain(1.),
-                })
-                .collect()
+                let bend_points = nodes
+                    .iter()
+                    .map(|dummy_id| *node_positions.get(&dummy_id).unwrap() + edge_center_offset);
+                let all_bend_points = (Some(start_pos.unwrap_or_default() + edge_center_offset))
+                    .into_iter()
+                    .chain(bend_points)
+                    .chain(Some(end_pos.unwrap_or_default() + edge_center_offset));
+                let reduced_points = remove_redundant_bendpoints(&all_bend_points.collect());
+                reduced_points[1..reduced_points.len() - 1]
+                    .iter()
+                    .map(|&point| EdgePoint {
+                        point: Transition::plain(point),
+                        exists: Transition::plain(1.),
+                    })
+                    .collect()
             },
         ),
         exists: Transition::plain(1.),

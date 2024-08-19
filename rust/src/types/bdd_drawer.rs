@@ -20,6 +20,7 @@ use crate::util::rc_refcell::MutRcRefCell;
 use crate::util::rectangle::Rectangle;
 use crate::wasm_interface::NodeGroupID;
 use crate::wasm_interface::NodeID;
+use crate::wasm_interface::StepData;
 use crate::wasm_interface::TargetID;
 use crate::wasm_interface::TargetIDType;
 use oxidd::bdd;
@@ -135,17 +136,19 @@ pub struct BDDDiagramDrawer<
     T: DrawTag,
     G: GraphStructure<T, NodeLabel<String>, String> + 'static,
     R: Renderer<T>,
-    L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+    L: LayoutRules<T, String, String, GM<T, G>>,
 > {
-    group_manager: MutRcRefCell<GroupManager<T, NodeLabel<String>, String, G>>,
-    drawer: Drawer<T, R, L, GroupManager<T, NodeLabel<String>, String, G>>,
+    group_manager: MutRcRefCell<GM<T, G>>,
+    drawer: Drawer<T, R, L, GM<T, G>>,
 }
+type GM<T, G> = GroupManager<T, NodeLabel<String>, String, MGraph<G>>;
+type MGraph<G> = G;
 
 impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+        L: LayoutRules<T, String, String, GM<T, G>>,
     > BDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> BDDDiagramDrawer<T, G, R, L> {
@@ -206,7 +209,7 @@ impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+        L: LayoutRules<T, String, String, GM<T, G>>,
     > DiagramDrawer for BDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
@@ -228,22 +231,15 @@ impl<
         self.drawer.set_transform(width, height, x, y, scale);
     }
 
-    fn set_step(&mut self, step: i32) -> Option<crate::wasm_interface::StepData> {
+    fn set_step(&mut self, step: i32) -> Option<StepData> {
         todo!()
     }
 
-    fn set_group(
-        &mut self,
-        from: Vec<crate::wasm_interface::TargetID>,
-        to: crate::wasm_interface::NodeGroupID,
-    ) -> bool {
+    fn set_group(&mut self, from: Vec<TargetID>, to: NodeGroupID) -> bool {
         self.group_manager.get().set_group(from, to)
     }
 
-    fn create_group(
-        &mut self,
-        from: Vec<crate::wasm_interface::TargetID>,
-    ) -> crate::wasm_interface::NodeGroupID {
+    fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
         self.group_manager.get().create_group(from)
     }
 
@@ -251,7 +247,7 @@ impl<
         self.group_manager.get().split_edges(group, fully);
     }
 
-    fn get_nodes(&self, area: Rectangle) -> Vec<crate::wasm_interface::NodeGroupID> {
+    fn get_nodes(&self, area: Rectangle) -> Vec<NodeGroupID> {
         self.drawer.get_nodes(area)
     }
 }
