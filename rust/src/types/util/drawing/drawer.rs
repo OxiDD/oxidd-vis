@@ -42,7 +42,7 @@ pub struct Drawer<
     renderer: R,
     layout_rules: L,
     layout: DiagramLayout<T>,
-    graph: RcRefCell<G>,
+    graph: MutRcRefCell<G>,
     sources: G::Tracker,
     transform: Transformation,
 }
@@ -59,7 +59,7 @@ impl<
             sources: graph.get().get_source_reader(),
             renderer,
             layout_rules,
-            graph: graph.clone_readonly(),
+            graph: graph.clone(),
             layout: DiagramLayout {
                 groups: HashMap::new(),
                 layers: Vec::new(),
@@ -69,6 +69,7 @@ impl<
     }
 
     pub fn layout(&mut self, time: u32) {
+        self.graph.get().refresh();
         self.layout =
             self.layout_rules
                 .layout(&*self.graph.read(), &self.layout, &self.sources, time);

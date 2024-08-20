@@ -9,7 +9,9 @@ use std::{
 use oxidd::{Edge, Function, InnerNode, LevelNo, Manager, NodeID};
 use oxidd_core::{DiagramRules, HasLevel, Node};
 
-use super::graph_structure::{DrawTag, EdgeType, GraphListener, GraphStructure};
+use super::graph_structure::{
+    Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
+};
 
 pub struct OxiddGraphStructure<DT: DrawTag, F: Function, T, S: Fn(&T) -> String>
 where
@@ -20,6 +22,7 @@ where
     node_parents: HashMap<NodeID, HashSet<(EdgeType<DT>, NodeID)>>,
     terminal_to_string: S,
     terminal: PhantomData<T>,
+    event_writer: GraphEventsWriter,
 }
 
 #[derive(Clone)]
@@ -41,6 +44,7 @@ where
             root,
             node_parents: HashMap::new(),
             terminal_to_string,
+            event_writer: GraphEventsWriter::new(),
             terminal: PhantomData,
         }
     }
@@ -62,6 +66,8 @@ where
             .entry(node)
             .or_insert_with(|| HashSet::new());
         parents.insert((edge_type, parent));
+        self.event_writer
+            .write(Change::ParentDiscover { child: node });
     }
 }
 
@@ -140,12 +146,6 @@ where
         level.to_string()
     }
 
-    fn on_change(&mut self, listener: Box<GraphListener>) -> usize {
-        // This diagram never changes
-        0
-    }
-    fn off_change(&mut self, listener: usize) {}
-
     fn get_node_label(&self, node: NodeID) -> NodeLabel<String> {
         if let Some(node) = self.get_node_by_id(node) {
             return node.with_manager_shared(|manager, edge| match manager.get_node(edge) {
@@ -155,5 +155,12 @@ where
         } else {
             NodeLabel::Inner("Not found".to_string())
         }
+    }
+
+    fn create_event_reader(&mut self) -> GraphEventsReader {
+        self.event_writer.create_reader()
+    }
+    fn consume_events(&mut self, reader: &GraphEventsReader) -> Vec<Change> {
+        self.event_writer.read(reader)
     }
 }

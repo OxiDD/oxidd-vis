@@ -22,179 +22,18 @@ use crate::{
 
 use super::{
     graph_structure::{
-        graph_structure::{Change, DrawTag, EdgeType, GraphStructure},
+        graph_structure::{Change, DrawTag, EdgeType, GraphEventsReader, GraphStructure},
         grouped_graph_structure::{EdgeCountData, EdgeData, GroupedGraphStructure},
     },
     source_tracker_manager::{SourceReader, SourceTrackerManager},
 };
 
 pub struct GroupManager<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> {
-    // This wrapper is required for the listener to have access to the internal functions
-    inner: MutRcRefCell<InnerGroupManager<T, NL, LL, G>>,
-    listener_handle: Option<usize>,
-}
-
-impl<
-        T: DrawTag + 'static,
-        NL: Clone + 'static,
-        LL: Clone + 'static,
-        G: GraphStructure<T, NL, LL> + 'static,
-    > GroupManager<T, NL, LL, G>
-{
-    pub fn new(graph: G) -> GroupManager<T, NL, LL, G> {
-        let mut group_manager = GroupManager {
-            inner: MutRcRefCell::new(InnerGroupManager::new(graph)),
-            listener_handle: None,
-        };
-        group_manager.setup_listener();
-        group_manager
-    }
-
-    pub fn set_group(
-        &mut self,
-        from: Vec<crate::wasm_interface::TargetID>,
-        to: crate::wasm_interface::NodeGroupID,
-    ) -> bool {
-        self.inner.get().set_group(from, to)
-    }
-
-    pub fn create_group(
-        &mut self,
-        from: Vec<crate::wasm_interface::TargetID>,
-    ) -> crate::wasm_interface::NodeGroupID {
-        self.inner.get().create_group(from)
-    }
-
-    pub fn split_edges(&mut self, group_id: NodeGroupID, fully: bool) {
-        self.inner.get().split_edges(group_id, fully)
-    }
-
-    pub fn setup_listener(&mut self) {
-        let inner = self.inner.clone();
-        self.listener_handle = Some(self.inner.get().graph.on_change(Box::new(move |events| {
-            let mut removed_from = HashMap::new();
-            let mut used_sources = HashSet::new();
-            for event in events {
-                let mut inner = inner.get();
-                match event {
-                    Change::NodeLabelChange { node } => {}
-                    Change::LevelChange { node } => {}
-                    Change::LevelLabelChange { level } => {}
-                    Change::NodeConnectionsChange { node } => {
-                        // TODO: handle connection changes, node removals, and node insertions
-                        let group = inner.remove_node_from_group(*node);
-                        inner.add_node_to_group(*node, group);
-                    }
-                    Change::NodeRemoval { node } => {
-                        let group = inner.remove_node_from_group(*node);
-                        removed_from.insert(node, group);
-                    }
-                    Change::NodeInsertion { node, source } => {
-                        let add_group = source.and_then(|source| {
-                            // A source may have been removed and replaced by something (1 thing) else, in which case we want to place this thing int he original group
-                            if !used_sources.contains(&source) {
-                                used_sources.insert(source);
-                                return removed_from.get(&source).cloned();
-                            }
-
-                            // Otherwise, a source may have been in a group together with all its parents, in which case we don't want to separate the new node
-                            let source_group = inner.get_group(source);
-                            let all_parents_in_group = inner
-                                .graph
-                                .get_known_parents(source)
-                                .iter()
-                                .all(|(_, parent)| inner.get_group(*parent) == source_group);
-                            if all_parents_in_group {
-                                return Some(source_group);
-                            }
-
-                            // Otherwise a new group may be created
-                            None
-                        });
-                        if let Some(group) = add_group {
-                            // Don't add it to the group in which it's already implicitly present
-                            if group == 0 {
-                                return;
-                            }
-                            inner.add_node_to_group(*node, group);
-                        } else {
-                            inner.create_group(vec![TargetID(TargetIDType::NodeID, *node)]);
-                        }
-                    }
-                }
-            }
-
-            for group_id in removed_from.values().cloned() {
-                inner.get().remove_group_if_empty(group_id);
-            }
-        })));
-    }
-}
-
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> Drop
-    for GroupManager<T, NL, LL, G>
-{
-    fn drop(&mut self) {
-        if let Some(listener_handle) = self.listener_handle {
-            self.inner.get().graph.off_change(listener_handle);
-        }
-    }
-}
-
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    GroupedGraphStructure<T, String, LL> for GroupManager<T, NL, LL, G>
-{
-    type Tracker = SourceReader;
-
-    fn get_root(&self) -> NodeGroupID {
-        self.inner.read().get_root()
-    }
-
-    fn get_all_groups(&self) -> Vec<NodeGroupID> {
-        self.inner.read().get_all_groups()
-    }
-
-    fn get_hidden(&self) -> Option<NodeGroupID> {
-        self.inner.read().get_hidden()
-    }
-
-    fn get_group(&self, node: NodeID) -> NodeGroupID {
-        self.inner.read().get_group(node)
-    }
-
-    fn get_group_label(&self, node: NodeID) -> String {
-        self.inner.read().get_group_label(node)
-    }
-
-    fn get_parents(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>> {
-        self.inner.read().get_parents(group)
-    }
-
-    fn get_children(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>> {
-        self.inner.read().get_children(group)
-    }
-
-    fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID> {
-        self.inner.read().get_nodes_of_group(group)
-    }
-
-    fn get_level_range(&self, group: NodeGroupID) -> (LevelNo, LevelNo) {
-        self.inner.read().get_level_range(group)
-    }
-
-    fn get_level_label(&self, level: LevelNo) -> LL {
-        self.inner.read().get_level_label(level)
-    }
-
-    fn get_source_reader(&mut self) -> Self::Tracker {
-        self.inner.get().get_source_reader()
-    }
-}
-
-pub struct InnerGroupManager<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> {
     node_label: PhantomData<NL>,
     level_label: PhantomData<LL>,
     graph: G,
+    graph_events: GraphEventsReader,
+
     /// Nodes are implicitly in group 0 by default, I.e either:
     /// - group_by_id[group_id_by_node[node]].nodes.contains(node)
     /// - or !group_id_by_node.contains(node) && !exists g. group_by_id[g].nodes.contains(node)
@@ -247,9 +86,64 @@ impl<T: DrawTag> Display for NodeGroup<T> {
 }
 
 // Helper methods
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    InnerGroupManager<T, NL, LL, G>
-{
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManager<T, NL, LL, G> {
+    fn process_graph_events(&mut self) {
+        let events = self.graph.consume_events(&self.graph_events);
+
+        let mut removed_from = HashMap::new();
+        let mut used_sources = HashSet::new();
+        for event in events {
+            match event {
+                Change::NodeConnectionsChange { node } => {
+                    // TODO: handle connection changes, node removals, and node insertions
+                    let group = self.remove_node_from_group(node);
+                    self.add_node_to_group(node, group);
+                }
+                Change::NodeRemoval { node } => {
+                    let group = self.remove_node_from_group(node);
+                    removed_from.insert(node, group);
+                }
+                Change::NodeInsertion { node, source } => {
+                    let add_group = source.and_then(|source| {
+                        // A source may have been removed and replaced by something (1 thing) else, in which case we want to place this thing int he original group
+                        if !used_sources.contains(&source) {
+                            used_sources.insert(source);
+                            return removed_from.get(&source).cloned();
+                        }
+
+                        // Otherwise, a source may have been in a group together with all its parents, in which case we don't want to separate the new node
+                        let source_group = self.get_group(source);
+                        let all_parents_in_group = self
+                            .graph
+                            .get_known_parents(source)
+                            .iter()
+                            .all(|(_, parent)| self.get_group(*parent) == source_group);
+                        if all_parents_in_group {
+                            return Some(source_group);
+                        }
+
+                        // Otherwise a new group may be created
+                        None
+                    });
+                    if let Some(group) = add_group {
+                        // Don't add it to the group in which it's already implicitly present
+                        if group == 0 {
+                            return;
+                        }
+                        self.add_node_to_group(node, group);
+                    } else {
+                        self.create_group(vec![TargetID(TargetIDType::NodeID, node)]);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for group_id in removed_from.values().cloned() {
+            self.remove_group_if_empty(group_id);
+        }
+    }
+
     fn get_node_group_mut(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<T> {
         self.group_by_id.get_mut(&group_id).unwrap()
     }
@@ -307,7 +201,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         let to_level = self.graph.get_level(to_source);
 
         let from_group = self.get_node_group_mut(from);
-        InnerGroupManager::<T, NL, LL, G>::remove_edges_to_set(
+        GroupManager::<T, NL, LL, G>::remove_edges_to_set(
             &mut from_group.out_edges,
             EdgeData::new(to, from_level, to_level, edge_type),
             count,
@@ -317,7 +211,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         });
 
         let to_group = self.get_node_group_mut(to);
-        InnerGroupManager::<T, NL, LL, G>::remove_edges_to_set(
+        GroupManager::<T, NL, LL, G>::remove_edges_to_set(
             &mut to_group.in_edges,
             EdgeData::new(from, to_level, from_level, edge_type),
             count,
@@ -345,7 +239,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         let to_level = self.graph.get_level(to_source);
 
         let from_group = self.get_node_group_mut(from);
-        InnerGroupManager::<T, NL, LL, G>::add_edges_to_set(
+        GroupManager::<T, NL, LL, G>::add_edges_to_set(
             &mut from_group.out_edges,
             EdgeData::new(to, from_level, to_level, edge_type),
             count,
@@ -358,7 +252,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             .insert((edge_type, to_source));
 
         let to_group = self.get_node_group_mut(to);
-        InnerGroupManager::<T, NL, LL, G>::add_edges_to_set(
+        GroupManager::<T, NL, LL, G>::add_edges_to_set(
             &mut to_group.in_edges,
             EdgeData::new(from, to_level, from_level, edge_type),
             count,
@@ -456,15 +350,14 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 }
 
 // Main methods
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    InnerGroupManager<T, NL, LL, G>
-{
-    pub fn new(mut graph: G) -> InnerGroupManager<T, NL, LL, G> {
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManager<T, NL, LL, G> {
+    pub fn new(mut graph: G) -> GroupManager<T, NL, LL, G> {
         let root_id = graph.get_root();
         let root_level = graph.get_level(root_id);
-        InnerGroupManager {
+        GroupManager {
             level_label: PhantomData,
             node_label: PhantomData,
+            graph_events: graph.create_event_reader(),
             graph,
             group_id_by_node: HashMap::new(),
             group_by_id: HashMap::from([(
@@ -672,7 +565,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 }
 
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    GroupedGraphStructure<T, String, LL> for InnerGroupManager<T, NL, LL, G>
+    GroupedGraphStructure<T, String, LL> for GroupManager<T, NL, LL, G>
 {
     type Tracker = SourceReader;
     fn get_root(&self) -> NodeGroupID {
@@ -782,5 +675,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
     fn get_group_label(&self, node: NodeID) -> String {
         todo!()
+    }
+
+    fn refresh(&mut self) {
+        self.process_graph_events();
     }
 }
