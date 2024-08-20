@@ -42,6 +42,10 @@ impl GraphListenerManager {
     }
 
     pub fn dispatch_change(&mut self) {
+        if self.changes.len() == 0 {
+            return;
+        }
+
         for listener in self.listeners.values() {
             listener(&self.changes);
         }
@@ -49,7 +53,7 @@ impl GraphListenerManager {
     }
 
     pub fn dispatch_changes(&mut self, changes: &Vec<Change>) {
-        &self.changes.extend(changes.iter().cloned());
+        self.changes.extend(changes.iter().cloned());
         self.dispatch_change();
     }
 }

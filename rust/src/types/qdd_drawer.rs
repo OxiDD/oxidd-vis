@@ -56,6 +56,7 @@ use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
+use super::util::graph_structure::graph_manipulators::terminal_level_adjuster::TerminalLevelAdjuster;
 use super::util::graph_structure::graph_structure::DrawTag;
 use super::util::graph_structure::graph_structure::EdgeType;
 use super::util::graph_structure::graph_structure::GraphStructure;
@@ -155,7 +156,12 @@ pub struct QDDDiagramDrawer<
     drawer: Drawer<T, R, L, GM<T, G>>,
 }
 type GM<T, G> = GroupManager<T, PresenceLabel<NodeLabel<String>>, String, MGraph<T, G>>;
-type MGraph<T, G> = NodePresenceAdjuster<T, NodeLabel<String>, String, G>;
+type MGraph<T, G> = TerminalLevelAdjuster<
+    T,
+    PresenceLabel<NodeLabel<String>>,
+    String,
+    NodePresenceAdjuster<T, NodeLabel<String>, String, G>,
+>;
 
 impl<
         T: DrawTag + 'static,
@@ -181,6 +187,7 @@ impl<
                 PresenceGroups::remainder(PresenceRemainder::Duplicate),
             )
         }
+        let modified_graph = TerminalLevelAdjuster::new(modified_graph);
         let root = modified_graph.get_root();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph));
         let mut out = QDDDiagramDrawer {

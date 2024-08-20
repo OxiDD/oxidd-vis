@@ -187,6 +187,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 data.adjustments.insert(owner, presence.clone());
             }
 
+            // This automatically creates events for the created replacements
             for group in presence.groups {
                 self.create_replacement(group, owner);
             }
@@ -202,15 +203,15 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
         }
 
-        // Create events for addition of new node (connections) and images
+        // Create an event for the replaced node
         if presence.remainder == PresenceRemainder::Show {
             self.add_insert_node_events(owner_out, owner_out);
         }
-        if let Some(images) = maybe_images {
-            for image in images {
-                self.add_insert_node_events(from_sourced(Either::Right(image)), owner_out);
-            }
-        }
+        // if let Some(images) = maybe_images {
+        //     for image in images {
+        //         self.add_insert_node_events(from_sourced(Either::Right(image)), owner_out);
+        //     }
+        // }
 
         // Emit the events
         (*self.node_data).borrow_mut().listeners.dispatch_change();
@@ -333,7 +334,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
         // Calculate the connections
         self.update_parents(id);
-        self.update_children(from_sourced(Either::Right(id)));
+        let out_id = from_sourced(Either::Right(id));
+        self.update_children(out_id);
+
+        // Create a creation event
+        self.add_insert_node_events(out_id, from_sourced(Either::Left(child_to_be_replaced)));
 
         id
     }
@@ -564,7 +569,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             Either::Left(_) => {
                 self.update_children(node);
 
-                let data = (*self.node_data).borrow();
+                let mut data = (*self.node_data).borrow_mut();
+                data.listeners.dispatch_change();
                 // console::log!(
                 //     "{} children: {}",
                 //     node,
