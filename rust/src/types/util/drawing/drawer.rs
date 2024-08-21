@@ -35,9 +35,10 @@ use super::{
 
 pub struct Drawer<
     T: DrawTag,
+    GL,
     R: Renderer<T>,
-    L: LayoutRules<T, String, String, G>,
-    G: GroupedGraphStructure<T, String, String>,
+    L: LayoutRules<T, GL, String, G>,
+    G: GroupedGraphStructure<T, GL, String>,
 > {
     renderer: R,
     layout_rules: L,
@@ -49,12 +50,13 @@ pub struct Drawer<
 
 impl<
         T: DrawTag,
+        GL,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, G>,
-        G: GroupedGraphStructure<T, String, String>,
-    > Drawer<T, R, L, G>
+        L: LayoutRules<T, GL, String, G>,
+        G: GroupedGraphStructure<T, GL, String>,
+    > Drawer<T, GL, R, L, G>
 {
-    pub fn new(renderer: R, layout_rules: L, graph: MutRcRefCell<G>) -> Drawer<T, R, L, G> {
+    pub fn new(renderer: R, layout_rules: L, graph: MutRcRefCell<G>) -> Drawer<T, GL, R, L, G> {
         Drawer {
             sources: graph.get().get_source_reader(),
             renderer,

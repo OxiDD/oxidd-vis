@@ -185,7 +185,6 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 
     fn process_graph_changes(&mut self) {
-        // TODO: compute the changes based on the changes of the parent
         let events = self.graph.consume_events(&self.graph_events);
 
         for event in events {
@@ -464,8 +463,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct PresenceLabel<LL> {
-    original_label: LL,
-    original_id: NodeID,
+    pub original_label: LL,
+    pub original_id: NodeID,
 }
 
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>

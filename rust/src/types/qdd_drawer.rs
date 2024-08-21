@@ -51,9 +51,11 @@ use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
 use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition_layout::TransitionLayout;
+use super::util::drawing::layouts::util::color_label::Color;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
+use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
 use super::util::graph_structure::graph_manipulators::terminal_level_adjuster::TerminalLevelAdjuster;
@@ -150,24 +152,26 @@ pub struct QDDDiagramDrawer<
     T: DrawTag + 'static,
     G: GraphStructure<T, NodeLabel<String>, String> + 'static,
     R: Renderer<T>,
-    L: LayoutRules<T, String, String, GM<T, G>>,
+    L: LayoutRules<T, Color, String, GMGraph<T, G>>,
 > {
     group_manager: MutRcRefCell<GM<T, G>>,
-    drawer: Drawer<T, R, L, GM<T, G>>,
+    drawer: Drawer<T, Color, R, L, GMGraph<T, G>>,
 }
-type GM<T, G> = GroupManager<T, PresenceLabel<NodeLabel<String>>, String, MGraph<T, G>>;
+type GraphLabel = PresenceLabel<NodeLabel<String>>;
+type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
 type MGraph<T, G> = TerminalLevelAdjuster<
     T,
-    PresenceLabel<NodeLabel<String>>,
+    GraphLabel,
     String,
     NodePresenceAdjuster<T, NodeLabel<String>, String, G>,
 >;
+type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, (f32, f32, f32)>;
 
 impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GM<T, G>>,
+        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
@@ -190,9 +194,28 @@ impl<
         let modified_graph = TerminalLevelAdjuster::new(modified_graph);
         let root = modified_graph.get_root();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph));
+        let grouped_graph = GMGraph::new_shared(group_manager.clone(), |nodes| {
+            match (nodes.get(0), nodes.get(1)) {
+                (
+                    Some(&PresenceLabel {
+                        original_label: NodeLabel::Terminal(ref terminal),
+                        original_id: _,
+                    }),
+                    None,
+                ) => {
+                    if terminal == "T" {
+                        (0.2, 1., 0.2)
+                    } else {
+                        (1., 0.2, 0.2)
+                    }
+                }
+                (Some(_), None) => (0., 0., 0.),
+                _ => (0.7, 0.7, 0.7),
+            }
+        });
         let mut out = QDDDiagramDrawer {
-            group_manager: group_manager.clone(),
-            drawer: Drawer::new(renderer, layout, group_manager),
+            group_manager: group_manager,
+            drawer: Drawer::new(renderer, layout, MutRcRefCell::new(grouped_graph)),
         };
         out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
@@ -222,7 +245,7 @@ impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GM<T, G>>,
+        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > DiagramDrawer for QDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {

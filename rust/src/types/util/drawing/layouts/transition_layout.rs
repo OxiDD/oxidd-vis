@@ -87,6 +87,13 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
             let per = get_per(time, val);
             val.old * (1.0 - per) + val.new * per
         };
+        let get_current_color = |val: Transition<(f32, f32, f32)>| {
+            let per = get_per(time, val);
+            let r = (val.old.0 * val.old.0 * (1.0 - per) + val.new.0 * val.new.0 * per).sqrt();
+            let g = (val.old.1 * val.old.1 * (1.0 - per) + val.new.1 * val.new.1 * per).sqrt();
+            let b = (val.old.2 * val.old.2 * (1.0 - per) + val.new.2 * val.new.2 * per).sqrt();
+            (r, g, b)
+        };
 
         let (node_mapping, edge_mapping) =
             relate_elements(graph, old, &new, sources, &get_current_point);
@@ -280,6 +287,12 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                                         )
                                     })
                                     .collect(),
+                                color: Transition {
+                                    old_time,
+                                    duration,
+                                    old: get_current_color(old_group.color),
+                                    new: group.color.new,
+                                },
                             }
                         } else {
                             group.clone()

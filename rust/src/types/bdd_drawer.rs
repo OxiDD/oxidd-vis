@@ -51,9 +51,11 @@ use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
 use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition_layout::TransitionLayout;
+use super::util::drawing::layouts::util::color_label::Color;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
+use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
 use super::util::graph_structure::graph_structure::DrawTag;
 use super::util::graph_structure::graph_structure::EdgeType;
 use super::util::graph_structure::graph_structure::GraphStructure;
@@ -136,26 +138,29 @@ pub struct BDDDiagramDrawer<
     T: DrawTag,
     G: GraphStructure<T, NodeLabel<String>, String> + 'static,
     R: Renderer<T>,
-    L: LayoutRules<T, String, String, GM<T, G>>,
+    L: LayoutRules<T, Color, String, GMGraph<T, G>>,
 > {
     group_manager: MutRcRefCell<GM<T, G>>,
-    drawer: Drawer<T, R, L, GM<T, G>>,
+    drawer: Drawer<T, Color, R, L, GMGraph<T, G>>,
 }
-type GM<T, G> = GroupManager<T, NodeLabel<String>, String, MGraph<G>>;
+type GraphLabel = NodeLabel<String>;
+type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<G>>;
 type MGraph<G> = G;
+type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, (f32, f32, f32)>;
 
 impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GM<T, G>>,
+        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > BDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> BDDDiagramDrawer<T, G, R, L> {
         let root = graph.get_root();
         let group_manager = MutRcRefCell::new(GroupManager::new(graph));
+        let grouped_graph = GMGraph::new_shared(group_manager.clone(), |nodes| (0., 0., 0.));
         let mut out = BDDDiagramDrawer {
-            group_manager: group_manager.clone(),
+            group_manager: group_manager,
             drawer: Drawer::new(
                 renderer,
                 // Box::new(TransitionLayout::new(Box::new(RandomTestLayout))),
@@ -178,7 +183,7 @@ impl<
                 //     Box::new(RandomTestLayout),
                 //     Box::new(SugiyamaLayout),
                 // ])))),
-                group_manager,
+                MutRcRefCell::new(grouped_graph),
             ),
         };
         out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
@@ -209,7 +214,7 @@ impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GM<T, G>>,
+        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > DiagramDrawer for BDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {

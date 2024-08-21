@@ -24,6 +24,7 @@ use super::{
     graph_structure::{
         graph_structure::{Change, DrawTag, EdgeType, GraphEventsReader, GraphStructure},
         grouped_graph_structure::{EdgeCountData, EdgeData, GroupedGraphStructure},
+        oxidd_graph_structure::NodeLabel,
     },
     source_tracker_manager::{SourceReader, SourceTrackerManager},
 };
@@ -565,7 +566,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 }
 
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    GroupedGraphStructure<T, String, LL> for GroupManager<T, NL, LL, G>
+    GroupedGraphStructure<T, Vec<NL>, LL> for GroupManager<T, NL, LL, G>
 {
     type Tracker = SourceReader;
     fn get_root(&self) -> NodeGroupID {
@@ -673,8 +674,17 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         self.graph.get_level_label(level)
     }
 
-    fn get_group_label(&self, node: NodeID) -> String {
-        todo!()
+    fn get_group_label(&self, group_id: NodeID) -> Vec<NL> {
+        self.group_by_id.get(&group_id).map_or_else(
+            || Vec::default(),
+            |group| {
+                group
+                    .nodes
+                    .keys()
+                    .map(|&node_id| self.graph.get_node_label(node_id))
+                    .collect_vec()
+            },
+        )
     }
 
     fn refresh(&mut self) {

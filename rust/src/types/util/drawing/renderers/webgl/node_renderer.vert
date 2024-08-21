@@ -11,11 +11,17 @@ in vec2 sizeOld;
 in float sizeStartTime;
 in float sizeDuration;
 
+in vec3 color;
+in vec3 colorOld;
+in float colorStartTime;
+in float colorDuration;
+
 uniform mat4 transform;
 uniform float time;
 
 out vec2 cornerPos;
 out vec2 curSize;
+out vec3 curColor;
 
 void main() {
     float positionPer = min((time - positionStartTime) / positionDuration, 1.0f);
@@ -23,6 +29,9 @@ void main() {
 
     float sizePer = min((time - sizeStartTime) / sizeDuration, 1.0f);
     curSize = sizePer * size + (1.0f - sizePer) * sizeOld;
+
+    float colorPer = min((time - colorStartTime) / colorDuration, 1.0f);
+    curColor = sqrt(mix(colorOld * colorOld, color * color, colorPer));
 
     int corner = gl_VertexID % 6; // two triangles
     cornerPos = curSize * (

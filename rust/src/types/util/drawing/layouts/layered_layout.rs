@@ -28,6 +28,7 @@ use crate::{
 };
 
 use super::util::{
+    color_label::ColorLabel,
     compute_layers_layout::compute_layers_layout,
     layered::layer_orderer::{EdgeMap, Order},
     remove_redundant_bendpoints::remove_redundant_bendpoints,
@@ -138,7 +139,7 @@ pub fn is_edge_dummy(node: NodeGroupID, dummy_edge_start_id: NodeGroupID) -> boo
 
 impl<
         T: DrawTag,
-        GL,
+        GL: ColorLabel,
         O: LayerOrdering<T, GL, String>,
         S: LayerGroupSorting<T, GL, String>,
         P: NodePositioning<T, GL, String>,
@@ -335,7 +336,7 @@ fn add_edges_with_dummies<T: DrawTag, GL, LL>(
     (edge_bend_nodes, edge_connection_nodes)
 }
 
-fn format_layout<T: DrawTag, GL>(
+fn format_layout<T: DrawTag, GL: ColorLabel>(
     graph: &impl GroupedGraphStructure<T, GL, String>,
     max_curve_offset: f32,
     node_positions: HashMap<usize, Point>,
@@ -420,6 +421,7 @@ fn format_layout<T: DrawTag, GL>(
                                     - layer_positions.get(&e).unwrap_or(&0.))
                                     * node_size,
                         }),
+                        color: Transition::plain(graph.get_group_label(group_id).get_color()),
                         exists: Transition::plain(1.),
                         edges: graph
                             .get_children(group_id)
