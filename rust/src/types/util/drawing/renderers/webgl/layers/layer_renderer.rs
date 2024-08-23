@@ -9,10 +9,7 @@ use crate::{
     util::{logging::console, matrix4::Matrix4},
 };
 
-use super::super::{
-    text::text_renderer::{TextRenderer, TextRendererSettings},
-    vertex_renderer::VertexRenderer,
-};
+use super::super::text::text_renderer::{TextRenderer, TextRendererSettings};
 
 pub struct LayerRenderer {
     division_renderer: Box<dyn LayerDivisionRenderer>,

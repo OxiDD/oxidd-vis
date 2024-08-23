@@ -120,9 +120,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
                 .map(|parents| (*child, parents))
         });
         let new_parent_terminals = terminal_children
-            .filter_map(|(_, parents)| {
+            .filter_map(|(terminal, parents)| {
                 if !parents.contains(&node) {
-                    Some(node)
+                    Some(terminal)
                 } else {
                     None
                 }

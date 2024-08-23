@@ -40,6 +40,8 @@ export function useTransformCallbacks(
             const startScale = transform.get().scale;
             const endScale = (scaleTarget.current *= multiplier);
 
+            e.preventDefault();
+            e.stopPropagation();
             stopPrevScaleTransition.current();
             stopPrevScaleTransition.current = transition(per => {
                 setScale((1 - per) * startScale + per * endScale, target).commit();
@@ -48,7 +50,7 @@ export function useTransformCallbacks(
         onMouseDown: useCallback(e => {
             // We register listeners on the window, such that dragging works even when leaving the canvas
             const moveListener = (e: MouseEvent) => {
-                if ((e.buttons & 1) != 0) {
+                if ((e.buttons & 3) != 0) {
                     const {
                         offset: {x, y},
                         scale,

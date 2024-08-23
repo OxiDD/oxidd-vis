@@ -4,16 +4,13 @@ use web_sys::WebGl2RenderingContext;
 use crate::{
     types::util::drawing::{
         diagram_layout::{Point, Transition},
-        renderers::webgl::text::text_renderer::Text,
+        renderers::webgl::{text::text_renderer::Text, util::vertex_renderer::VertexRenderer},
     },
     util::{logging::console, matrix4::Matrix4},
 };
 
 use super::{
-    super::{
-        text::text_renderer::{TextRenderer, TextRendererSettings},
-        vertex_renderer::VertexRenderer,
-    },
+    super::text::text_renderer::{TextRenderer, TextRendererSettings},
     layer_renderer::{Layer, LayerDivisionRenderer},
 };
 
@@ -98,7 +95,7 @@ impl LayerDivisionRenderer for LayerBgRenderer {
         self.bg_renderer
             .set_data(context, "typeDuration", &types_durations, 1);
 
-        self.bg_renderer.update_data(context);
+        self.bg_renderer.send_data(context);
     }
 
     fn set_transform(&mut self, context: &WebGl2RenderingContext, transform: &Matrix4) {

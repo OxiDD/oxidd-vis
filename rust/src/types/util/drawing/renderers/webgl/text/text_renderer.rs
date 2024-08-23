@@ -25,9 +25,11 @@ use crate::{
     types::util::drawing::{
         diagram_layout::{Point, Transition},
         renderers::webgl::{
-            render_texture::{RenderTarget, RenderTexture},
             text::triangulate::triangulate,
-            vertex_renderer::VertexRenderer,
+            util::{
+                render_texture::{RenderTarget, RenderTexture},
+                vertex_renderer::VertexRenderer,
+            },
         },
     },
     util::{logging::console, matrix4::Matrix4, rectangle::Rectangle},
@@ -179,7 +181,6 @@ impl TextRenderer {
         let scale = self.get_char_scale();
         let spacing = self.settings.atlas_spacing;
 
-        console::log!("------");
         let mut texture_id = 0;
         let mut width = 0.;
         let mut row_height = 0.;
@@ -309,7 +310,7 @@ impl TextRenderer {
                 2,
             );
 
-            self.char_renderer.update_data(context);
+            self.char_renderer.send_data(context);
 
             let texture = self.get_cur_atlas().textures.get(index).unwrap();
             texture.bind_buffer(context);
@@ -492,7 +493,7 @@ impl TextRenderer {
         self.vertex_renderer
             .set_data(context, "existsDuration", &exists_duration, 1);
 
-        self.vertex_renderer.update_data(context);
+        self.vertex_renderer.send_data(context);
     }
 
     pub fn set_transform_and_screen_height(

@@ -408,7 +408,6 @@ fn format_layout<T: DrawTag, GL: ColorLabel>(
             .iter()
             .map(|&group_id| {
                 let (s, e) = graph.get_level_range(group_id);
-                console::log!(">-------");
                 (
                     group_id,
                     NodeGroupLayout {

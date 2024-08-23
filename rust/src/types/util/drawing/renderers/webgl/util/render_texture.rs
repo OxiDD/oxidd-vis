@@ -127,7 +127,7 @@ impl ScreenTexture {
             color,
         }
     }
-    pub fn setSize(&mut self, width: usize, height: usize) {
+    pub fn set_size(&mut self, width: usize, height: usize) {
         self.width = width;
         self.height = height;
     }

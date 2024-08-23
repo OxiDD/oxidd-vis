@@ -3,6 +3,7 @@ import {DiagramVisualizationState} from "../../../state/diagrams/DiagramVisualiz
 import {useTransformCallbacks} from "./useTransformCallbacks";
 import {css} from "@emotion/css";
 import {ViewContainer} from "../../components/layout/ViewContainer";
+import {BoxSelection} from "./BoxSelection";
 
 export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}> = ({
     visualization,
@@ -23,7 +24,7 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
     useEffect(() => {
         const el = ref.current;
         if (el) {
-            el.appendChild(visualization.canvas);
+            el.insertBefore(visualization.canvas, el.firstChild);
 
             let running = true;
             function render() {
@@ -40,9 +41,20 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
     const moveListeners = useTransformCallbacks(visualization.transform);
     return (
         <ViewContainer
+            onContextMenu={e => e.preventDefault()}
             ref={ref}
             {...moveListeners}
-            css={{padding: 0, overflow: "hidden"}}
-        />
+            css={{padding: 0, overflow: "hidden"}}>
+            <BoxSelection
+                onStart={m => m.buttons == 1}
+                onHighlight={rect => {
+                    const nodes = visualization.getNodes(rect);
+                    visualization.sharedState.highlight.set(nodes).commit();
+                }}
+                onSelect={rect => {
+                    const nodes = visualization.getNodes(rect);
+                    visualization.sharedState.selection.set(nodes).commit();
+                }}></BoxSelection>
+        </ViewContainer>
     );
 };

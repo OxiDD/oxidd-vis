@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use regex::Regex;
 use wasm_bindgen::{JsValue, UnwrapThrowExt};
@@ -18,10 +18,13 @@ pub struct VertexRenderer {
     vao: WebGlVertexArrayObject,
     buffer_data: Vec<f32>,
     uniforms: HashMap<String, WebGlUniformLocation>,
+    dirty_ranges: Vec<Range<usize>>,
+    size_changed: bool,
 }
 struct AttributeData {
     name: String,
-    element_size: i32,
+    element_size: usize,
+    index: usize,
     data_size: usize,
     attribute_location: u32,
 }
@@ -68,68 +71,158 @@ impl VertexRenderer {
             attributes: Vec::new(),
             buffer_data: Vec::new(),
             uniforms: HashMap::new(),
+            dirty_ranges: Vec::new(),
+            size_changed: true,
         })
     }
     pub fn set_data(&mut self, context: &Gl, name: &str, data: &[f32], element_size: u8) {
-        let mut index = 0;
-        for attribute_data in &mut self.attributes {
-            if attribute_data.name == name {
-                self.buffer_data.splice(
-                    index..index + attribute_data.data_size,
-                    data.iter().cloned(),
-                );
-                attribute_data.data_size = data.len();
-                attribute_data.element_size = element_size as i32;
-                return;
+        // Try to update some existing attribute
+        let update_data = if let Some((ad_index, ad)) = &mut self
+            .attributes
+            .iter_mut()
+            .enumerate()
+            .find(|(_, ad)| ad.name == name)
+        {
+            let new_data_size = data.len();
+            let delta = new_data_size as i32 - ad.data_size as i32;
+            let range = ad.index..ad.index + ad.data_size;
+            self.buffer_data.splice(range.clone(), data.iter().cloned());
+            ad.data_size = new_data_size;
+            ad.element_size = element_size as usize;
+
+            Some((*ad_index, delta, range))
+        } else {
+            None
+        };
+        if let Some((ad_index, delta, range)) = update_data {
+            if delta == 0 {
+                self.dirty_ranges.push(range);
+            } else {
+                for i in (ad_index + 1)..self.attributes.len() {
+                    let ad = &mut self.attributes[i];
+                    ad.index = (ad.index as i32 + delta) as usize;
+                }
+                self.size_changed = true;
             }
-            index += attribute_data.data_size;
+            return;
         }
 
+        // Insert the new attribute
         self.buffer_data.extend(data);
+        let index = self
+            .attributes
+            .last()
+            .map(|ad| ad.index + ad.data_size)
+            .unwrap_or(0);
         self.attributes.push(AttributeData {
             name: name.to_string(),
-            element_size: element_size as i32,
+            index,
+            element_size: element_size as usize,
             data_size: data.len(),
             attribute_location: context.get_attrib_location(&self.program, name) as u32,
         });
     }
-    pub fn update_data(&mut self, context: &Gl) {
+
+    pub fn update_data<const LEN: usize>(
+        &mut self,
+        context: &Gl,
+        name: &str,
+        element_index: usize,
+        data: [f32; LEN],
+    ) {
+        if let Some(ad) = self.attributes.iter().find(|ad| ad.name == name) {
+            let data_index = element_index * ad.element_size;
+            let buffer_index = data_index + ad.index;
+            for i in 0..LEN {
+                self.buffer_data[buffer_index as usize + i] = data[i];
+            }
+
+            self.dirty_ranges.push(buffer_index..buffer_index + LEN);
+        }
+    }
+
+    pub fn send_data(&mut self, context: &Gl) {
         context.bind_vertex_array(Some(&self.vao));
         context.bind_buffer(Gl::ARRAY_BUFFER, Some(&self.buffer));
         // context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.buffer));
 
-        // Note that `Float32Array::view` is somewhat dangerous (hence the
-        // `unsafe`!). This is creating a raw view into our module's
-        // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
-        // (aka do a memory allocation in Rust) it'll cause the buffer to change,
-        // causing the `Float32Array` to be invalid.
-        //
-        // As a result, after `Float32Array::view` we have to be very careful not to
-        // do any memory allocations before it's dropped.
-        unsafe {
-            let positions_array_buf_view = js_sys::Float32Array::view(&self.buffer_data);
+        if self.size_changed {
+            // Note that `Float32Array::view` is somewhat dangerous (hence the
+            // `unsafe`!). This is creating a raw view into our module's
+            // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
+            // (aka do a memory allocation in Rust) it'll cause the buffer to change,
+            // causing the `Float32Array` to be invalid.
+            //
+            // As a result, after `Float32Array::view` we have to be very careful not to
+            // do any memory allocations before it's dropped.
+            unsafe {
+                let positions_array_buf_view = js_sys::Float32Array::view(&self.buffer_data);
 
-            context.buffer_data_with_array_buffer_view(
-                Gl::ARRAY_BUFFER,
-                &positions_array_buf_view,
-                Gl::STATIC_DRAW,
-            );
+                context.buffer_data_with_array_buffer_view(
+                    Gl::ARRAY_BUFFER,
+                    &positions_array_buf_view,
+                    Gl::STATIC_DRAW,
+                );
+            }
+        } else {
+            self.dirty_ranges.sort_by_key(|r| r.start);
+
+            let tolerance: usize = 50;
+            let mut maybe_cum: Option<Range<usize>> = None;
+            for cur in &self.dirty_ranges {
+                if let Some(cum) = &mut maybe_cum {
+                    if cur.start <= cum.end + tolerance {
+                        // Extend range
+                        cum.end = cur.end.clone();
+                    } else {
+                        // Flush
+                        unsafe {
+                            let positions_array_buf_view =
+                                js_sys::Float32Array::view(&self.buffer_data[cum.start..cum.end]);
+                            context.buffer_sub_data_with_i32_and_array_buffer_view(
+                                Gl::ARRAY_BUFFER,
+                                4 * cum.start as i32, // 4 * to convert to bytes
+                                &positions_array_buf_view,
+                            );
+                        }
+
+                        // Create new range
+                        maybe_cum = Some(cur.clone());
+                    }
+                } else {
+                    maybe_cum = Some(cur.clone());
+                }
+            }
+
+            if let Some(cum) = maybe_cum {
+                unsafe {
+                    let positions_array_buf_view =
+                        js_sys::Float32Array::view(&self.buffer_data[cum.start..cum.end]);
+                    context.buffer_sub_data_with_i32_and_array_buffer_view(
+                        Gl::ARRAY_BUFFER,
+                        4 * cum.start as i32, // 4 * to convert to bytes
+                        &positions_array_buf_view,
+                    );
+                }
+            }
         }
 
-        let mut index = 0;
         for attribute_data in &self.attributes {
             context.vertex_attrib_pointer_with_i32(
                 attribute_data.attribute_location,
-                attribute_data.element_size,
+                attribute_data.element_size as i32,
                 Gl::FLOAT,
                 false,
                 0,
-                4 * index, // 4 * to convert to bytes
+                4 * attribute_data.index as i32, // 4 * to convert to bytes
             );
             context.enable_vertex_attrib_array(attribute_data.attribute_location as u32);
-            index += attribute_data.data_size as i32;
         }
+
+        self.size_changed = false;
+        self.dirty_ranges.clear();
     }
+
     pub fn set_uniform(
         &mut self,
         context: &Gl,
@@ -148,7 +241,7 @@ impl VertexRenderer {
         if let Some(point_count) = self
             .attributes
             .get(0)
-            .map(|attribute| (attribute.data_size as i32) / attribute.element_size)
+            .map(|attribute| (attribute.data_size as i32) / attribute.element_size as i32)
         {
             context.use_program(Some(&self.program));
             context.bind_vertex_array(Some(&self.vao));
@@ -163,11 +256,6 @@ impl VertexRenderer {
     }
 }
 
-// impl Drop for VertexRenderer {
-//     fn drop(&mut self) {
-
-//     }
-// }
 fn replace_template_vars(template: &str, vars: Option<&HashMap<&str, &str>>) -> String {
     let Some(vars) = vars else {
         return template.to_string();
