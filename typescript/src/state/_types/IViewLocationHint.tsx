@@ -13,7 +13,7 @@ export type IViewLocationHint = {
         /** Whether to position before or after this tab */
         position: "before" | "after";
     };
-    /** The ID to create if a new tab is made */
+    /** The ID to create if a new panel is made */
     createId?: string;
     /** The side of the the target to open in */
     side?: IDropPanelSide;

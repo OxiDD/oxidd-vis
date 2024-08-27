@@ -1,3 +1,4 @@
+import {Constant} from "../../watchables/Constant";
 import {Derived} from "../../watchables/Derived";
 import {PlainField} from "../../watchables/PlainField";
 import {IWatchable} from "../../watchables/_types/IWatchable";
@@ -5,6 +6,7 @@ import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
 import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
 import {ViewState} from "../views/ViewState";
+import {sidebarLocationHint} from "../views/locations/sidebarLocationHint";
 import {DiagramState} from "./DiagramState";
 import {IDiagramCollectionSerialization} from "./_types/IDiagramCollectionSerialization";
 import {IDiagramSourceType} from "./_types/IDiagramSource";
@@ -30,6 +32,9 @@ export class DiagramCollectionState extends ViewState {
 
     /** The current diagrams */
     public readonly diagrams = this._diagrams.readonly();
+
+    /** @override */
+    public readonly baseLocationHints = new Constant(sidebarLocationHint);
 
     /** @override */
     public readonly children = new Derived(watch => watch(this.diagrams));

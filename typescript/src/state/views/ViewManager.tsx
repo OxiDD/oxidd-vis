@@ -14,7 +14,7 @@ import {IContent} from "../../layout/_types/IContentGetter";
 import {PassiveDerived} from "../../watchables/PassiveDerived";
 import {Constant} from "../../watchables/Constant";
 import {IViewLocationHint} from "../_types/IViewLocationHint";
-import {IPanelTabsState} from "../../layout/_types/IPanelState";
+import {IPanelState, IPanelTabsState} from "../../layout/_types/IPanelState";
 import {Observer} from "../../watchables/Observer";
 import {all} from "../../watchables/mutator/all";
 
@@ -104,7 +104,15 @@ export class ViewManager implements IViewManager {
      * @returns The mutator to commit the change
      */
     public loadLayout(layout: IPanelData): IMutator {
-        return this.layoutState.loadLayout(layout);
+        return chain(push => {
+            push(this.layoutState.loadLayout(layout));
+            for (const view of this.root.descendants.get()) {
+                this.layoutState.addCloseHandler(
+                    view.ID,
+                    this.createTabCloseListener(view)
+                );
+            }
+        });
     }
 
     /** The current layout assigning views to tabs */
@@ -152,13 +160,19 @@ export class ViewManager implements IViewManager {
     /**
      * Opens the given view, or focuses it if already opened
      * @param view The view state
-     * @param locationHints A list of location hints, picking the first one for which the target was found
+     * @param locationHintsModifier Modifies the list of location hints, picking the first one for which the target was found
      * @returns The mutator to commit the change
      */
-    public open(view: ViewState, locationHints?: IViewLocationHint[]): IMutator {
+    public open(
+        view: ViewState,
+        locationHintsModifier: (hints: IViewLocationHint[]) => IViewLocationHint[] = h =>
+            h
+    ): IMutator {
+        const locationHints = locationHintsModifier(view.openLocationHints.get());
+
         const layout = this.layoutState;
         const getContainer = (ID: string | null | undefined) =>
-            ID ? layout.allTabPanels.get().find(({id}) => id == ID) : undefined;
+            ID ? layout.allPanels.get().find(({id}) => id == ID) : undefined;
 
         return chain(push => {
             const defaultHint: IViewLocationHint = {createId: "default"};
@@ -225,7 +239,7 @@ export class ViewManager implements IViewManager {
 
                 // Find the tab index
                 let beforeTabID;
-                if (location?.tabIndex != undefined) {
+                if (location?.tabIndex != undefined && openContainer.type == "tabs") {
                     let index;
                     if (typeof location.tabIndex.target == "number") {
                         index = location.tabIndex.target;
@@ -243,18 +257,35 @@ export class ViewManager implements IViewManager {
                 }
 
                 // Open and select the tab
-                const onClose = () => {
-                    const stillShown = this.layoutState.allTabs
-                        .get()
-                        .some(({id}) => id == view.ID);
-                    if (stillShown) return;
-
-                    view.onCloseUI();
-                };
-                push(layout.openTab(openContainer.id, viewID, onClose, beforeTabID));
+                push(
+                    layout.openTab(
+                        openContainer.id,
+                        viewID,
+                        this.createTabCloseListener(view),
+                        beforeTabID
+                    )
+                );
                 push(layout.selectTab(openContainer.id, viewID));
             }
         });
+    }
+
+    /**
+     * Retrieves the tab close listener for a given view
+     * @param view The view to obtain the listener for
+     * @returns The created listener
+     */
+    protected createTabCloseListener(
+        view: ViewState
+    ): (oldLayout: IPanelState) => IMutator | void {
+        return (oldLayout: IPanelState) => {
+            const stillShown = this.layoutState.allTabs
+                .get()
+                .some(({id}) => id == view.ID);
+            if (stillShown) return;
+
+            return view.onCloseUI(oldLayout);
+        };
     }
 
     /**

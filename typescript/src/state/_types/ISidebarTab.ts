@@ -5,6 +5,6 @@ export type ISidebarTab = {
     icon: string;
     name: string;
     view: ViewState;
-    openIn?: string;
+    hidden?: boolean;
     skipSerialization?: boolean;
 };

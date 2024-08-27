@@ -18,6 +18,7 @@ import {ViewState} from "./views/ViewState";
 import {IViewLocationHint} from "./_types/IViewLocationHint";
 import {Field} from "../watchables/Field";
 import {ToolbarState} from "./toolbar/ToolbarState";
+import {mainLocationHint} from "./views/locations/mainLocationHint";
 
 const APP_STORAGE_NAME = "BDD-viewer";
 export class AppState extends ViewState {
@@ -75,6 +76,9 @@ export class AppState extends ViewState {
             view: this.settings,
         },
     ];
+
+    /** @override */
+    public readonly baseLocationHints = new Constant(mainLocationHint);
 
     /** @override */
     public readonly children = new Constant<ViewState[]>(
