@@ -4,10 +4,17 @@ import {useTransformCallbacks} from "./useTransformCallbacks";
 import {css} from "@emotion/css";
 import {ViewContainer} from "../../components/layout/ViewContainer";
 import {BoxSelection} from "./BoxSelection";
+import {useToolbar} from "../../providers/ToolbarContext";
+import {useWatch} from "../../../watchables/react/useWatch";
+import {useTheme} from "@fluentui/react";
+import {Toolbar} from "../toolbar/Toolbar";
 
 export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}> = ({
     visualization,
 }) => {
+    const theme = useTheme();
+    const watch = useWatch();
+    const toolbar = useToolbar();
     const ref = useRef<HTMLDivElement>(null);
     useEffect(() => {
         const el = ref.current;
@@ -47,14 +54,29 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
             css={{padding: 0, overflow: "hidden"}}>
             <BoxSelection
                 onStart={m => m.buttons == 1}
-                onHighlight={rect => {
+                onHighlight={(rect, e) => {
                     const nodes = visualization.getNodes(rect);
-                    visualization.sharedState.highlight.set(nodes).commit();
+                    visualization.applyTool(toolbar, nodes, {
+                        type: "drag",
+                        event: e,
+                    });
                 }}
-                onSelect={rect => {
+                onSelect={(rect, e) => {
                     const nodes = visualization.getNodes(rect);
-                    visualization.sharedState.selection.set(nodes).commit();
+                    visualization.applyTool(toolbar, nodes, {
+                        type: "release",
+                        event: e,
+                    });
                 }}></BoxSelection>
+            <div
+                className={css({
+                    position: "absolute",
+                    right: theme.spacing.m,
+                    top: theme.spacing.m,
+                    background: theme.palette.neutralLight,
+                })}>
+                <Toolbar toolbar={toolbar} />
+            </div>
         </ViewContainer>
     );
 };

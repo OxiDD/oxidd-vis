@@ -5,15 +5,19 @@ import {useTheme} from "@fluentui/react";
 
 /**  A component that handles selecting a box within its parent  */
 export const BoxSelection: FC<{
-    onSelect: (rect: IRectangle) => void;
-    onHighlight?: (rect: IRectangle) => void;
+    disabled?: boolean;
+    onSelect: (rect: IRectangle, e: MouseEvent) => void;
+    onHighlight?: (rect: IRectangle, e: MouseEvent) => void;
     onStart?: (event: React.MouseEvent<HTMLDivElement, MouseEvent>) => boolean;
-}> = ({onSelect, onHighlight, onStart}) => {
+}> = ({disabled = false, onSelect, onHighlight, onStart}) => {
     const theme = useTheme();
     const containerRef = useRef<HTMLDivElement>(null);
+    const disabledRef = useRef<boolean>(disabled);
+    disabledRef.current = disabled;
     const [selection, setSelection] = useState<IRectangle | null>(null);
     const selectionRef = useRef<IRectangle | null>(null);
     const onDown = useCallback((event: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+        if (disabledRef.current) return;
         const select = onStart?.(event) ?? true;
         if (!select) return;
         const frame = containerRef.current?.getBoundingClientRect();
@@ -31,9 +35,10 @@ export const BoxSelection: FC<{
         };
         selectionRef.current = selection;
         setSelection(selection);
-        onHighlight?.(selection);
+        onHighlight?.(selection, event.nativeEvent);
 
         const moveListener = (e: MouseEvent) => {
+            if (disabledRef.current) return;
             const x = e.clientX - frame.left;
             const y = e.clientY - frame.top;
             const minX = Math.min(start.x, x);
@@ -46,11 +51,12 @@ export const BoxSelection: FC<{
             };
             selectionRef.current = selection;
             setSelection(selection);
-            onHighlight?.(selection);
+            onHighlight?.(selection, e);
         };
         const upListener = (e: MouseEvent) => {
+            if (disabledRef.current) return;
             const selection = selectionRef.current;
-            if (selection) onSelect(selection);
+            if (selection) onSelect(selection, e);
             setSelection(null);
             window.removeEventListener("mousemove", moveListener);
             window.removeEventListener("mouseup", upListener);
@@ -89,7 +95,7 @@ export const BoxSelection: FC<{
                     <div
                         className={css({
                             backgroundColor: theme.palette.themePrimary,
-                            opacity: 0.4,
+                            opacity: 0.2,
                             position: "absolute",
                             left: 0,
                             right: 0,
@@ -99,7 +105,6 @@ export const BoxSelection: FC<{
                     />
                 </div>
             )}
-            hello
         </div>
     );
 };

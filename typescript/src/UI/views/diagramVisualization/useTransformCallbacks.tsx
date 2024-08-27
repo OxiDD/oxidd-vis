@@ -40,7 +40,6 @@ export function useTransformCallbacks(
             const startScale = transform.get().scale;
             const endScale = (scaleTarget.current *= multiplier);
 
-            e.preventDefault();
             e.stopPropagation();
             stopPrevScaleTransition.current();
             stopPrevScaleTransition.current = transition(per => {

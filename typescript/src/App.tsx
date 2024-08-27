@@ -25,6 +25,9 @@ import {ThemeProvider} from "./UI/providers/ThemeProvider";
 import {DiagramVisualizationState} from "./state/diagrams/DiagramVisualizationState";
 import {DiagramVisualization} from "./UI/views/diagramVisualization/DiagramVisualization";
 import {ViewManagerProvider} from "./UI/providers/ViewManagerContext";
+import {ToolbarProvider} from "./UI/providers/ToolbarContext";
+import {ToolbarState} from "./state/toolbar/ToolbarState";
+import {Toolbar} from "./UI/views/toolbar/Toolbar";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -44,12 +47,14 @@ export const App: FC = () => {
     return (
         <ThemeProvider state={app}>
             <ViewManagerProvider value={app.views}>
-                <div style={{display: "flex", height: "100%"}}>
-                    <Sidebar state={app} projectUrl="https://google.com" />
-                    <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
-                        <UserLayout state={app} />
+                <ToolbarProvider value={app.toolbar}>
+                    <div style={{display: "flex", height: "100%"}}>
+                        <Sidebar state={app} projectUrl="https://google.com" />
+                        <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
+                            <UserLayout state={app} />
+                        </div>
                     </div>
-                </div>
+                </ToolbarProvider>
             </ViewManagerProvider>
         </ThemeProvider>
     );
@@ -62,6 +67,7 @@ const Component: IViewComponent = ({view}) => {
         return <DiagramCollection collection={view} />;
     if (view instanceof DiagramVisualizationState)
         return <DiagramVisualization visualization={view} />;
+    if (view instanceof ToolbarState) return <Toolbar toolbar={view} />;
 
     return <ViewContainer>Not found</ViewContainer>;
 };

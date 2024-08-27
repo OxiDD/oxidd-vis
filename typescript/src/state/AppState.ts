@@ -17,6 +17,7 @@ import {ViewManager} from "./views/ViewManager";
 import {ViewState} from "./views/ViewState";
 import {IViewLocationHint} from "./_types/IViewLocationHint";
 import {Field} from "../watchables/Field";
+import {ToolbarState} from "./toolbar/ToolbarState";
 
 const APP_STORAGE_NAME = "BDD-viewer";
 export class AppState extends ViewState {
@@ -46,6 +47,9 @@ export class AppState extends ViewState {
     /** The diagrams visualized by the application */
     public readonly diagrams = new DiagramsSourceState();
 
+    /** The toolbar to access the selected tool */
+    public readonly toolbar = new ToolbarState();
+
     /** The sidebar tabs to show, forming an entry to this */
     public readonly tabs: Readonly<ISidebarTab[]> = [
         {
@@ -54,10 +58,15 @@ export class AppState extends ViewState {
             view: this.diagrams,
         },
         {
+            icon: "Toolbox",
+            name: "Toolbar",
+            view: this.toolbar,
+            hidden: true, // We don't have a good UI for a separate panel
+        },
+        {
             icon: "Info",
             name: "Info",
             view: this,
-            openIn: "default",
             skipSerialization: true,
         },
         {

@@ -1,0 +1,27 @@
+import {DiagramDrawerBox} from "oxidd-viz-rust";
+import {DiagramVisualizationState} from "../diagrams/DiagramVisualizationState";
+import {ViewState} from "../views/ViewState";
+import {ITool} from "./_types/ITool";
+import {IToolEvent} from "./_types/IToolEvent";
+
+export class ExpansionToolState extends ViewState implements ITool {
+    public constructor() {
+        super("ExpansionTool");
+    }
+
+    /** @override */
+    apply(
+        visualization: DiagramVisualizationState,
+        drawer: DiagramDrawerBox,
+        nodes: Uint32Array,
+        event: IToolEvent
+    ): boolean {
+        if (event.type != "release") return false;
+        console.log("expanding"); // TODO:
+
+        for (let node of nodes) {
+            drawer.split_edges(node, true);
+        }
+        return true;
+    }
+}

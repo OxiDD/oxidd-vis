@@ -10,6 +10,8 @@ import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {Observer} from "../../watchables/Observer";
 import {ISharedVisualizationState} from "./_types/ISharedVisualizationState";
 import {IRectangle} from "../../utils/_types/IRectangle";
+import {ITool} from "../toolbar/_types/ITool";
+import {IToolEvent} from "../toolbar/_types/IToolEvent";
 
 /** The state of a single visualization of a diagram */
 export class DiagramVisualizationState extends ViewState {
@@ -20,7 +22,7 @@ export class DiagramVisualizationState extends ViewState {
     protected readonly drawer: DiagramDrawerBox;
 
     /** The start date */
-    protected readonly start = Date.now();
+    protected start = Date.now();
 
     /** The local transformation */
     public readonly transform = new Field({offset: {x: 0, y: 0}, scale: 1});
@@ -52,7 +54,7 @@ export class DiagramVisualizationState extends ViewState {
         this.canvas = canvas;
         this.sharedState = sharedState;
 
-        this.drawer.layout(this.start);
+        this.drawer.layout(Date.now() - this.start);
     }
 
     /** Updates the transform on rust's side */
@@ -68,6 +70,23 @@ export class DiagramVisualizationState extends ViewState {
             transform.offset.y,
             transform.scale
         );
+    }
+
+    /**
+     * Applies the given tool to this visualization
+     * @param tool The tool to apply
+     * @param nodes The nodes to apply it to
+     * @param event The event to activate the tool for, defaults to {type: "release"}
+     */
+    public applyTool(tool: ITool, nodes: Uint32Array, event?: IToolEvent): void {
+        const layout = tool.apply(this, this.drawer, nodes, event ?? {type: "release"});
+        if (layout) {
+            const layoutStart = Date.now();
+            this.drawer.layout(layoutStart - this.start);
+            const layoutTime = Date.now() - layoutStart;
+            console.log("Layout duration: " + layoutTime + "ms");
+            this.start += layoutTime;
+        }
     }
 
     /**
