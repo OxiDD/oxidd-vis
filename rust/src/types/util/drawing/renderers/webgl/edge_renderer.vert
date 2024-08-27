@@ -1,6 +1,8 @@
 #version 300 es
 struct EdgeType {
     vec3 color;
+    vec3 hoverColor;
+    vec3 selectColor;
     float width;
     float dashSolid;
     float dashTransparent;
@@ -22,7 +24,9 @@ in float curveOffsetStartTime;
 in float curveOffsetDuration;
 
 in float type;
+in float state;
 out float outType;
+out float outState;
 
 out vec2 curStart;
 out vec2 curEnd;
@@ -37,6 +41,7 @@ uniform float time;
 
 void main() {
     outType = type;
+    outState = state;
 
     float startPer = min((time - startStartTime) / startDuration, 1.0f);
     curStart = startPer * start + (1.0f - startPer) * startOld;

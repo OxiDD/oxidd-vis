@@ -1,5 +1,9 @@
-use std::{collections::HashMap, iter::repeat};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::repeat,
+};
 
+use multimap::MultiMap;
 use web_sys::{WebGl2RenderingContext, WebGlTexture};
 
 use crate::{
@@ -8,6 +12,7 @@ use crate::{
         renderers::webgl::util::set_animated_data::{self, set_animated_data},
     },
     util::{logging::console, matrix4::Matrix4},
+    wasm_interface::NodeGroupID,
 };
 
 use super::util::vertex_renderer::VertexRenderer;
@@ -15,12 +20,15 @@ use super::util::vertex_renderer::VertexRenderer;
 pub struct EdgeRenderer {
     vertex_renderer: VertexRenderer,
     edge_types: Vec<EdgeRenderingType>,
+    node_edge_indices: MultiMap<NodeGroupID, usize>,
 }
 
 pub struct Edge {
     pub start: Transition<Point>,
+    pub start_node: NodeGroupID,
     pub points: Vec<Transition<Point>>,
     pub end: Transition<Point>,
+    pub end_node: NodeGroupID,
     pub edge_type: usize,
     pub shift: Transition<f32>, // Some sideways shift
 }
@@ -28,6 +36,8 @@ pub struct Edge {
 #[derive(Clone)]
 pub struct EdgeRenderingType {
     pub color: (f32, f32, f32),
+    pub hover_color: (f32, f32, f32),
+    pub select_color: (f32, f32, f32),
     pub width: f32,
     pub dash_solid: f32, // The distance per period over which this dash should be solid
     pub dash_transparent: f32, // The distance per
@@ -60,20 +70,16 @@ impl EdgeRenderer {
         EdgeRenderer {
             vertex_renderer,
             edge_types,
+            node_edge_indices: MultiMap::new(),
         }
     }
 
     pub fn set_edges(&mut self, context: &WebGl2RenderingContext, edges: &Vec<Edge>) {
-        fn map<const LEN: usize>(
-            edges: &Vec<Segment>,
-            map: impl Fn(&Segment) -> [f32; LEN],
-        ) -> Box<[f32]> {
-            edges
-                .iter()
-                .flat_map(|edge| map(edge).repeat(6))
-                // .flat_map(|node| [0.0, 0.0].repeat(4))
-                .collect()
-        }
+        self.node_edge_indices = edges
+            .iter()
+            .enumerate()
+            .flat_map(|(index, edge)| [(edge.start_node, index), (edge.end_node, index)])
+            .collect();
 
         let segments = edges
             .iter()
@@ -121,8 +127,15 @@ impl EdgeRenderer {
             context,
             "type",
             &segments6
+                .clone()
                 .map(|(_, _, edge_type, _)| edge_type.clone())
                 .collect::<Box<_>>(),
+            1,
+        );
+        self.vertex_renderer.set_data(
+            context,
+            "state",
+            &segments6.map(|_| 0.).collect::<Box<_>>(),
             1,
         );
 
@@ -135,13 +148,68 @@ impl EdgeRenderer {
         });
     }
 
-    pub fn render(
+    pub fn update_selection(
         &mut self,
         context: &WebGl2RenderingContext,
-        time: u32,
         selected_ids: &[u32],
-        hovered_ids: &[u32],
+        prev_selected_ids: &[u32],
+        hover_ids: &[u32],
+        prev_hover_ids: &[u32],
     ) {
+        let to_indices = |ids: &[u32]| {
+            ids.iter()
+                .filter_map(|id| self.node_edge_indices.get_vec(&(*id as usize)))
+                .flatten()
+                .cloned()
+                .collect::<HashSet<usize>>()
+        };
+
+        let new_selected_indices = to_indices(selected_ids);
+        let new_hover_indices = to_indices(hover_ids);
+        let old_selected_indices = to_indices(prev_selected_ids);
+        let old_hover_indices = to_indices(prev_hover_ids);
+
+        let indices = new_selected_indices
+            .iter()
+            .chain(old_selected_indices.iter())
+            .chain(new_hover_indices.iter())
+            .chain(old_hover_indices.iter());
+
+        let state_updates = indices.filter_map(|index| {
+            let new_state = if new_selected_indices.contains(&index) {
+                2
+            } else if new_hover_indices.contains(&index) {
+                1
+            } else {
+                0
+            };
+
+            let old_state = if old_selected_indices.contains(&index) {
+                2
+            } else if old_hover_indices.contains(&index) {
+                1
+            } else {
+                0
+            };
+
+            if new_state != old_state {
+                Some((index, new_state))
+            } else {
+                None
+            }
+        });
+
+        for (index, state) in state_updates {
+            let data_index = index * 6;
+            for i in 0..6 {
+                self.vertex_renderer
+                    .update_data(context, "state", data_index + i, [state as f32]);
+            }
+        }
+        self.vertex_renderer.send_data(context);
+    }
+
+    pub fn render(&mut self, context: &WebGl2RenderingContext, time: u32) {
         self.vertex_renderer
             .set_uniform(context, "time", |u| context.uniform1f(u, time as f32));
         for (index, edge_type) in self.edge_types.iter().enumerate() {
@@ -150,6 +218,18 @@ impl EdgeRenderer {
                 .set_uniform(context, &format!("edgeTypes[{index}].color"), |u| {
                     context.uniform3f(u, c.0, c.1, c.2)
                 });
+            let c = edge_type.hover_color;
+            self.vertex_renderer.set_uniform(
+                context,
+                &format!("edgeTypes[{index}].hoverColor"),
+                |u| context.uniform3f(u, c.0, c.1, c.2),
+            );
+            let c = edge_type.select_color;
+            self.vertex_renderer.set_uniform(
+                context,
+                &format!("edgeTypes[{index}].selectColor"),
+                |u| context.uniform3f(u, c.0, c.1, c.2),
+            );
             self.vertex_renderer
                 .set_uniform(context, &format!("edgeTypes[{index}].width"), |u| {
                     context.uniform1f(u, edge_type.width)

@@ -54,6 +54,7 @@ use super::util::drawing::layouts::transition_layout::TransitionLayout;
 use super::util::drawing::layouts::util::color_label::Color;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
+use super::util::drawing::renderers::webgl::util::mix_color::mix_color;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
 use super::util::graph_structure::graph_structure::DrawTag;
@@ -97,13 +98,21 @@ where
         Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramDrawer> {
+        let c0 = (0., 0., 0.);
+        let c1 = (0.6, 0.6, 0.6);
+
+        let hover_color = ((0.0, 0.0, 1.0), 0.3);
+        let select_color = ((0.0, 0.0, 1.0), 0.8);
+
         let renderer = WebglRenderer::from_canvas(
             canvas,
             HashMap::from([
                 (
                     EdgeType::new((), 0),
                     EdgeRenderingType {
-                        color: (0., 0., 0.),
+                        color: c0,
+                        hover_color: mix_color(c0, hover_color.0, hover_color.1),
+                        select_color: mix_color(c0, select_color.0, select_color.1),
                         width: 0.15,
                         dash_solid: 1.0,
                         dash_transparent: 0.0, // No dashing, just solid
@@ -112,13 +121,17 @@ where
                 (
                     EdgeType::new((), 1),
                     EdgeRenderingType {
-                        color: (0.6, 0.6, 0.6),
+                        color: c1,
+                        hover_color: mix_color(c1, hover_color.0, hover_color.1),
+                        select_color: mix_color(c1, select_color.0, select_color.1),
                         width: 0.1,
                         dash_solid: 0.2,
                         dash_transparent: 0.1,
                     },
                 ),
             ]),
+            hover_color,
+            select_color,
         )
         .unwrap();
         let layout = LayeredLayout::new(

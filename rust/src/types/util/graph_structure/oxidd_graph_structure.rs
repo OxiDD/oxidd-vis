@@ -143,7 +143,7 @@ where
 
     fn get_level_label(&self, level: LevelNo) -> String {
         // TODO: get actual level vars
-        level.to_string()
+        format!("x{}", level.to_string())
     }
 
     fn get_node_label(&self, node: NodeID) -> NodeLabel<String> {

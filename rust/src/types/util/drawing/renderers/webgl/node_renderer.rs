@@ -20,10 +20,13 @@ use super::util::{mix_color::mix_color, vertex_renderer::VertexRenderer};
 pub struct NodeRenderer {
     vertex_renderer: VertexRenderer,
     node_indices: HashMap<u32, NodeData>,
+    hover_color: (Color, f32),
+    select_color: (Color, f32),
 }
 pub struct NodeData {
     index: usize,
     color: Color,
+    old_color: Color,
 }
 
 #[derive(Clone)]
@@ -37,7 +40,11 @@ pub struct Node {
 }
 
 impl NodeRenderer {
-    pub fn new(context: &WebGl2RenderingContext) -> NodeRenderer {
+    pub fn new(
+        context: &WebGl2RenderingContext,
+        hover_color: (Color, f32),
+        select_color: (Color, f32),
+    ) -> NodeRenderer {
         let vertex_renderer = VertexRenderer::new(
             context,
             include_str!("node_renderer.vert"),
@@ -47,6 +54,8 @@ impl NodeRenderer {
         NodeRenderer {
             vertex_renderer,
             node_indices: HashMap::new(),
+            hover_color,
+            select_color,
         }
     }
 
@@ -60,17 +69,11 @@ impl NodeRenderer {
                     NodeData {
                         index: index,
                         color: node.color.new.clone(),
+                        old_color: node.color.old.clone(),
                     },
                 )
             })
             .collect();
-
-        fn map<const LEN: usize>(
-            nodes: &Vec<Node>,
-            map: impl Fn(&Node) -> [f32; LEN],
-        ) -> Box<[f32]> {
-            nodes.iter().flat_map(|node| map(node).repeat(6)).collect()
-        }
 
         let nodes6 = nodes.iter().flat_map(|node| repeat(node).take(6));
         set_animated_data(
@@ -108,8 +111,8 @@ impl NodeRenderer {
         hover_ids: &[u32],
         prev_hover_ids: &[u32],
     ) {
-        let select_color = ((0.0, 0.0, 1.0), 0.8);
-        let hover_color = ((0.0, 0.0, 1.0), 0.3);
+        let select_color = self.select_color.clone();
+        let hover_color = self.hover_color.clone();
 
         let ids = selected_ids
             .iter()
@@ -152,12 +155,21 @@ impl NodeRenderer {
                 let node_color = maybe_color
                     .map(|(color, per)| mix_color(node_data.color, color, per))
                     .unwrap_or(node_data.color);
+                let old_node_color = maybe_color
+                    .map(|(color, per)| mix_color(node_data.color, color, per))
+                    .unwrap_or(node_data.color);
                 for i in 0..6 {
                     self.vertex_renderer.update_data(
                         context,
                         "color",
                         data_index + i,
                         [node_color.0, node_color.1, node_color.2],
+                    );
+                    self.vertex_renderer.update_data(
+                        context,
+                        "colorOld",
+                        data_index + i,
+                        [old_node_color.0, old_node_color.1, old_node_color.2],
                     );
                 }
             }
