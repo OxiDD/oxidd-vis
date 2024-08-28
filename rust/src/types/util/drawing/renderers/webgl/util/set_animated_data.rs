@@ -22,19 +22,14 @@ pub fn set_animated_data<
     let values: Box<[f32]> = data.clone().flat_map(|val| values(val.new)).collect();
     renderer.set_data(context, name, &values, L as u8);
 
-    let value_old_times: Box<[f32]> = data.clone().flat_map(|val| [val.old_time as f32]).collect();
+    let value_transitions: Box<[f32]> = data
+        .clone()
+        .flat_map(|val| [val.old_time as f32, val.duration as f32])
+        .collect();
     renderer.set_data(
         context,
-        &format!("{}StartTime", name)[..],
-        &value_old_times,
-        1,
-    );
-
-    let value_durations: Box<[f32]> = data.flat_map(|val| [val.duration as f32]).collect();
-    renderer.set_data(
-        context,
-        &format!("{}Duration", name)[..],
-        &value_durations,
-        1,
+        &format!("{}Transition", name)[..],
+        &value_transitions,
+        2,
     );
 }

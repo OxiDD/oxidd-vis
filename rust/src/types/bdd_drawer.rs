@@ -57,6 +57,7 @@ use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl::util::mix_color::mix_color;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
+use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder;
 use super::util::graph_structure::graph_structure::DrawTag;
 use super::util::graph_structure::graph_structure::EdgeType;
 use super::util::graph_structure::graph_structure::GraphStructure;
@@ -268,4 +269,6 @@ impl<
     fn get_nodes(&self, area: Rectangle) -> Vec<NodeGroupID> {
         self.drawer.get_nodes(area)
     }
+
+    fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) -> () {}
 }

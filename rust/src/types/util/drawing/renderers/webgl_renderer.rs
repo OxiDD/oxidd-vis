@@ -166,6 +166,7 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
                         end_node: edge_data.to,
                         edge_type: *edge_type_ids.get(&edge_data.edge_type).unwrap(),
                         shift: edge.curve_offset,
+                        exists: edge.exists,
                     })
                 })
                 .collect(),

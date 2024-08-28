@@ -59,6 +59,7 @@ use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
+use super::util::graph_structure::graph_manipulators::rc_graph::RCGraph;
 use super::util::graph_structure::graph_manipulators::terminal_level_adjuster::TerminalLevelAdjuster;
 use super::util::graph_structure::graph_structure::DrawTag;
 use super::util::graph_structure::graph_structure::EdgeType;
@@ -171,16 +172,14 @@ pub struct QDDDiagramDrawer<
     L: LayoutRules<T, Color, String, GMGraph<T, G>>,
 > {
     group_manager: MutRcRefCell<GM<T, G>>,
+    presence_adjuster: MPresenceAdjuster<T, G>,
     drawer: Drawer<T, Color, R, L, GMGraph<T, G>>,
 }
 type GraphLabel = PresenceLabel<NodeLabel<String>>;
 type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
-type MGraph<T, G> = TerminalLevelAdjuster<
-    T,
-    GraphLabel,
-    String,
-    NodePresenceAdjuster<T, NodeLabel<String>, String, G>,
->;
+type MGraph<T, G> = TerminalLevelAdjuster<T, GraphLabel, String, MPresenceAdjuster<T, G>>;
+type MPresenceAdjuster<T, G> =
+    RCGraph<T, GraphLabel, String, NodePresenceAdjuster<T, NodeLabel<String>, String, G>>;
 type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, (f32, f32, f32)>;
 
 impl<
@@ -191,23 +190,8 @@ impl<
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
-        let mut modified_graph = NodePresenceAdjuster::new(graph);
-        // modified_graph.set_node_presence(out_node, presence)
-        // console::log!(
-        //     "Terminals: {}",
-        //     modified_graph
-        //         .get_terminals()
-        //         .iter()
-        //         .map(|t| t.to_string())
-        //         .join(",")
-        // );
-        for terminal in modified_graph.get_terminals() {
-            modified_graph.set_node_presence(
-                terminal,
-                PresenceGroups::remainder(PresenceRemainder::Duplicate),
-            )
-        }
-        let modified_graph = TerminalLevelAdjuster::new(modified_graph);
+        let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(graph));
+        let modified_graph = TerminalLevelAdjuster::new(presence_adjuster.clone());
         let root = modified_graph.get_root();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph));
         let grouped_graph = GMGraph::new_shared(group_manager.clone(), |nodes| {
@@ -230,13 +214,14 @@ impl<
             }
         });
         let mut out = QDDDiagramDrawer {
-            group_manager: group_manager,
+            group_manager,
+            presence_adjuster,
             drawer: Drawer::new(renderer, layout, MutRcRefCell::new(grouped_graph)),
         };
         out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
-        // out.reveal_all(30000);
-        out.reveal_all(10);
+        out.reveal_all(30000);
+        // out.reveal_all(10);
         out
     }
 
@@ -302,5 +287,21 @@ impl<
 
     fn get_nodes(&self, area: Rectangle) -> Vec<crate::wasm_interface::NodeGroupID> {
         self.drawer.get_nodes(area)
+    }
+
+    fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) -> () {
+        let mut adjuster = self.presence_adjuster.get();
+        let terminals = adjuster.get_terminals();
+        let terminals = terminals.iter().filter_map(|&node| {
+            match adjuster.get_node_label(node).original_label {
+                NodeLabel::Terminal(t) if t == terminal => Some(node),
+                _ => None,
+            }
+        });
+        let Some(target_terminal) = terminals.last() else {
+            return;
+        };
+
+        adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(mode));
     }
 }

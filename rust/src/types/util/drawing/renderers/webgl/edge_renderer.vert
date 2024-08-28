@@ -10,24 +10,26 @@ struct EdgeType {
 
 in vec2 start;
 in vec2 startOld;
-in float startStartTime;
-in float startDuration;
+in vec2 startTransition;
 
 in vec2 end;
 in vec2 endOld;
-in float endStartTime;
-in float endDuration;
+in vec2 endTransition;
 
 in float curveOffset;
 in float curveOffsetOld;
-in float curveOffsetStartTime;
-in float curveOffsetDuration;
+in vec2 curveOffsetTransition;
+
+in float exists;
+in float existsOld;
+in vec2 existsTransition;
 
 in float type;
 in float state;
 out float outType;
 out float outState;
 
+out float curExists;
 out vec2 curStart;
 out vec2 curEnd;
 out vec2 outPos;
@@ -39,19 +41,26 @@ uniform EdgeType edgeTypes[/*$type_count {*/1/*}*/];
 uniform mat4 transform;
 uniform float time;
 
+float getPer(vec2 transition) {
+    return min((time - transition.x) / transition.y, 1.0f);
+}
+
 void main() {
     outType = type;
     outState = state;
 
-    float startPer = min((time - startStartTime) / startDuration, 1.0f);
+    float startPer = getPer(startTransition);
     curStart = startPer * start + (1.0f - startPer) * startOld;
     float halfWidth = 0.5f * edgeTypes[int(type)].width;
 
-    float endPer = min((time - endStartTime) / endDuration, 1.0f);
+    float endPer = getPer(endTransition);
     curEnd = endPer * end + (1.0f - endPer) * endOld;
 
-    float curvePer = min((time - curveOffsetStartTime) / curveOffsetDuration, 1.0f);
+    float curvePer = getPer(curveOffsetTransition);
     curCurveOffset = curvePer * curveOffset + (1.0f - curvePer) * curveOffsetOld;
+
+    float existsPer = getPer(existsTransition);
+    curExists = existsPer * exists + (1.0f - curvePer) * existsOld;
 
     vec2 delta = curEnd - curStart;
     vec2 dir = normalize(delta);

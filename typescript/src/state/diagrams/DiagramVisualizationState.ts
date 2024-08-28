@@ -73,6 +73,16 @@ export class DiagramVisualizationState extends ViewState {
     }
 
     /**
+     * Updates the diagram's layout
+     */
+    protected relayout() {
+        const layoutStart = Date.now();
+        this.drawer.layout(layoutStart - this.start);
+        const layoutTime = Date.now() - layoutStart;
+        this.start += layoutTime;
+    }
+
+    /**
      * Applies the given tool to this visualization
      * @param tool The tool to apply
      * @param nodes The nodes to apply it to
@@ -80,13 +90,7 @@ export class DiagramVisualizationState extends ViewState {
      */
     public applyTool(tool: ITool, nodes: Uint32Array, event?: IToolEvent): void {
         const layout = tool.apply(this, this.drawer, nodes, event ?? {type: "release"});
-        if (layout) {
-            const layoutStart = Date.now();
-            this.drawer.layout(layoutStart - this.start);
-            const layoutTime = Date.now() - layoutStart;
-            console.log("Layout duration: " + layoutTime + "ms");
-            this.start += layoutTime;
-        }
+        if (layout) this.relayout();
     }
 
     /**

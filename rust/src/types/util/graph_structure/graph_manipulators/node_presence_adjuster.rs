@@ -10,6 +10,7 @@ use std::{
 use itertools::{Either, Itertools};
 use multimap::MultiMap;
 use oxidd::{LevelNo, NodeID};
+use wasm_bindgen::prelude::*;
 
 use crate::{
     types::util::graph_structure::graph_structure::{
@@ -84,6 +85,7 @@ pub enum EdgeConstraint<T: DrawTag> {
     Any,
 }
 
+#[wasm_bindgen]
 #[derive(Eq, PartialEq, Clone)]
 pub enum PresenceRemainder {
     // Show this unique terminal the regular way (default)
@@ -137,17 +139,14 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         let owner = self.get_owner_id(out_node);
 
         // Create events for removal of the old node (connections) and images
-        let owner_out = from_sourced(Either::Left(owner));
-        self.add_remove_node_events(owner_out);
-        let maybe_images = self.images.get_vec(&owner).cloned();
-        if let Some(images) = maybe_images.clone() {
-            for image in images {
-                self.add_remove_node_events(from_sourced(Either::Right(image)));
-            }
+        let node_copies = self.get_all_copies(owner);
+        for copy in node_copies {
+            self.add_remove_node_events(copy);
         }
 
         // Delete the old images
-        if let Some(images) = maybe_images.clone() {
+        let maybe_images = self.images.get_vec(&owner).cloned();
+        if let Some(images) = maybe_images {
             for image in images {
                 self.delete_replacement(image);
             }
@@ -174,14 +173,10 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         }
 
         // Create an event for the replaced node
+        let owner_out = from_sourced(Either::Left(owner));
         if presence.remainder == PresenceRemainder::Show {
             self.add_insert_node_events(owner_out, owner_out);
         }
-        // if let Some(images) = maybe_images {
-        //     for image in images {
-        //         self.add_insert_node_events(from_sourced(Either::Right(image)), owner_out);
-        //     }
-        // }
     }
 
     fn process_graph_changes(&mut self) {
@@ -318,21 +313,23 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 
     fn delete_replacement(&mut self, node: NodeID) {
-        let parents = self.get_known_parents(node);
+        let parents = self.get_known_parents(from_sourced(Either::Right(node)));
         let Some(&source) = self.sources.get(&node) else {
             return;
         };
 
         for (edge, parent) in parents {
-            self.replacements
+            let r1 = self
+                .replacements
                 .remove(&(parent, EdgeConstraint::Exact(edge), source));
-            self.replacements
+            let r2 = self
+                .replacements
                 .remove(&(parent, EdgeConstraint::Any, source));
         }
 
         self.sources.remove(&node);
         if let Some(images) = self.images.get_vec_mut(&source) {
-            images.remove(node);
+            images.retain(|&e| e != node);
             if images.len() == 0 {
                 self.images.remove(&source);
             }

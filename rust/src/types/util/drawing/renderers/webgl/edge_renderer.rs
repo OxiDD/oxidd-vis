@@ -29,6 +29,7 @@ pub struct Edge {
     pub points: Vec<Transition<Point>>,
     pub end: Transition<Point>,
     pub end_node: NodeGroupID,
+    pub exists: Transition<f32>,
     pub edge_type: usize,
     pub shift: Transition<f32>, // Some sideways shift
 }
@@ -47,6 +48,7 @@ type Segment = (
     Transition<Point>,
     f32,             /* type*/
     Transition<f32>, /* curvature */
+    Transition<f32>, /* exists */
 );
 
 impl EdgeRenderer {
@@ -75,50 +77,58 @@ impl EdgeRenderer {
     }
 
     pub fn set_edges(&mut self, context: &WebGl2RenderingContext, edges: &Vec<Edge>) {
-        self.node_edge_indices = edges
-            .iter()
-            .enumerate()
-            .flat_map(|(index, edge)| [(edge.start_node, index), (edge.end_node, index)])
-            .collect();
-
         let segments = edges
             .iter()
             .flat_map(|edge| {
                 let mut points = edge.points.clone();
                 let edge_type = edge.edge_type;
                 let curve_offset = edge.shift;
+                let exists = edge.exists;
                 points.push(edge.end);
                 let edge_segments = points
                     .iter()
                     .scan(edge.start, |prev, item| {
-                        let out = (*prev, *item, edge_type as f32, curve_offset);
+                        let out = (*prev, *item, edge_type as f32, curve_offset, exists);
                         *prev = *item;
-                        Some(out)
+                        Some((out, edge))
                     })
-                    .collect::<Vec<Segment>>();
+                    .collect::<Vec<_>>();
                 edge_segments
             })
-            .collect::<Vec<Segment>>();
+            .collect::<Vec<(Segment, &Edge)>>();
 
-        let segments6 = segments.iter().flat_map(|edge| repeat(edge).take(6));
+        self.node_edge_indices = segments
+            .iter()
+            .enumerate()
+            .flat_map(|(index, (segment, edge))| [(edge.start_node, index), (edge.end_node, index)])
+            .collect();
+
+        let segments6 = segments.iter().flat_map(|(edge, _)| repeat(edge).take(6));
         set_animated_data(
             "start",
-            segments6.clone().map(|(start, _, _, _)| start.clone()),
+            segments6.clone().map(|(start, _, _, _, _)| start.clone()),
             |start| [start.x, start.y],
             context,
             &mut self.vertex_renderer,
         );
         set_animated_data(
             "end",
-            segments6.clone().map(|(_, end, _, _)| end.clone()),
+            segments6.clone().map(|(_, end, _, _, _)| end.clone()),
             |end| [end.x, end.y],
             context,
             &mut self.vertex_renderer,
         );
         set_animated_data(
             "curveOffset",
-            segments6.clone().map(|(_, _, _, offset)| offset.clone()),
+            segments6.clone().map(|(_, _, _, offset, _)| offset.clone()),
             |offset| [offset],
+            context,
+            &mut self.vertex_renderer,
+        );
+        set_animated_data(
+            "exists",
+            segments6.clone().map(|(_, _, _, _, exists)| exists.clone()),
+            |exists| [exists],
             context,
             &mut self.vertex_renderer,
         );
@@ -128,7 +138,7 @@ impl EdgeRenderer {
             "type",
             &segments6
                 .clone()
-                .map(|(_, _, edge_type, _)| edge_type.clone())
+                .map(|(_, _, edge_type, _, _)| edge_type.clone())
                 .collect::<Box<_>>(),
             1,
         );

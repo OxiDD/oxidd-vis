@@ -50,8 +50,8 @@ type EdgeCounts<T: DrawTag> = HashMap<EdgeData<T>, usize>;
 
 #[derive(Clone)]
 struct ConnectionData<T: DrawTag> {
-    parents: HashSet<(EdgeType<T>, NodeID)>,
-    children: HashSet<(EdgeType<T>, NodeID)>,
+    parents: HashSet<(LevelNo, LevelNo, EdgeType<T>, NodeID)>,
+    children: HashSet<(LevelNo, LevelNo, EdgeType<T>, NodeID)>,
 }
 impl<T: DrawTag> ConnectionData<T> {
     pub fn new() -> ConnectionData<T> {
@@ -91,34 +91,49 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
     fn process_graph_events(&mut self) {
         let events = self.graph.consume_events(&self.graph_events);
 
-        let mut removed_from = HashMap::new();
-        let mut used_sources = HashSet::new();
+        let mut removed_from = HashMap::<NodeID, NodeGroupID>::new();
+        let mut used_sources = HashSet::<NodeID>::new();
+        let mut refresh_data = HashSet::<NodeID>::new();
         for event in events {
             match event {
+                Change::NodeLabelChange { node } => {
+                    refresh_data.insert(node);
+                }
+                Change::LevelChange { node } => {
+                    refresh_data.insert(node);
+                }
                 Change::NodeConnectionsChange { node } => {
-                    // TODO: handle connection changes, node removals, and node insertions
-                    let group = self.remove_node_from_group(node);
-                    self.add_node_to_group(node, group);
+                    refresh_data.insert(node);
                 }
                 Change::NodeRemoval { node } => {
                     let group = self.remove_node_from_group(node);
-                    removed_from.insert(node, group);
+                    let source_group_exists = self.group_by_id.contains_key(&group); // If the node wasn't in the diagram to begin the group may not exist
+                    if source_group_exists {
+                        removed_from.insert(node, group);
+                    }
                 }
                 Change::NodeInsertion { node, source } => {
                     let add_group = source.and_then(|source| {
                         // A source may have been removed and replaced by something (1 thing) else, in which case we want to place this thing int he original group
                         if !used_sources.contains(&source) {
                             used_sources.insert(source);
-                            return removed_from.get(&source).cloned();
+                            if let Some(&group_id) = removed_from.get(&source) {
+                                return Some(group_id);
+                            }
                         }
 
                         // Otherwise, a source may have been in a group together with all its parents, in which case we don't want to separate the new node
-                        let source_group = self.get_group(source);
-                        let all_parents_in_group = self
-                            .graph
-                            .get_known_parents(source)
-                            .iter()
-                            .all(|(_, parent)| self.get_group(*parent) == source_group);
+                        let source_group = removed_from
+                            .get(&source)
+                            .cloned()
+                            .unwrap_or_else(|| self.get_group(source));
+                        let source_group_exists = self.group_by_id.contains_key(&source_group);
+                        let all_parents_in_group = source_group_exists
+                            && self
+                                .graph
+                                .get_known_parents(node)
+                                .iter()
+                                .all(|(_, parent)| self.get_group(*parent) == source_group);
                         if all_parents_in_group {
                             return Some(source_group);
                         }
@@ -127,30 +142,43 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                         None
                     });
                     if let Some(group) = add_group {
-                        // Don't add it to the group in which it's already implicitly present
-                        if group == 0 {
-                            return;
-                        }
+                        // // Don't add it to the group in which it's already implicitly present
+                        // if group == 0 {
+                        //     return;
+                        // }
                         self.add_node_to_group(node, group);
                     } else {
-                        self.create_group(vec![TargetID(TargetIDType::NodeID, node)]);
+                        let group_id =
+                            self.create_group(vec![TargetID(TargetIDType::NodeID, node)]);
+
+                        // Add a source for the new group
+                        if let Some(source) = source {
+                            if let Some(&source_group_id) = removed_from
+                                .get(&source)
+                                .or_else(|| self.group_id_by_node.get(&source))
+                            {
+                                self.sources.add_source(group_id, source_group_id);
+                            }
+                        }
                     }
                 }
                 _ => {}
             }
         }
 
+        // We batch connection changes at the end, since the graph may already refer to newly inserted nodes (that were inserted after the connection change)
+        for node in refresh_data {
+            let group = self.remove_node_from_group(node);
+            let group_exists = self.group_by_id.contains_key(&group);
+            if group_exists {
+                self.add_node_to_group(node, group);
+            }
+        }
+        console::log!("after events");
+
         for group_id in removed_from.values().cloned() {
             self.remove_group_if_empty(group_id);
         }
-    }
-
-    fn get_node_group_mut(&mut self, group_id: NodeGroupID) -> &mut NodeGroup<T> {
-        self.group_by_id.get_mut(&group_id).unwrap()
-    }
-
-    fn get_node_group(&self, group_id: NodeGroupID) -> &NodeGroup<T> {
-        self.group_by_id.get(&group_id).unwrap()
     }
 
     fn get_node_group_id(&self, node: NodeID) -> NodeGroupID {
@@ -183,7 +211,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
     fn remove_edges_to_set(edges: &mut EdgeCounts<T>, edge_data: EdgeData<T>, count: usize) {
         if let Some(cur_count) = edges.get_mut(&edge_data) {
             *cur_count -= count;
-            if (*cur_count <= 0) {
+            if *cur_count <= 0 {
                 edges.remove(&edge_data);
             }
         }
@@ -193,33 +221,38 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         &mut self,
         from: NodeGroupID,
         from_source: NodeID,
+        from_level: LevelNo,
         to: NodeGroupID,
         to_source: NodeID,
+        to_level: LevelNo,
         edge_type: EdgeType<T>,
         count: usize,
     ) {
-        let from_level = self.graph.get_level(from_source);
-        let to_level = self.graph.get_level(to_source);
+        if let Some(from_group) = self.group_by_id.get_mut(&from) {
+            GroupManager::<T, NL, LL, G>::remove_edges_to_set(
+                &mut from_group.out_edges,
+                EdgeData::new(to, from_level, to_level, edge_type),
+                count,
+            );
+            from_group.nodes.entry(from_source).and_modify(|cd| {
+                let removed = cd
+                    .children
+                    .remove(&(from_level, to_level, edge_type, to_source));
+            });
+        }
 
-        let from_group = self.get_node_group_mut(from);
-        GroupManager::<T, NL, LL, G>::remove_edges_to_set(
-            &mut from_group.out_edges,
-            EdgeData::new(to, from_level, to_level, edge_type),
-            count,
-        );
-        from_group.nodes.entry(from_source).and_modify(|cd| {
-            cd.children.remove(&(edge_type, to_source));
-        });
-
-        let to_group = self.get_node_group_mut(to);
-        GroupManager::<T, NL, LL, G>::remove_edges_to_set(
-            &mut to_group.in_edges,
-            EdgeData::new(from, to_level, from_level, edge_type),
-            count,
-        );
-        to_group.nodes.entry(to_source).and_modify(|cd| {
-            cd.parents.remove(&(edge_type, to_source));
-        });
+        if let Some(to_group) = self.group_by_id.get_mut(&to) {
+            GroupManager::<T, NL, LL, G>::remove_edges_to_set(
+                &mut to_group.in_edges,
+                EdgeData::new(from, to_level, from_level, edge_type),
+                count,
+            );
+            to_group.nodes.entry(to_source).and_modify(|cd| {
+                let removed = cd
+                    .parents
+                    .remove(&(from_level, to_level, edge_type, from_source));
+            });
+        }
     }
 
     fn add_edges_to_set(edges: &mut EdgeCounts<T>, edge_data: EdgeData<T>, count: usize) {
@@ -239,70 +272,110 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         let from_level = self.graph.get_level(from_source);
         let to_level = self.graph.get_level(to_source);
 
-        let from_group = self.get_node_group_mut(from);
-        GroupManager::<T, NL, LL, G>::add_edges_to_set(
-            &mut from_group.out_edges,
-            EdgeData::new(to, from_level, to_level, edge_type),
-            count,
-        );
-        from_group
-            .nodes
-            .entry(from_source)
-            .or_insert_with(|| ConnectionData::new())
-            .children
-            .insert((edge_type, to_source));
+        if let Some(from_group) = self.group_by_id.get_mut(&from) {
+            GroupManager::<T, NL, LL, G>::add_edges_to_set(
+                &mut from_group.out_edges,
+                EdgeData::new(to, from_level, to_level, edge_type),
+                count,
+            );
+            from_group
+                .nodes
+                .entry(from_source)
+                .or_insert_with(|| ConnectionData::new())
+                .children
+                .insert((from_level, to_level, edge_type, to_source));
+        }
 
-        let to_group = self.get_node_group_mut(to);
-        GroupManager::<T, NL, LL, G>::add_edges_to_set(
-            &mut to_group.in_edges,
-            EdgeData::new(from, to_level, from_level, edge_type),
-            count,
-        );
-        to_group
-            .nodes
-            .entry(to_source)
-            .or_insert_with(|| ConnectionData::new())
-            .parents
-            .insert((edge_type, from_source));
+        if let Some(to_group) = self.group_by_id.get_mut(&to) {
+            GroupManager::<T, NL, LL, G>::add_edges_to_set(
+                &mut to_group.in_edges,
+                EdgeData::new(from, to_level, from_level, edge_type),
+                count,
+            );
+            to_group
+                .nodes
+                .entry(to_source)
+                .or_insert_with(|| ConnectionData::new())
+                .parents
+                .insert((from_level, to_level, edge_type, from_source));
+        }
     }
 
     fn remove_node_from_group(&mut self, node: NodeID) -> NodeGroupID {
         let cur_group_id = self.get_node_group_id(node);
+        if cur_group_id == 0 && !self.group_by_id.contains_key(&0) {
+            return 0;
+        }
 
         // Check if the node is explicitly contained (instead of implicitly, which can happen for the 0 group)
-        let cur_group = self.get_node_group(cur_group_id);
+        let Some(cur_group) = self.group_by_id.get(&cur_group_id) else {
+            console::log!(
+                "cur group {}, for node {}, does not exist",
+                cur_group_id,
+                node
+            );
+
+            return cur_group_id;
+        };
         let contained = cur_group.nodes.contains_key(&node);
 
         // Remove old edges
-        let cur_group = self.get_node_group_mut(cur_group_id);
+        let Some(cur_group) = self.group_by_id.get_mut(&cur_group_id) else {
+            return cur_group_id;
+        };
         if let Some(connections) = cur_group.nodes.get(&node) {
             let connections = connections.clone();
-            for (edge_type, child_id) in connections.children {
+            for (from_level, to_level, edge_type, child_id) in connections.children {
                 let child_group_id = self.get_node_group_id(child_id);
                 if contained && cur_group_id != child_group_id {
-                    self.remove_edges(cur_group_id, node, child_group_id, child_id, edge_type, 1);
+                    self.remove_edges(
+                        cur_group_id,
+                        node,
+                        from_level,
+                        child_group_id,
+                        child_id,
+                        to_level,
+                        edge_type,
+                        1,
+                    );
                 }
             }
 
-            for (edge_type, parent_id) in connections.parents {
+            for (from_level, to_level, edge_type, parent_id) in connections.parents {
                 let parent_group_id = self.get_node_group_id(parent_id);
                 if contained && parent_group_id != cur_group_id {
-                    self.remove_edges(parent_group_id, parent_id, cur_group_id, node, edge_type, 1);
+                    self.remove_edges(
+                        parent_group_id,
+                        parent_id,
+                        from_level,
+                        cur_group_id,
+                        node,
+                        to_level,
+                        edge_type,
+                        1,
+                    );
                 }
             }
         }
 
         // Remove from group
-        let cur_group = self.get_node_group_mut(cur_group_id);
+        let Some(cur_group) = self.group_by_id.get_mut(&cur_group_id) else {
+            return cur_group_id;
+        };
         cur_group.nodes.remove(&node);
         cur_group.layer_min.remove(&node);
         cur_group.layer_max.remove(&node);
+
+        // Default node to be in group 0
+        self.group_id_by_node.insert(node, 0);
 
         cur_group_id
     }
 
     fn remove_group_if_empty(&mut self, group_id: NodeGroupID) {
-        let cur_group = self.get_node_group_mut(group_id);
+        let Some(cur_group) = self.group_by_id.get_mut(&group_id) else {
+            return;
+        };
         let from_empty = cur_group.nodes.is_empty();
         if from_empty {
             self.remove_group(group_id);
@@ -315,10 +388,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 
         // Add to new
         self.group_id_by_node.insert(node, group_id);
-        let new_group = self.get_node_group_mut(group_id);
-        new_group.nodes.insert(node, ConnectionData::new());
-        new_group.layer_min.push(node, Reverse(from_level));
-        new_group.layer_max.push(node, from_level);
+        if let Some(new_group) = self.group_by_id.get_mut(&group_id) {
+            new_group.nodes.insert(node, ConnectionData::new());
+            new_group.layer_min.push(node, Reverse(from_level));
+            new_group.layer_max.push(node, from_level);
+        }
 
         // Add new connections
         for (edge_type, child_id) in self.graph.get_children(node) {
@@ -331,7 +405,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 
             // Ensure the child id is in there, which may not have been the case initially for the initial group 0
             if child_group_id == 0 {
-                let child_group = self.get_node_group_mut(child_group_id);
+                let Some(child_group) = self.group_by_id.get_mut(&child_group_id) else {
+                    continue;
+                };
                 if !child_group.nodes.contains_key(&child_id) {
                     child_group.nodes.insert(child_id, ConnectionData::new());
                     child_group.layer_min.push(child_id, Reverse(child_level));
@@ -408,7 +484,10 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
             } else if from_id == to {
                 continue;
             } else if from_id == 0 {
-                let init_nodes = self.get_node_group_mut(from_id).nodes.keys();
+                let Some(group) = self.group_by_id.get_mut(&from_id) else {
+                    continue;
+                };
+                let init_nodes = group.nodes.keys();
                 let mut found: HashSet<NodeID> = init_nodes.clone().cloned().collect();
                 let mut queue: LinkedList<NodeID> = init_nodes.cloned().collect();
 
@@ -431,8 +510,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                         .collect(),
                     to,
                 );
-            } else if let Some(_) = self.group_by_id.get(&from_id) {
-                let from_group = &self.get_node_group(from_id);
+            } else if let Some(from_group) = self.group_by_id.get(&from_id) {
                 self.set_group(
                     from_group
                         .nodes
@@ -524,14 +602,12 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 
     pub fn split_edges(&mut self, group_id: NodeGroupID, fully: bool) {
         // TODO: rethink this entire approach, one nodeID can end up in multiple splits atm
-        let group_nodes = &self
-            .get_node_group(group_id)
-            .nodes
-            .keys()
-            .cloned()
-            .collect_vec();
+        let Some(group) = &self.group_by_id.get(&group_id) else {
+            return;
+        };
+        let group_nodes = group.nodes.keys().cloned().collect_vec();
         let mut splits: HashMap<(EdgeType<T>, NodeGroupID), HashSet<NodeID>> = HashMap::new();
-        for &node in group_nodes {
+        for node in group_nodes {
             let children = &self.graph.get_children(node);
             for (edge_type, to) in children {
                 let to_group = self.get_group(*to);

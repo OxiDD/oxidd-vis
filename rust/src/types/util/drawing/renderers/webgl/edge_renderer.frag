@@ -14,7 +14,7 @@ struct EdgeType {
 
 out vec4 outColor;
 
-
+in float curExists;
 in vec2 curStart;
 in vec2 curEnd;
 in vec2 outPos;
@@ -112,5 +112,5 @@ void main() {
     vec3 typeColor = typeData.color;
     if (outState >= 1.) typeColor = typeData.hoverColor;
     if (outState >= 2.) typeColor = typeData.selectColor;
-    outColor = vec4(typeColor, alpha);
+    outColor = vec4(typeColor, curExists * alpha);
 }

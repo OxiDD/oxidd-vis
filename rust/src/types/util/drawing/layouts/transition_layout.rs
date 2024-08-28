@@ -6,6 +6,7 @@ use std::{
 };
 
 use itertools::{EitherOrBoth, Itertools};
+use multimap::MultiMap;
 use oxidd::{Edge, Function, InnerNode, LevelNo, Manager};
 use oxidd_core::{DiagramRules, Tag};
 
@@ -172,7 +173,8 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                                 duration,
                                 old_time,
                                 old: get_current_point(point.point),
-                                new: new.groups.get(&edge_data.to).unwrap().position.new,
+                                new: new.groups.get(&edge_data.to).unwrap().position.new
+                                    + edge.end_offset.new,
                             },
                             exists: Transition {
                                 duration,
@@ -225,80 +227,149 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                     start_offset: edge.start_offset,
                     end_offset: edge.end_offset,
                     points: points,
-                    exists: edge.exists,
+                    exists: Transition {
+                        old_time,
+                        duration,
+                        old: 0.,
+                        new: edge.exists.new,
+                    },
                     curve_offset: edge.curve_offset,
                 }
             }
         };
 
-        DiagramLayout {
-            groups: new
-                .groups
-                .iter()
-                .map(|(id, group)| {
+        let groups = new.groups.iter().map(|(id, group)| {
+            (
+                id,
+                group,
+                node_mapping
+                    .get(&id)
+                    .and_then(|(old_id, offset, copy_size)| {
+                        old.groups
+                            .get(old_id)
+                            .map(|group| (offset, group, copy_size))
+                    }),
+            )
+        });
+        let updated_groups = groups
+            .clone()
+            .filter_map(|(id, group, old_group_data)| {
+                old_group_data.map(|old_group_data| (id, group, old_group_data))
+            })
+            .map(|(id, group, (&offset, old_group, &copy_size))| {
+                let cur_size = get_current_point(old_group.size);
+                let cur_center = get_current_point(old_group.position);
+                let start_size = if copy_size {
+                    cur_size
+                } else {
+                    // TODO: Perform better inside bounding box guarantee that uses offset
+                    Point {
+                        x: f32::min(cur_size.x, group.size.new.x),
+                        y: f32::min(cur_size.y, group.size.new.y),
+                    }
+                };
+                (
+                    *id,
+                    NodeGroupLayout {
+                        position: Transition {
+                            old_time,
+                            duration,
+                            old: cur_center + offset,
+                            new: group.position.new,
+                        },
+                        size: Transition {
+                            old_time,
+                            duration: duration,
+                            old: start_size,
+                            new: group.size.new,
+                        },
+                        label: group.label.clone(),
+                        exists: Transition {
+                            old_time,
+                            duration,
+                            old: get_current_float(old_group.exists),
+                            new: group.exists.new,
+                        },
+                        edges: group
+                            .edges
+                            .iter()
+                            .map(|(edge_data, edge)| {
+                                (edge_data.clone(), map_edge(*id, edge_data, edge, old_group))
+                            })
+                            .collect(),
+                        color: Transition {
+                            old_time,
+                            duration,
+                            old: get_current_color(old_group.color),
+                            new: group.color.new,
+                        },
+                    },
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        let some_updated_parents = groups
+            .clone()
+            .filter(|(_id, _group, old_group_data)| old_group_data.is_some())
+            .flat_map(|(&id, group, _)| {
+                group
+                    .edges
+                    .iter()
+                    .map(move |(edge_data, _)| (edge_data.to, id))
+            })
+            .collect::<HashMap<_, _>>();
+
+        let new_groups = groups
+            .filter(|(_id, _group, old_group_data)| old_group_data.is_none())
+            .map(|(id, group, _)| {
+                if let Some(parent_id) = some_updated_parents.get(id) {
+                    let parent = updated_groups.get(parent_id).unwrap();
                     (
                         *id,
-                        if let Some((&offset, old_group, &copy_size)) = node_mapping
-                            .get(&id)
-                            .and_then(|(old_id, offset, copy_size)| {
-                                old.groups
-                                    .get(old_id)
-                                    .map(|group| (offset, group, copy_size))
-                            })
-                        {
-                            let cur_size = get_current_point(old_group.size);
-                            let cur_center = get_current_point(old_group.position);
-                            let start_size = if copy_size {
-                                cur_size
-                            } else {
-                                // TODO: Perform better inside bounding box guarantee that uses offset
-                                Point {
-                                    x: f32::min(cur_size.x, group.size.new.x),
-                                    y: f32::min(cur_size.y, group.size.new.y),
-                                }
-                            };
-                            NodeGroupLayout {
-                                position: Transition {
-                                    old_time,
-                                    duration,
-                                    old: cur_center + offset,
-                                    new: group.position.new,
-                                },
-                                size: Transition {
-                                    old_time,
-                                    duration: duration,
-                                    old: start_size,
-                                    new: group.size.new,
-                                },
-                                label: group.label.clone(),
-                                exists: Transition {
-                                    old_time,
-                                    duration,
-                                    old: get_current_float(old_group.exists),
-                                    new: group.exists.new,
-                                },
-                                edges: group
-                                    .edges
-                                    .iter()
-                                    .map(|(edge_data, edge)| {
-                                        (
-                                            edge_data.clone(),
-                                            map_edge(*id, edge_data, edge, old_group),
-                                        )
-                                    })
-                                    .collect(),
-                                color: Transition {
-                                    old_time,
-                                    duration,
-                                    old: get_current_color(old_group.color),
-                                    new: group.color.new,
-                                },
-                            }
-                        } else {
-                            group.clone()
+                        NodeGroupLayout {
+                            position: Transition {
+                                old_time,
+                                duration,
+                                old: parent.position.old,
+                                new: group.position.new,
+                            },
+                            edges: group
+                                .edges
+                                .iter()
+                                .map(|(edge_data, edge)| {
+                                    (
+                                        edge_data.clone(),
+                                        EdgeLayout {
+                                            points: edge
+                                                .points
+                                                .iter()
+                                                .map(|point| EdgePoint {
+                                                    point: Transition {
+                                                        old_time,
+                                                        duration,
+                                                        old: parent.position.old,
+                                                        new: point.point.new.clone(),
+                                                    },
+                                                    ..point.clone()
+                                                })
+                                                .collect(),
+                                            ..edge.clone()
+                                        },
+                                    )
+                                })
+                                .collect(),
+                            ..group.clone()
                         },
                     )
-                })
+                } else {
+                    (*id, group.clone())
+                }
+            })
+            .collect_vec();
+
+        DiagramLayout {
+            groups: new_groups
+                .into_iter()
+                .chain(updated_groups.into_iter())
                 .collect(),
             layers: transition_layers(
                 &old.layers,
@@ -337,6 +408,10 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
             )
         })
         .collect();
+    let reverse_map = node_mapping
+        .iter()
+        .map(|(&new_group_id, &(old_group_id, _, _))| (old_group_id, new_group_id))
+        .collect::<MultiMap<_, _>>();
 
     // Decide which node should represent the old source, and hence copy the size
     let mut source_dests: HashMap<NodeGroupID, HashSet<NodeGroupID>> = HashMap::new();
@@ -372,20 +447,29 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
                 continue;
             };
 
-            let old_edge = EdgeData {
+            let old_edge = &EdgeData {
                 to: to_source,
                 ..edge
             };
 
-            let Some(old_edge_layout) = old
-                .groups
-                .get(&source)
-                .and_then(|group| group.edges.get(&old_edge))
-            else {
+            let Some((old_edge, old_edge_layout)) = old.groups.get(&source).and_then(|group| {
+                group
+                    .edges
+                    .get(&old_edge)
+                    .map(|edge_layout| (old_edge, edge_layout))
+                    .or_else(|| {
+                        // Fallback to ignoring the to-level
+                        group.edges.iter().find(|(edge_data, _)| {
+                            to_source == old_edge.to
+                                && old_edge.edge_type == edge_data.edge_type
+                                && old_edge.from_level == edge_data.from_level
+                        })
+                    })
+            }) else {
                 continue;
             };
 
-            edge_mapping.insert((node, edge.clone()), (source, old_edge));
+            edge_mapping.insert((node, edge.clone()), (source, old_edge.clone()));
 
             let Some(new_edge_layout) = new
                 .groups
