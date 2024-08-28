@@ -5,6 +5,8 @@ precision highp float;
 
 struct EdgeType { 
     vec3 color;
+    vec3 hoverColor;
+    vec3 selectColor;
     float width;
     float dashSolid;
     float dashTransparent;
@@ -12,12 +14,13 @@ struct EdgeType {
 
 out vec4 outColor;
 
-
+in float curExists;
 in vec2 curStart;
 in vec2 curEnd;
 in vec2 outPos;
 
 in float outType;
+in float outState;
 in float curCurveOffset;
 in float radius;
 in vec2 center;
@@ -105,5 +108,9 @@ void main() {
             alpha = 0.0;
     }
 
-    outColor = vec4(typeData.color, alpha);
+
+    vec3 typeColor = typeData.color;
+    if (outState >= 1.) typeColor = typeData.hoverColor;
+    if (outState >= 2.) typeColor = typeData.selectColor;
+    outColor = vec4(typeColor, curExists * alpha);
 }

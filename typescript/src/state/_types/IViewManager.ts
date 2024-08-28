@@ -14,6 +14,7 @@ export type IViewManager = {
 
     /**
      * Loads teh given layout data
+     * @note The root should be deserialized before loading a layout, in order to properly register the close listeners
      * @param layout The layout that specifies how to assign views to tabs
      * @returns The mutator to commit the change
      */

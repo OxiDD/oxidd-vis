@@ -8,4 +8,5 @@ import {installDevtools} from "./watchables/utils/devtools";
 installDevtools();
 initializeIcons();
 
+Error.stackTraceLimit = 30;
 ReactDOM.render(<App />, document.getElementById("root"));

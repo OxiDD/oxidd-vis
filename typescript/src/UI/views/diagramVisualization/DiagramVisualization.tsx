@@ -3,10 +3,19 @@ import {DiagramVisualizationState} from "../../../state/diagrams/DiagramVisualiz
 import {useTransformCallbacks} from "./useTransformCallbacks";
 import {css} from "@emotion/css";
 import {ViewContainer} from "../../components/layout/ViewContainer";
+import {BoxSelection} from "./BoxSelection";
+import {useToolbar} from "../../providers/ToolbarContext";
+import {useWatch} from "../../../watchables/react/useWatch";
+import {ActionButton, PrimaryButton, useTheme} from "@fluentui/react";
+import {Toolbar} from "../toolbar/Toolbar";
+import {PresenceRemainder} from "oxidd-viz-rust";
 
 export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}> = ({
     visualization,
 }) => {
+    const theme = useTheme();
+    const watch = useWatch();
+    const toolbar = useToolbar();
     const ref = useRef<HTMLDivElement>(null);
     useEffect(() => {
         const el = ref.current;
@@ -23,7 +32,7 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
     useEffect(() => {
         const el = ref.current;
         if (el) {
-            el.appendChild(visualization.canvas);
+            el.insertBefore(visualization.canvas, el.firstChild);
 
             let running = true;
             function render() {
@@ -38,11 +47,61 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
         }
     }, []);
     const moveListeners = useTransformCallbacks(visualization.transform);
+    const modeRef = useRef(0);
     return (
         <ViewContainer
+            onContextMenu={e => e.preventDefault()}
             ref={ref}
             {...moveListeners}
-            css={{padding: 0, overflow: "hidden"}}
-        />
+            css={{padding: 0, overflow: "hidden"}}>
+            <BoxSelection
+                onStart={m => m.buttons == 1}
+                onHighlight={(rect, e) => {
+                    const nodes = visualization.getNodes(rect);
+                    visualization.applyTool(toolbar, nodes, {
+                        type: "drag",
+                        event: e,
+                    });
+                }}
+                onSelect={(rect, e) => {
+                    const nodes = visualization.getNodes(rect);
+                    visualization.applyTool(toolbar, nodes, {
+                        type: "release",
+                        event: e,
+                    });
+                }}></BoxSelection>
+            <div
+                className={css({
+                    position: "absolute",
+                    right: theme.spacing.m,
+                    top: theme.spacing.m,
+                    background: theme.palette.neutralLight,
+                })}>
+                <Toolbar toolbar={toolbar} />
+
+                <PrimaryButton
+                    text="toggle"
+                    onClick={() => {
+                        visualization.applyTool(
+                            {
+                                apply(visualization, drawer, nodes, event) {
+                                    let m = (modeRef.current = (modeRef.current + 1) % 3);
+                                    drawer.set_terminal_mode(
+                                        "F",
+                                        m == 0
+                                            ? PresenceRemainder.Show
+                                            : m == 1
+                                            ? PresenceRemainder.Duplicate
+                                            : PresenceRemainder.Hide
+                                    );
+                                    return true;
+                                },
+                            },
+                            visualization.sharedState.selection.get()
+                        );
+                    }}
+                />
+            </div>
+        </ViewContainer>
     );
 };

@@ -42,6 +42,7 @@ use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 use super::util::drawing::drawer::Drawer;
 use super::util::drawing::layout_rules::LayoutRules;
 use super::util::drawing::layouts::layer_group_sorting::average_group_alignment::AverageGroupAlignment;
+use super::util::drawing::layouts::layer_group_sorting::ordering_group_alignment::OrderingGroupAlignment;
 use super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaOrdering;
 use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
 use super::util::drawing::layouts::layer_positionings::dummy_layer_positioning::DummyLayerPositioning;
@@ -50,11 +51,16 @@ use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
 use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition_layout::TransitionLayout;
+use super::util::drawing::layouts::util::color_label::Color;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
+use super::util::drawing::renderers::webgl::util::mix_color::mix_color;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
+use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
+use super::util::graph_structure::graph_manipulators::rc_graph::RCGraph;
+use super::util::graph_structure::graph_manipulators::terminal_level_adjuster::TerminalLevelAdjuster;
 use super::util::graph_structure::graph_structure::DrawTag;
 use super::util::graph_structure::graph_structure::EdgeType;
 use super::util::graph_structure::graph_structure::GraphStructure;
@@ -96,13 +102,22 @@ where
         Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramDrawer> {
+        let c0 = (0., 0., 0.);
+        let c1 = (0.4, 0.4, 0.4);
+        let c2 = (0.6, 0.6, 0.6);
+
+        let hover_color = ((0.0, 0.0, 1.0), 0.3);
+        let select_color = ((0.0, 0.0, 1.0), 0.8);
+
         let renderer = WebglRenderer::from_canvas(
             canvas,
             HashMap::from([
                 (
                     EdgeType::new((), 0),
                     EdgeRenderingType {
-                        color: (0., 0., 0.),
+                        color: c0,
+                        hover_color: mix_color(c0, hover_color.0, hover_color.1),
+                        select_color: mix_color(c0, select_color.0, select_color.1),
                         width: 0.15,
                         dash_solid: 1.0,
                         dash_transparent: 0.0, // No dashing, just solid
@@ -111,7 +126,9 @@ where
                 (
                     EdgeType::new((), 1),
                     EdgeRenderingType {
-                        color: (0.4, 0.4, 0.4),
+                        color: c1,
+                        hover_color: mix_color(c1, hover_color.0, hover_color.1),
+                        select_color: mix_color(c1, select_color.0, select_color.1),
                         width: 0.15,
                         dash_solid: 0.2,
                         dash_transparent: 0.1,
@@ -120,19 +137,25 @@ where
                 (
                     EdgeType::new((), 2),
                     EdgeRenderingType {
-                        color: (0.6, 0.6, 0.6),
+                        color: c2,
+                        hover_color: mix_color(c2, hover_color.0, hover_color.1),
+                        select_color: mix_color(c2, select_color.0, select_color.1),
                         width: 0.1,
                         dash_solid: 1.0,
                         dash_transparent: 0.0,
                     },
                 ),
             ]),
+            hover_color,
+            select_color,
         )
         .unwrap();
         let layout = LayeredLayout::new(
             SugiyamaOrdering::new(1, 1),
-            AverageGroupAlignment,
+            // AverageGroupAlignment,
+            OrderingGroupAlignment,
             BrandesKopfPositioning,
+            // DummyLayerPositioning,
             0.3,
         );
         let layout = TransitionLayout::new(layout);
@@ -146,45 +169,59 @@ pub struct QDDDiagramDrawer<
     T: DrawTag + 'static,
     G: GraphStructure<T, NodeLabel<String>, String> + 'static,
     R: Renderer<T>,
-    L: LayoutRules<T, String, String, GM<T, G>>,
+    L: LayoutRules<T, Color, String, GMGraph<T, G>>,
 > {
     group_manager: MutRcRefCell<GM<T, G>>,
-    drawer: Drawer<T, R, L, GM<T, G>>,
+    presence_adjuster: MPresenceAdjuster<T, G>,
+    drawer: Drawer<T, Color, R, L, GMGraph<T, G>>,
 }
-type GM<T, G> = GroupManager<T, PresenceLabel<NodeLabel<String>>, String, MGraph<T, G>>;
-type MGraph<T, G> = NodePresenceAdjuster<T, NodeLabel<String>, String, G>;
+type GraphLabel = PresenceLabel<NodeLabel<String>>;
+type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
+type MGraph<T, G> = TerminalLevelAdjuster<T, GraphLabel, String, MPresenceAdjuster<T, G>>;
+type MPresenceAdjuster<T, G> =
+    RCGraph<T, GraphLabel, String, NodePresenceAdjuster<T, NodeLabel<String>, String, G>>;
+type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, (f32, f32, f32)>;
 
 impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GM<T, G>>,
+        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
-        let mut modified_graph = NodePresenceAdjuster::new(graph);
-        // modified_graph.set_node_presence(out_node, presence)
-        // console::log!(
-        //     "Terminals: {}",
-        //     modified_graph
-        //         .get_terminals()
-        //         .iter()
-        //         .map(|t| t.to_string())
-        //         .join(",")
-        // );
-        for terminal in modified_graph.get_terminals() {
-            modified_graph
-                .set_node_presence(terminal, PresenceGroups::remainder(PresenceRemainder::Show))
-        }
+        let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(graph));
+        let modified_graph = TerminalLevelAdjuster::new(presence_adjuster.clone());
         let root = modified_graph.get_root();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph));
+        let grouped_graph = GMGraph::new_shared(group_manager.clone(), |nodes| {
+            match (nodes.get(0), nodes.get(1)) {
+                (
+                    Some(&PresenceLabel {
+                        original_label: NodeLabel::Terminal(ref terminal),
+                        original_id: _,
+                    }),
+                    None,
+                ) => {
+                    if terminal == "T" {
+                        (0.2, 1., 0.2)
+                    } else {
+                        (1., 0.2, 0.2)
+                    }
+                }
+                (Some(_), None) => (0., 0., 0.),
+                _ => (0.7, 0.7, 0.7),
+            }
+        });
         let mut out = QDDDiagramDrawer {
-            group_manager: group_manager.clone(),
-            drawer: Drawer::new(renderer, layout, group_manager),
+            group_manager,
+            presence_adjuster,
+            drawer: Drawer::new(renderer, layout, MutRcRefCell::new(grouped_graph)),
         };
         out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         out.reveal_all(30000);
+        // out.reveal_all(10);
         out
     }
 
@@ -210,7 +247,7 @@ impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GM<T, G>>,
+        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > DiagramDrawer for QDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
@@ -250,5 +287,21 @@ impl<
 
     fn get_nodes(&self, area: Rectangle) -> Vec<crate::wasm_interface::NodeGroupID> {
         self.drawer.get_nodes(area)
+    }
+
+    fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) -> () {
+        let mut adjuster = self.presence_adjuster.get();
+        let terminals = adjuster.get_terminals();
+        let terminals = terminals.iter().filter_map(|&node| {
+            match adjuster.get_node_label(node).original_label {
+                NodeLabel::Terminal(t) if t == terminal => Some(node),
+                _ => None,
+            }
+        });
+        let Some(target_terminal) = terminals.last() else {
+            return;
+        };
+
+        adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(mode));
     }
 }

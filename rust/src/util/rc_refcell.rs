@@ -1,10 +1,7 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
-    // marker::Unsize,
-    ops::{
-        // CoerceUnsized,
-        Deref,
-    },
+    hash::Hash,
+    ops::Deref,
     rc::Rc,
 };
 
@@ -25,6 +22,7 @@ impl<T> RcRefCell<T> {
 
 // impl<T: ?Sized + Unsize<U>, U: ?Sized> CoerceUnsized<RcRefCell<U>> for RcRefCell<T> {}
 
+#[derive(PartialEq, Eq, Clone)]
 pub struct MutRcRefCell<T: ?Sized>(Rc<RefCell<T>>);
 impl<T: ?Sized> MutRcRefCell<T> {
     pub fn read<'a>(&'a self) -> Ref<'a, T> {
@@ -43,5 +41,11 @@ impl<T: ?Sized> MutRcRefCell<T> {
 impl<T> MutRcRefCell<T> {
     pub fn new(data: T) -> Self {
         MutRcRefCell(Rc::new(RefCell::new(data)))
+    }
+}
+
+impl<T: Hash> Hash for MutRcRefCell<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.read().hash(state);
     }
 }

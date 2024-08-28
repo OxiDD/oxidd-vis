@@ -21,6 +21,7 @@ import {PlainField} from "../watchables/PlainField";
 import {all} from "../watchables/mutator/all";
 import {TDeepReadonly} from "../utils/_types/TDeepReadonly";
 import {Constant} from "../watchables/Constant";
+import {ICloseListener} from "./_types/ICloseListener";
 
 /**
  * A component to store the layout of the application
@@ -37,7 +38,7 @@ export class LayoutState {
 
     protected closeEmptyPanels: IWatchable<boolean>;
 
-    protected closeListeners: Map<string, (() => IMutator | void)[]> = new Map();
+    protected closeListeners: Map<string, ICloseListener[]> = new Map();
 
     /***
      * Creates a new layout state
@@ -65,17 +66,16 @@ export class LayoutState {
     /** The current layout state */
     public readonly layoutState = this.layout.readonly();
 
-    /**
-     * All the contents that are being rendered
-     */
+    /** All the contents that are being rendered */
     public readonly allTabs = new Derived(watch => getStateTabs(watch(this.layout)));
 
-    /**
-     * All the tab panel ids
-     */
+    /** All the tab panel ids */
     public readonly allTabPanels = new Derived(watch =>
         getStateTabPanels(watch(this.layout))
     );
+
+    /** All of the panels ids */
+    public readonly allPanels = new Derived(watch => getStatePanels(watch(this.layout)));
 
     // Atomic layout change management
     protected pauseLayoutUpdateDepth: number = 0;
@@ -206,7 +206,7 @@ export class LayoutState {
     public openTab(
         panelId: string,
         tab: string | ITabState,
-        closeHandler?: () => IMutator | void,
+        closeHandler?: ICloseListener,
         beforeTabId?: string
     ): IMutator {
         return this.updateLayout(layout => {
@@ -270,7 +270,7 @@ export class LayoutState {
      * @param handler The close handler
      * @returns The function to call to remove the handler
      */
-    public addCloseHandler(tabId: string, handler: () => void): () => void {
+    public addCloseHandler(tabId: string, handler: ICloseListener): () => void {
         let listeners = this.closeListeners.get(tabId);
         if (!listeners) {
             listeners = [];
@@ -292,14 +292,15 @@ export class LayoutState {
      * @param tabId The tab id for which to call
      */
     protected schedulePotentialCloseEvent(tabId: string) {
+        const beforeSchedule = this.layout.get();
         setTimeout(() => {
             const stillExists = !!this.allTabs.get().find(({id}) => tabId == id);
             if (!stillExists) {
                 const mutators = this.closeListeners
                     .get(tabId)
-                    ?.map(handler => handler())
+                    ?.map(handler => handler(beforeSchedule))
                     .filter((m): m is IMutator => !!m);
-                if (mutators) all(mutators);
+                if (mutators && mutators.length > 0) all(mutators).commit();
                 this.closeListeners.delete(tabId);
             }
         }, 10);
@@ -314,8 +315,9 @@ export class LayoutState {
 export function panelStateToData(state: IPanelState): IPanelData {
     if (state.type == "split") {
         const weights = state.handle.current?.getLayout();
+        const {handle, ...stateRest} = state;
         return {
-            ...state,
+            ...stateRest,
             panels: state.panels.map(({defaultWeight, content}, i) => ({
                 weight: weights?.[i] ?? defaultWeight,
                 content: panelStateToData(content),
@@ -350,6 +352,17 @@ export function panelDataToState(data: TDeepReadonly<IPanelData>): IPanelState {
             ...data,
             tabs: data.tabs.map(id => ({id, element: document.createElement("div")})),
         };
+}
+
+/**
+ * Retrieves all of the panel IDs that are currently rendered
+ * @param state The state to get the content ids from
+ * @returns The content ids
+ */
+export function getStatePanels(state: IPanelState): IPanelState[] {
+    if (state.type == "split")
+        return [state, ...state.panels.flatMap(panel => getStatePanels(panel.content))];
+    return [state];
 }
 
 /**

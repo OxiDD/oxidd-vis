@@ -4,6 +4,7 @@ precision highp float;
 out vec4 outColor;
 in vec2 cornerPos;
 in vec2 curSize;
+in vec3 curColor;
 
 uniform mat4 transform;
 float cornerSize = 0.3;
@@ -27,5 +28,5 @@ void main() {
             alpha = 0.0;
     }
 
-    outColor = vec4(0, 0, 0, alpha);
+    outColor = vec4(curColor, alpha);
 }

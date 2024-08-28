@@ -10,28 +10,14 @@ use std::{
 use itertools::{Either, Itertools};
 use multimap::MultiMap;
 use oxidd::{LevelNo, NodeID};
+use wasm_bindgen::prelude::*;
 
 use crate::{
     types::util::graph_structure::graph_structure::{
-        Change, DrawTag, EdgeType, GraphListener, GraphStructure,
+        Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
     },
     util::{free_id_manager::FreeIdManager, logging::console},
 };
-
-use super::util::graph_listener_manager::GraphListenerManager;
-
-pub struct NodePresenceAdjuster<
-    T: DrawTag + 'static,
-    NL: Clone,
-    LL: Clone,
-    G: GraphStructure<T, NL, LL>,
-> {
-    graph: G,
-    node_data: Rc<RefCell<NodeData<T>>>,
-    listener_handle: Option<usize>,
-    node_label: PhantomData<NL>,
-    level_label: PhantomData<LL>,
-}
 
 /// We distinguish 2 different nodeID kinds:
 /// - source node IDs, corresponding to the ID of the underlying graph(s)
@@ -40,8 +26,20 @@ pub struct NodePresenceAdjuster<
 /// The source node IDs are distinguished into 2 labeled kinds:
 /// - left node IDs, corresponding to the underlying graph we are wrapping
 /// - right node IDs, corresponding to the created virtual nodes
+pub struct NodePresenceAdjuster<
+    T: DrawTag + 'static,
+    NL: Clone,
+    LL: Clone,
+    G: GraphStructure<T, NL, LL>,
+> {
+    graph: G,
+    event_writer: GraphEventsWriter,
+    graph_events: GraphEventsReader,
 
-struct NodeData<T: DrawTag + 'static> {
+    node_label: PhantomData<NL>,
+    level_label: PhantomData<LL>,
+
+    /*  All the adjustment data */
     adjustments: HashMap<NodeID, PresenceGroups<T>>, // Specifies the adjustments for the left source node ID
     sources: HashMap<NodeID, NodeID>, // Maps the right source nodeID to the corresponding left source node ID
     images: MultiMap<NodeID, NodeID>, // Maps the left source nodeID to all of the corresponding right source node IDs
@@ -51,7 +49,6 @@ struct NodeData<T: DrawTag + 'static> {
     known_parents: HashMap<NodeID, Vec<(EdgeType<T>, NodeID)>>, // The parents (output node IDs) and edge type of a right source nodeID. Note that these are the known parents, because we may for sure these are the only parents that can exist for the created node, but can not be sure these are the only edge types.
     children: HashMap<NodeID, Vec<(EdgeType<T>, NodeID)>>, // The children (output node IDs) and edge type of a output nodeID
     free_id: FreeIdManager<usize>,
-    listeners: GraphListenerManager,
 }
 
 #[derive(Eq, PartialEq, Clone)]
@@ -88,6 +85,7 @@ pub enum EdgeConstraint<T: DrawTag> {
     Any,
 }
 
+#[wasm_bindgen]
 #[derive(Eq, PartialEq, Clone)]
 pub enum PresenceRemainder {
     // Show this unique terminal the regular way (default)
@@ -116,65 +114,39 @@ fn from_sourced(id: SourcedNodeID) -> NodeID {
     }
 }
 
-fn get_all_copies<T: DrawTag>(
-    node_data: Ref<NodeData<T>>,
-    left_source_node: NodeID,
-) -> Vec<NodeID> {
-    let source_out = from_sourced(Either::Left(left_source_node));
-    let maybe_images = node_data.images.get_vec(&left_source_node).cloned();
-    if let Some(images) = maybe_images {
-        let mut images = images
-            .into_iter()
-            .map(|image| from_sourced(Either::Right(image)))
-            .collect_vec();
-        images.push(source_out);
-        images
-    } else {
-        vec![source_out]
-    }
-}
-
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     NodePresenceAdjuster<T, NL, LL, G>
 {
-    pub fn new(graph: G) -> NodePresenceAdjuster<T, NL, LL, G> {
-        let mut adjuster = NodePresenceAdjuster {
+    pub fn new(mut graph: G) -> NodePresenceAdjuster<T, NL, LL, G> {
+        NodePresenceAdjuster {
+            graph_events: graph.create_event_reader(),
             graph,
-            node_data: Rc::new(RefCell::new(NodeData {
-                adjustments: HashMap::new(),
-                sources: HashMap::new(),
-                images: MultiMap::new(),
-                replacements: HashMap::new(),
-                parent_nodes: HashMap::new(),
-                known_parents: HashMap::new(),
-                children: HashMap::new(),
-                free_id: FreeIdManager::new(0),
-                listeners: GraphListenerManager::new(),
-            })),
-            // tag: PhantomData,
-            listener_handle: None,
+            event_writer: GraphEventsWriter::new(),
+            adjustments: HashMap::new(),
+            sources: HashMap::new(),
+            images: MultiMap::new(),
+            replacements: HashMap::new(),
+            parent_nodes: HashMap::new(),
+            known_parents: HashMap::new(),
+            children: HashMap::new(),
+            free_id: FreeIdManager::new(0),
             level_label: PhantomData,
             node_label: PhantomData,
-        };
-        adjuster.setup_listener_forwarding();
-        adjuster
+        }
     }
 
     pub fn set_node_presence(&mut self, out_node: NodeID, presence: PresenceGroups<T>) {
         let owner = self.get_owner_id(out_node);
 
         // Create events for removal of the old node (connections) and images
-        let owner_out = from_sourced(Either::Left(owner));
-        self.add_remove_node_events(owner_out);
-        let maybe_images = (*self.node_data).borrow().images.get_vec(&owner).cloned();
-        if let Some(images) = maybe_images.clone() {
-            for image in images {
-                self.add_remove_node_events(from_sourced(Either::Right(image)));
-            }
+        let node_copies = self.get_all_copies(owner);
+        for copy in node_copies {
+            self.add_remove_node_events(copy);
         }
 
         // Delete the old images
-        if let Some(images) = maybe_images.clone() {
+        let maybe_images = self.images.get_vec(&owner).cloned();
+        if let Some(images) = maybe_images {
             for image in images {
                 self.delete_replacement(image);
             }
@@ -182,11 +154,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
         // Determine the new images of the node
         {
-            {
-                let mut data = (*self.node_data).borrow_mut();
-                data.adjustments.insert(owner, presence.clone());
-            }
+            self.adjustments.insert(owner, presence.clone());
 
+            // This automatically creates events for the created replacements
             for group in presence.groups {
                 self.create_replacement(group, owner);
             }
@@ -195,100 +165,102 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             let source_parents = self.graph.get_known_parents(owner);
             let parents = source_parents
                 .iter()
-                .flat_map(|(_, parent)| get_all_copies((*self.node_data).borrow(), *parent))
+                .flat_map(|(_, parent)| self.get_all_copies(*parent))
                 .collect_vec();
             for parent in parents {
                 self.update_children(parent);
             }
         }
 
-        // Create events for addition of new node (connections) and images
+        // Create an event for the replaced node
+        let owner_out = from_sourced(Either::Left(owner));
         if presence.remainder == PresenceRemainder::Show {
             self.add_insert_node_events(owner_out, owner_out);
         }
-        if let Some(images) = maybe_images {
-            for image in images {
-                self.add_insert_node_events(from_sourced(Either::Right(image)), owner_out);
-            }
-        }
-
-        // Emit the events
-        (*self.node_data).borrow_mut().listeners.dispatch_change();
     }
 
-    fn setup_listener_forwarding(&mut self) {
-        let node_data = self.node_data.clone();
-        self.listener_handle = Some(self.graph.on_change(Box::new(move |events| {
-            // let data = (*node_data).borrow();
+    fn process_graph_changes(&mut self) {
+        let events = self.graph.consume_events(&self.graph_events);
 
-            let mapped_events = events
-                .iter()
-                .flat_map(|event| match event {
-                    Change::NodeLabelChange { node } => {
-                        get_all_copies((*node_data).borrow(), *node)
-                            .into_iter()
-                            .map(|node| Change::NodeLabelChange { node })
-                            .collect_vec()
+        for event in events {
+            match event {
+                Change::NodeLabelChange { node } => {
+                    for node_copy in self.get_all_copies(node) {
+                        self.event_writer
+                            .write(Change::NodeLabelChange { node: node_copy });
                     }
-                    Change::LevelChange { node } => get_all_copies((*node_data).borrow(), *node)
-                        .into_iter()
-                        .map(|node| Change::LevelChange { node })
-                        .collect_vec(),
-                    Change::LevelLabelChange { level } => {
-                        vec![Change::LevelLabelChange { level: *level }]
+                }
+                Change::LevelChange { node } => {
+                    for node_copy in self.get_all_copies(node) {
+                        self.event_writer
+                            .write(Change::LevelChange { node: node_copy });
                     }
-                    Change::NodeConnectionsChange { node } => {
-                        get_all_copies((*node_data).borrow(), *node)
-                            .into_iter()
-                            .map(|node| Change::NodeConnectionsChange { node })
-                            .collect_vec()
-                    }
-                    Change::NodeRemoval { node } => get_all_copies((*node_data).borrow(), *node)
-                        .into_iter()
-                        .map(|node| Change::NodeRemoval { node })
-                        .collect_vec(),
-                    Change::NodeInsertion { node, source } => {
-                        get_all_copies((*node_data).borrow(), *node)
-                            .into_iter()
-                            .map(|node| Change::NodeInsertion {
-                                node,
-                                source: source.clone(),
-                            })
-                            .collect_vec()
-                    }
-                })
-                .collect_vec();
+                }
+                Change::LevelLabelChange { level } => {
+                    self.event_writer.write(Change::LevelLabelChange { level });
+                }
+                Change::NodeConnectionsChange { node } => {
+                    for node_copy in self.get_all_copies(node) {
+                        self.event_writer
+                            .write(Change::NodeConnectionsChange { node: node_copy });
 
-            let listeners = &mut (*node_data).borrow_mut().listeners;
-            listeners.dispatch_changes(&mapped_events);
-        })));
+                        self.update_children(node_copy);
+                        if let Either::Right(copy_id) = to_sourced(node_copy) {
+                            self.update_parents(copy_id);
+                        }
+                    }
+                }
+                Change::NodeRemoval { node } => {
+                    for node_copy in self.get_all_copies(node) {
+                        self.event_writer
+                            .write(Change::NodeRemoval { node: node_copy });
+                        if let Either::Right(copy_id) = to_sourced(node_copy) {
+                            self.delete_replacement(copy_id);
+                        }
+                    }
+                }
+                Change::NodeInsertion { node, source } => {
+                    for node_copy in self.get_all_copies(node) {
+                        self.event_writer.write(Change::NodeInsertion {
+                            node: node_copy,
+                            source,
+                        });
+                    }
+                }
+                Change::ParentDiscover { child } => {
+                    self.event_writer.write(Change::ParentDiscover {
+                        child: from_sourced(Either::Right(child)),
+                    });
+                }
+            }
+        }
     }
 
     fn add_neighbor_connection_change_events(&mut self, out_node: NodeID) {
         let parents = self.get_known_parents(out_node);
         let children = self.get_children(out_node);
-        let listeners = &mut (*self.node_data).borrow_mut().listeners;
         for (_edge, parent) in parents {
-            listeners.add_change(Change::NodeConnectionsChange { node: parent });
+            self.event_writer
+                .write(Change::NodeConnectionsChange { node: parent });
         }
 
         for (_edge, child) in children {
-            listeners.add_change(Change::NodeConnectionsChange { node: child });
+            self.event_writer
+                .write(Change::NodeConnectionsChange { node: child });
         }
     }
 
     fn add_remove_node_events(&mut self, out_node: NodeID) {
         self.add_neighbor_connection_change_events(out_node);
 
-        let listeners = &mut (*self.node_data).borrow_mut().listeners;
-        listeners.add_change(Change::NodeRemoval { node: out_node });
+        self.event_writer
+            .write(Change::NodeRemoval { node: out_node });
     }
 
     fn add_insert_node_events(&mut self, out_node: NodeID, source: NodeID) {
         self.add_neighbor_connection_change_events(out_node);
 
-        let listeners = &mut (*self.node_data).borrow_mut().listeners;
-        listeners.add_change(Change::NodeInsertion {
+        self.event_writer.write(Change::NodeInsertion {
             node: out_node,
             source: Some(source),
         });
@@ -298,8 +270,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         match to_sourced(id) {
             Either::Left(id) => id,
             Either::Right(id) => {
-                let data = (*self.node_data).borrow();
-                let Some(original_id) = data.sources.get(&id) else {
+                let Some(original_id) = self.sources.get(&id) else {
                     return 0; // Case should not be reachable
                 };
                 *original_id
@@ -313,19 +284,18 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         child_to_be_replaced: NodeID,
     ) -> NodeID {
         let id = {
-            let mut data = (*self.node_data).borrow_mut();
-            let id = data.free_id.get_next();
+            let id = self.free_id.get_next();
 
             // Store the mapping
-            data.sources.insert(id, child_to_be_replaced);
-            data.images.insert(child_to_be_replaced, id);
+            self.sources.insert(id, child_to_be_replaced);
+            self.images.insert(child_to_be_replaced, id);
             for (constraint, parent) in &parents {
-                data.replacements
+                self.replacements
                     .insert((*parent, constraint.clone(), child_to_be_replaced), id);
             }
 
             // Store the parents
-            data.parent_nodes
+            self.parent_nodes
                 .insert(id, parents.iter().map(|(_, parent)| *parent).collect());
 
             id
@@ -333,44 +303,48 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
         // Calculate the connections
         self.update_parents(id);
-        self.update_children(id);
+        let out_id = from_sourced(Either::Right(id));
+        self.update_children(out_id);
+
+        // Create a creation event
+        self.add_insert_node_events(out_id, from_sourced(Either::Left(child_to_be_replaced)));
 
         id
     }
 
     fn delete_replacement(&mut self, node: NodeID) {
-        let parents = self.get_known_parents(node);
-        let mut data = (*self.node_data).borrow_mut();
-        let Some(&source) = data.sources.get(&node) else {
+        let parents = self.get_known_parents(from_sourced(Either::Right(node)));
+        let Some(&source) = self.sources.get(&node) else {
             return;
         };
 
         for (edge, parent) in parents {
-            data.replacements
+            let r1 = self
+                .replacements
                 .remove(&(parent, EdgeConstraint::Exact(edge), source));
-            data.replacements
+            let r2 = self
+                .replacements
                 .remove(&(parent, EdgeConstraint::Any, source));
         }
 
-        data.sources.remove(&node);
-        if let Some(images) = data.images.get_vec_mut(&source) {
-            images.remove(node);
+        self.sources.remove(&node);
+        if let Some(images) = self.images.get_vec_mut(&source) {
+            images.retain(|&e| e != node);
             if images.len() == 0 {
-                data.images.remove(&source);
+                self.images.remove(&source);
             }
         }
-        data.children.remove(&node);
-        data.parent_nodes.remove(&node);
-        data.known_parents.remove(&node);
-        data.free_id.make_available(node);
+        self.children.remove(&node);
+        self.parent_nodes.remove(&node);
+        self.known_parents.remove(&node);
+        self.free_id.make_available(node);
     }
 
     fn update_parents(&mut self, right_node_id: NodeID) {
         let source_id = self.get_owner_id(from_sourced(Either::Right(right_node_id)));
 
         let parent_images: MultiMap<NodeID, NodeID> = {
-            let data = (*self.node_data).borrow();
-            let parent_nodes = data.parent_nodes.get(&right_node_id).unwrap();
+            let parent_nodes = self.parent_nodes.get(&right_node_id).unwrap();
             parent_nodes
                 .iter()
                 .map(|&parent| (self.get_owner_id(parent), parent))
@@ -379,7 +353,6 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 .collect()
         };
 
-        let mut data = (*self.node_data).borrow_mut();
         let source_parents = self.graph.get_known_parents(source_id);
         let mut out_parents = Vec::new();
         for (edge, source_parent) in source_parents {
@@ -387,11 +360,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 continue;
             };
             for &parent in parent_images {
-                if data
+                if self
                     .replacements
                     .get(&(parent, EdgeConstraint::Exact(edge), source_id))
                     == Some(&right_node_id)
-                    || data
+                    || self
                         .replacements
                         .get(&(parent, EdgeConstraint::Any, source_id))
                         == Some(&right_node_id)
@@ -401,13 +374,13 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
         }
 
-        console::log!(
-            "update parents for {}: {}",
-            right_node_id,
-            out_parents.iter().map(|(_, k)| k.to_string()).join(", ")
-        );
+        // console::log!(
+        //     "update parents for {}: {}",
+        //     right_node_id,
+        //     out_parents.iter().map(|(_, k)| k.to_string()).join(", ")
+        // );
 
-        data.known_parents.insert(right_node_id, out_parents);
+        self.known_parents.insert(right_node_id, out_parents);
     }
 
     fn update_children(&mut self, out_node_id: NodeID) {
@@ -421,28 +394,25 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         for (edge_type, child) in children {
             let out_child = from_sourced(Either::Left(child));
             let remainder = {
-                let data = (*self.node_data).borrow();
                 if let Some(&replacement) =
-                    data.replacements
+                    self.replacements
                         .get(&(out_node_id, EdgeConstraint::Exact(edge_type), child))
                 {
-                    drop(data);
                     self.update_parents(replacement);
                     out.push((edge_type, from_sourced(Either::Right(replacement))));
                     continue;
                 }
 
                 if let Some(&replacement) =
-                    data.replacements
+                    self.replacements
                         .get(&(out_node_id, EdgeConstraint::Any, child))
                 {
-                    drop(data);
                     self.update_parents(replacement);
                     out.push((edge_type, from_sourced(Either::Right(replacement))));
                     continue;
                 }
 
-                let Some(adjustment) = data.adjustments.get(&child) else {
+                let Some(adjustment) = self.adjustments.get(&child) else {
                     out.push((edge_type, out_child));
                     continue;
                 };
@@ -469,19 +439,29 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
         }
 
-        let has0 = out.iter().find(|p| p.1 == 0);
-        if has0.is_some() {
-            console::log!("node0: {} ", out_node_id);
+        self.children.insert(out_node_id, out);
+    }
+
+    fn get_all_copies(&self, left_source_node: NodeID) -> Vec<NodeID> {
+        let source_out = from_sourced(Either::Left(left_source_node));
+        let maybe_images = self.images.get_vec(&left_source_node).cloned();
+        if let Some(images) = maybe_images {
+            let mut images = images
+                .into_iter()
+                .map(|image| from_sourced(Either::Right(image)))
+                .collect_vec();
+            images.push(source_out);
+            images
+        } else {
+            vec![source_out]
         }
-        let mut data = (*self.node_data).borrow_mut();
-        data.children.insert(out_node_id, out);
     }
 }
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct PresenceLabel<LL> {
-    original_label: LL,
-    original_id: NodeID,
+    pub original_label: LL,
+    pub original_id: NodeID,
 }
 
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
@@ -494,25 +474,25 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         self.graph
             .get_terminals()
             .iter()
-            .flat_map(|t| get_all_copies((*self.node_data).borrow(), *t))
+            .flat_map(|t| self.get_all_copies(*t))
             .collect()
     }
 
     fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+        self.process_graph_changes();
         let parents = match to_sourced(node) {
             Either::Left(id) => {
-                let data = (*self.node_data).borrow();
                 let known_parents = self.graph.get_known_parents(id);
                 // Filter parents to remove any parents that use a replacement node instead
                 known_parents
                     .into_iter()
                     .map(|(edge, parent)| (edge, from_sourced(Either::Left(parent))))
                     .filter(|&(edge, out_parent)| {
-                        let replaced = data.replacements.contains_key(&(
+                        let replaced = self.replacements.contains_key(&(
                             out_parent,
                             EdgeConstraint::Exact(edge.clone()),
                             id,
-                        )) || data.replacements.contains_key(&(
+                        )) || self.replacements.contains_key(&(
                             out_parent,
                             EdgeConstraint::Any,
                             id,
@@ -521,13 +501,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                     })
                     .collect()
             }
-            Either::Right(id) => {
-                let data = (*self.node_data).borrow();
-                data.known_parents
-                    .get(&id)
-                    .cloned()
-                    .unwrap_or_else(|| Vec::new())
-            }
+            Either::Right(id) => self
+                .known_parents
+                .get(&id)
+                .cloned()
+                .unwrap_or_else(|| Vec::new()),
         };
         // console::log!(
         //     "{} parents: {}",
@@ -538,12 +516,26 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 
     fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
-        if let Some(children) = (*self.node_data).borrow().children.get(&node) {
+        self.process_graph_changes();
+        if let Some(children) = self.children.get(&node) {
             // console::log!(
             //     "{} children: {}",
             //     node,
             //     children.iter().map(|(_, v)| v.to_string()).join(", ")
             // );
+            // if let Either::Left(_) = to_sourced(node) {
+            //     let data = (*self.node_data).borrow();
+            //     console::log!(
+            //         "{} children: {}",
+            //         node,
+            //         data.children
+            //             .get(&node)
+            //             .unwrap()
+            //             .iter()
+            //             .map(|(_, v)| v.to_string())
+            //             .join(", ")
+            //     );
+            // }
             return children.clone();
         }
 
@@ -551,18 +543,17 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             Either::Left(_) => {
                 self.update_children(node);
 
-                let data = (*self.node_data).borrow();
-                console::log!(
-                    "{} children: {}",
-                    node,
-                    data.children
-                        .get(&node)
-                        .unwrap()
-                        .iter()
-                        .map(|(_, v)| v.to_string())
-                        .join(", ")
-                );
-                return data.children.get(&node).cloned().unwrap();
+                // console::log!(
+                //     "{} children: {}",
+                //     node,
+                //     data.children
+                //         .get(&node)
+                //         .unwrap()
+                //         .iter()
+                //         .map(|(_, v)| v.to_string())
+                //         .join(", ")
+                // );
+                return self.children.get(&node).cloned().unwrap();
             }
             Either::Right(_) => {
                 // This should not be able to happen, since any such node should have registered children
@@ -573,14 +564,14 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
     fn get_level(&mut self, node: NodeID) -> LevelNo {
         let id = self.get_owner_id(node);
-        if self.graph.get_level(id) == 0 {
-            console::log!(
-                "node: {}, id: {}, level: {}",
-                node,
-                id,
-                self.graph.get_level(id)
-            );
-        }
+        // if self.graph.get_level(id) == 0 {
+        //     console::log!(
+        //         "node: {}, id: {}, level: {}",
+        //         node,
+        //         id,
+        //         self.graph.get_level(id)
+        //     );
+        // }
         // if let Either::Right(_) = to_sourced(node) {
         //     console::log!(
         //         "node: {}, id: {}, level: {}",
@@ -589,6 +580,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         //         self.graph.get_level(id)
         //     );
         // }
+
+        // TODO: store custom levels for terminals
         self.graph.get_level(id)
     }
 
@@ -604,23 +597,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         self.graph.get_level_label(level)
     }
 
-    fn on_change(&mut self, listener: Box<GraphListener>) -> usize {
-        let listeners = &mut (*self.node_data).borrow_mut().listeners;
-        listeners.add(listener)
+    fn create_event_reader(&mut self) -> GraphEventsReader {
+        self.event_writer.create_reader()
     }
-
-    fn off_change(&mut self, listener: usize) {
-        let listeners = &mut (*self.node_data).borrow_mut().listeners;
-        listeners.remove(listener)
-    }
-}
-
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> Drop
-    for NodePresenceAdjuster<T, NL, LL, G>
-{
-    fn drop(&mut self) {
-        if let Some(listener_handle) = self.listener_handle {
-            self.graph.off_change(listener_handle);
-        }
+    fn consume_events(&mut self, reader: &GraphEventsReader) -> Vec<Change> {
+        self.process_graph_changes();
+        self.event_writer.read(reader)
     }
 }

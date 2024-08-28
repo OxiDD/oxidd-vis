@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use crate::util::rectangle::Rectangle;
+use crate::{
+    types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder,
+    util::rectangle::Rectangle,
+};
 
 use super::traits::{Diagram, DiagramDrawer};
 use wasm_bindgen::prelude::*;
@@ -54,6 +57,9 @@ impl DiagramDrawerBox {
     }
     pub fn split_edges(&mut self, group: NodeGroupID, fully: bool) {
         self.0.split_edges(group, fully);
+    }
+    pub fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) {
+        self.0.set_terminal_mode(terminal, mode);
     }
 }
 

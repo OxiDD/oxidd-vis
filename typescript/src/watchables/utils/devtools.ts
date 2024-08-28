@@ -47,7 +47,7 @@ export function installDevtools() {
 
 function getTypeName(object: any): string {
     if (object && Symbol.toStringTag in object) {
-        return object[Symbol.toStringTag]();
+        return object[Symbol.toStringTag];
     }
     return Object.getPrototypeOf(object).constructor.name;
 }

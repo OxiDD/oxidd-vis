@@ -4,8 +4,8 @@ OxiDD visualization application
 
 TODO:s
 
-- [ ] text: Add text rendering
-- [ ] level: Add level rendering:
+- [x] text: Add text rendering
+- [x] level: Add level rendering:
   - [ ] Add level collapsing layout algorithm that condenses levels when nothing happens in them
 - [ ] stepping: Add BDD-algorithm stepping
 - [ ] algorithms: Develop own algorithms:
@@ -16,8 +16,8 @@ TODO:s
     - [ ] Level-wise node-grouping
     - [ ] ...
 - [ ] gui: Create GUI around visualization:
-  - [ ] Create watchables data-structure
-  - [ ] Create panel based UI, modified from rascal-vis
+  - [x] Create watchables data-structure
+  - [x] Create panel based UI, modified from rascal-vis
   - [ ] Create node selection system + visualization
   - [ ] Create node selection stats panel
   - [ ] Create algorithm-stepping controls

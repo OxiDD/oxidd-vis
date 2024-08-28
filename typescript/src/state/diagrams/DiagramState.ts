@@ -8,6 +8,8 @@ import {DiagramVisualizationState} from "./DiagramVisualizationState";
 import {IDiagramSerialization} from "./_types/IDiagramSerialization";
 import {IDiagramSource} from "./_types/IDiagramSource";
 import {Derived} from "../../watchables/Derived";
+import {Mutator} from "../../watchables/mutator/Mutator";
+import {NodeSelectionState} from "./NodeSelectionState";
 
 /** The state of a single diagram, which may contain multiple functions and views */
 export class DiagramState extends ViewState {
@@ -36,9 +38,20 @@ export class DiagramState extends ViewState {
     /** The current visualizations of this diagram */
     public readonly visualizations = this._visualizations.readonly();
 
-    /** @override */
-    public readonly children = new Derived(watch => watch(this.visualizations));
+    /** The currently selected nodes in this diagram */
+    public readonly selectedNodes = new NodeSelectionState();
 
+    /** The nodes currently highlighted in this diagram */
+    public readonly highlightNodes = new NodeSelectionState();
+
+    /** @override */
+    public readonly children = new Derived(watch => [
+        ...watch(this.visualizations),
+        this.selectedNodes,
+        this.highlightNodes,
+    ]);
+
+    // Visualization management
     /**
      * Creates a new visualization for this diagram
      * @returns The mutator to commit the change, resulting in the created visualization
@@ -78,6 +91,21 @@ export class DiagramState extends ViewState {
     }
 
     /**
+     * Creates a new visualization for this diagram
+     * @returns The created visualization
+     */
+    protected createVisualization(): DiagramVisualizationState {
+        const canvas = document.createElement("canvas");
+        const drawer = this.diagram.create_drawer(canvas);
+
+        return new DiagramVisualizationState(drawer, canvas, {
+            highlight: this.highlightNodes,
+            selection: this.selectedNodes,
+        });
+    }
+
+    // State serialization and maintenance
+    /**
      * Disposes the data held by this diagram and corresponding visualizations (drops the rust data)
      */
     public dispose() {
@@ -94,6 +122,8 @@ export class DiagramState extends ViewState {
             visualizations: this._visualizations
                 .get()
                 .map(visualization => visualization.serialize()),
+            selectedNodes: this.selectedNodes.serialize(),
+            highlightedNodes: this.highlightNodes.serialize(),
         };
     }
 
@@ -111,17 +141,8 @@ export class DiagramState extends ViewState {
             }
 
             push(this._visualizations.set(visualizations));
+            push(this.selectedNodes.deserialize(data.selectedNodes));
+            push(this.highlightNodes.deserialize(data.highlightedNodes));
         });
-    }
-
-    /**
-     * Creates a new visualization for this diagram
-     * @returns The created visualization
-     */
-    protected createVisualization(): DiagramVisualizationState {
-        const canvas = document.createElement("canvas");
-        const drawer = this.diagram.create_drawer(canvas);
-
-        return new DiagramVisualizationState(drawer, canvas);
     }
 }

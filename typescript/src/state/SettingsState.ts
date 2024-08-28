@@ -1,8 +1,10 @@
+import {Constant} from "../watchables/Constant";
 import {Field} from "../watchables/Field";
 import {IMutator} from "../watchables/mutator/_types/IMutator";
 import {chain} from "../watchables/mutator/chain";
 import {IBaseViewSerialization} from "./_types/IBaseViewSerialization";
 import {IGlobalSettings} from "./_types/IGlobalSettings";
+import {sidebarLocationHint} from "./views/locations/sidebarLocationHint";
 import {ViewState} from "./views/ViewState";
 
 export type ISettings = Omit<SettingsState, keyof ViewState>;
@@ -17,7 +19,11 @@ export class SettingsState extends ViewState {
         deleteUnusedPanels: new Field(true),
     } as const;
 
+    /** The global settings */
     public readonly global: Field<IGlobalSettings>;
+
+    /** @override */
+    public readonly baseLocationHints = new Constant(sidebarLocationHint);
 
     /**
      * Creates a new settings state/view

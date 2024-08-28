@@ -31,9 +31,11 @@ export const Sidebar: FC<{state: AppState; projectUrl: string}> = ({
                     display: "flex",
                     flexDirection: "column",
                 }}>
-                {tabs.map(props => (
-                    <SidebarButton key={props.name} appState={state} {...props} />
-                ))}
+                {tabs
+                    .filter(({hidden}) => !hidden)
+                    .map(props => (
+                        <SidebarButton key={props.name} appState={state} {...props} />
+                    ))}
 
                 <div style={{flexGrow: 1}} />
                 <StyledTooltipHost
@@ -91,22 +93,15 @@ export const SidebarButton: FC<{
     name: string;
     icon: string;
     view: ViewState;
-    openIn?: string;
     appState: AppState;
-}> = ({name, icon, view, appState, openIn}) => {
+}> = ({name, icon, view, appState}) => {
     const theme = useTheme();
     const tooltipId = useId(name);
     const watch = useWatch();
     const views = appState.views;
     const onClick = useCallback(() => {
         if (views.isVisible(view).get()) views.close(view).commit();
-        else
-            views
-                .open(view, [
-                    {targetId: openIn ?? "sidebar", targetType: "panel"},
-                    {createId: openIn ?? "sidebar", weightRatio: 0.7, side: "west"},
-                ])
-                .commit();
+        else views.open(view).commit();
     }, []);
     const isVisible = watch(views.isVisible(view));
 

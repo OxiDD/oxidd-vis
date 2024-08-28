@@ -3,26 +3,36 @@ precision highp float;
 
 in vec2 position;
 in vec2 positionOld;
-in float positionStartTime;
-in float positionDuration;
+in vec2 positionTransition;
 
 in vec2 size;
 in vec2 sizeOld;
-in float sizeStartTime;
-in float sizeDuration;
+in vec2 sizeTransition;
+
+in vec3 color;
+in vec3 colorOld;
+in vec2 colorTransition;
 
 uniform mat4 transform;
 uniform float time;
 
 out vec2 cornerPos;
 out vec2 curSize;
+out vec3 curColor;
+
+float getPer(vec2 transition) {
+    return min((time - transition.x) / transition.y, 1.0f);
+}
 
 void main() {
-    float positionPer = min((time - positionStartTime) / positionDuration, 1.0f);
+    float positionPer = getPer(positionTransition);
     vec2 curPosition = positionPer * position + (1.0f - positionPer) * positionOld;
 
-    float sizePer = min((time - sizeStartTime) / sizeDuration, 1.0f);
+    float sizePer = getPer(sizeTransition);
     curSize = sizePer * size + (1.0f - sizePer) * sizeOld;
+
+    float colorPer = getPer(colorTransition);
+    curColor = sqrt(mix(colorOld * colorOld, color * color, colorPer));
 
     int corner = gl_VertexID % 6; // two triangles
     cornerPos = curSize * (

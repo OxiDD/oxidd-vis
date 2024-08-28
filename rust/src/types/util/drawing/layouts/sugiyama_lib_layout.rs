@@ -21,7 +21,10 @@ use super::{
     layer_group_sorting::average_group_alignment::AverageGroupAlignment,
     layer_orderings::dummy_layer_ordering::DummyLayerOrdering,
     layered_layout::{LayerOrdering, LayeredLayout, NodePositioning},
-    util::layered::layer_orderer::{EdgeMap, Order},
+    util::{
+        color_label::ColorLabel,
+        layered::layer_orderer::{EdgeMap, Order},
+    },
 };
 
 pub struct SugiyamaLibLayout<T: DrawTag, GL, LL> {
@@ -41,8 +44,8 @@ impl<T: DrawTag, GL, LL> SugiyamaLibLayout<T, GL, LL> {
     }
 }
 
-impl<T: DrawTag, GL, G: GroupedGraphStructure<T, GL, String>> LayoutRules<T, GL, String, G>
-    for SugiyamaLibLayout<T, GL, String>
+impl<T: DrawTag, GL: ColorLabel, G: GroupedGraphStructure<T, GL, String>>
+    LayoutRules<T, GL, String, G> for SugiyamaLibLayout<T, GL, String>
 {
     fn layout(
         &mut self,

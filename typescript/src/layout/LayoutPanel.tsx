@@ -20,6 +20,7 @@ import {useChangeID} from "../utils/useChangeID";
 import {usePrevious} from "../utils/usePrevious";
 import {useWatch} from "../watchables/react/useWatch";
 import {chain} from "../watchables/mutator/chain";
+import {css} from "@emotion/css";
 
 /**
  * The component for rendering a layout panel
@@ -54,7 +55,11 @@ export const LayoutSplitPanel: FC<{
         <PanelGroup direction={panel.direction} ref={panel.handle} key={key}>
             {intersperseDynamic(
                 panel.panels.map(panel => (
-                    <Panel key={panel.content.id} defaultSize={panel.defaultWeight}>
+                    <Panel
+                        key={panel.content.id}
+                        minSize={0.0}
+                        // className={css({minHeight: 30})}
+                        defaultSize={panel.defaultWeight}>
                         <LayoutPanel
                             state={state}
                             panel={panel.content}

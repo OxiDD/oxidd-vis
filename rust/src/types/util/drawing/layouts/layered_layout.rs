@@ -28,8 +28,9 @@ use crate::{
 };
 
 use super::util::{
+    color_label::ColorLabel,
     compute_layers_layout::compute_layers_layout,
-    layered::layer_orderer::{EdgeMap, Order},
+    layered::layer_orderer::{get_sequence, EdgeMap, Order},
     remove_redundant_bendpoints::remove_redundant_bendpoints,
 };
 
@@ -138,7 +139,7 @@ pub fn is_edge_dummy(node: NodeGroupID, dummy_edge_start_id: NodeGroupID) -> boo
 
 impl<
         T: DrawTag,
-        GL,
+        GL: ColorLabel,
         O: LayerOrdering<T, GL, String>,
         S: LayerGroupSorting<T, GL, String>,
         P: NodePositioning<T, GL, String>,
@@ -187,6 +188,7 @@ impl<
             &dummy_owners,
         );
 
+        // Sort the groupings, such that they never cross each-other, and remove other edges that cross groups
         let layers = self.group_aligning.align_cross_layer_nodes(
             graph,
             &layers,
@@ -195,7 +197,9 @@ impl<
             dummy_edge_start_id,
             &dummy_owners,
         );
+        remove_group_crossings(&layers, &mut edges, &dummy_owners);
 
+        // Perform node-positioning
         let (node_positions, layer_positions) = self.positioning.position_nodes(
             graph,
             &layers,
@@ -286,7 +290,6 @@ fn add_edges_with_dummies<T: DrawTag, GL, LL>(
     let mut edge_connection_nodes: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)> =
         HashMap::new();
 
-    console::log!("---------------");
     for group in graph.get_all_groups() {
         // let (parent_start_level, parent_end_level) = graph.get_level_range(group);
 
@@ -335,7 +338,76 @@ fn add_edges_with_dummies<T: DrawTag, GL, LL>(
     (edge_bend_nodes, edge_connection_nodes)
 }
 
-fn format_layout<T: DrawTag, GL>(
+fn remove_group_crossings(
+    layers: &Vec<Order>,
+    edges: &mut EdgeMap,
+    dummy_owners: &HashMap<NodeGroupID, NodeGroupID>,
+) {
+    let layer_order = layers.iter().map(get_sequence).collect_vec();
+    let all_layer_group_indices = layers
+        .iter()
+        .map(|l| {
+            l.iter()
+                .filter_map(|(node, index)| dummy_owners.get(node).map(|owner| (*owner, *index)))
+                .collect::<HashMap<_, _>>()
+        })
+        .collect_vec();
+
+    for i in 0..(layers.len() - 1) {
+        let layer = &layer_order[i];
+        let next_layer = &layers[i + 1];
+
+        let next_layer_groups = &all_layer_group_indices[i + 1];
+        let mut shared_layer_groups = all_layer_group_indices[i]
+            .iter()
+            .filter_map(|(group, from_index)| {
+                next_layer_groups
+                    .get(group)
+                    .map(|to_index| (*group, *from_index, *to_index))
+            })
+            .sorted_by_key(|(_, from_index, _)| *from_index)
+            .collect_vec();
+
+        // Remove left to right downwards crossings
+        let mut node_index = 0;
+        for &(_group, from_index, to_index) in &shared_layer_groups {
+            // For each node to the left of from_index, remove any edges to the right of to_index (keep everything that's to the left of to_index)
+            while node_index < from_index {
+                let node = layer[node_index];
+                if let Some(node_edges) = edges.get_mut(&node) {
+                    node_edges.retain(|to_node| {
+                        next_layer
+                            .get(to_node)
+                            .map(|&index| index <= to_index)
+                            .unwrap_or(false)
+                    });
+                }
+                node_index += 1;
+            }
+        }
+
+        // Remove right to left downwards crossings
+        shared_layer_groups.reverse();
+        node_index = layer.len() - 1;
+        for &(_group, from_index, to_index) in &shared_layer_groups {
+            while node_index > from_index {
+                let node = layer[node_index];
+                if let Some(node_edges) = edges.get_mut(&node) {
+                    node_edges.retain(|to_node| {
+                        next_layer
+                            .get(to_node)
+                            .map(|&index| index >= to_index)
+                            .unwrap_or(false)
+                    });
+                }
+
+                node_index -= 1;
+            }
+        }
+    }
+}
+
+fn format_layout<T: DrawTag, GL: ColorLabel>(
     graph: &impl GroupedGraphStructure<T, GL, String>,
     max_curve_offset: f32,
     node_positions: HashMap<usize, Point>,
@@ -407,7 +479,6 @@ fn format_layout<T: DrawTag, GL>(
             .iter()
             .map(|&group_id| {
                 let (s, e) = graph.get_level_range(group_id);
-                console::log!(">-------");
                 (
                     group_id,
                     NodeGroupLayout {
@@ -420,6 +491,7 @@ fn format_layout<T: DrawTag, GL>(
                                     - layer_positions.get(&e).unwrap_or(&0.))
                                     * node_size,
                         }),
+                        color: Transition::plain(graph.get_group_label(group_id).get_color()),
                         exists: Transition::plain(1.),
                         edges: graph
                             .get_children(group_id)
@@ -501,57 +573,60 @@ fn format_edge<T: DrawTag>(
     } = edge;
     let edge_data = edge.drop_count();
 
-    let (start_offset, end_offset) = edge_connection_nodes
+    let (start_pos, end_pos) = edge_connection_nodes
         .get(&(group_id, edge_data.clone()))
         .map_or_else(
-            || (Point { x: 0.0, y: 0.0 }, Point { x: 0.0, y: 0.0 }),
+            || (None, None),
             |(start_id, end_id)| {
                 (
-                    node_positions.get(&start_id).map_or_else(
-                        || Point { x: 0.0, y: 0.0 },
-                        |start_point| {
-                            bottom_node_positions.get(&group_id).map_or_else(
-                                || Point { x: 0., y: 0. },
-                                |center_point| *start_point - *center_point,
-                            )
-                        },
-                    ),
-                    node_positions.get(&end_id).map_or_else(
-                        || Point { x: 0.0, y: 0.0 },
-                        |end_point| {
-                            bottom_node_positions.get(&to).map_or_else(
-                                || Point { x: 0., y: 0. },
-                                |center_point| *end_point - *center_point,
-                            )
-                        },
-                    ),
+                    node_positions.get(&start_id).cloned(),
+                    node_positions.get(&end_id).cloned(),
                 )
             },
         );
 
-    let edge_offset = Point {
+    let start_offset = start_pos
+        .and_then(|start_point| {
+            bottom_node_positions
+                .get(&group_id)
+                .map(|base_point| start_point - *base_point)
+        })
+        .unwrap_or_default();
+
+    let end_offset = end_pos
+        .and_then(|end_point| {
+            bottom_node_positions
+                .get(&to)
+                .map(|base_point| end_point - *base_point)
+        })
+        .unwrap_or_default();
+
+    let edge_center_offset = Point {
         x: node_size,
         y: node_size,
     } * 0.5;
 
     EdgeLayout {
-        start_offset: Transition::plain(start_offset + edge_offset),
-        end_offset: Transition::plain(end_offset + edge_offset),
+        start_offset: Transition::plain(start_offset + edge_center_offset),
+        end_offset: Transition::plain(end_offset + edge_center_offset),
         points: edge_bend_nodes.get(&(group_id, edge_data)).map_or_else(
             || Vec::new(),
             |nodes| {
-                remove_redundant_bendpoints(
-                    &nodes
-                        .iter()
-                        .map(|dummy_id| *node_positions.get(&dummy_id).unwrap() + edge_offset)
-                        .collect(),
-                )
-                .iter()
-                .map(|&point| EdgePoint {
-                    point: Transition::plain(point),
-                    exists: Transition::plain(1.),
-                })
-                .collect()
+                let bend_points = nodes
+                    .iter()
+                    .map(|dummy_id| *node_positions.get(&dummy_id).unwrap() + edge_center_offset);
+                let all_bend_points = (Some(start_pos.unwrap_or_default() + edge_center_offset))
+                    .into_iter()
+                    .chain(bend_points)
+                    .chain(Some(end_pos.unwrap_or_default() + edge_center_offset));
+                let reduced_points = remove_redundant_bendpoints(&all_bend_points.collect());
+                reduced_points[1..reduced_points.len() - 1]
+                    .iter()
+                    .map(|&point| EdgePoint {
+                        point: Transition::plain(point),
+                        exists: Transition::plain(1.),
+                    })
+                    .collect()
             },
         ),
         exists: Transition::plain(1.),

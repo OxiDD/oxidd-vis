@@ -61,9 +61,7 @@ export class ConfigurationState<X> {
     }
 
     /** The profiles currently available */
-    public readonly profiles = new Derived(
-        watch => [...watch(this._profiles).values()] as TDeepReadonly<IProfile[]>
-    );
+    public readonly profiles = new Derived(watch => [...watch(this._profiles).values()]);
 
     /**
      * Deletes the profile with the given id
@@ -105,14 +103,13 @@ export class ConfigurationState<X> {
      * @param profile The profile to be loaded
      * @returns The mutator that can be committed to load the profile
      */
-    public loadProfile(profile: TDeepReadonly<IProfile>): IMutator {
+    public loadProfile(profile: IProfile): IMutator {
         return chain(push => {
             push(this._profileName.set(profile.name));
             push(this._profileId.set(profile.id));
 
-            push(this.viewManager.loadLayout(profile.layout));
-
             push(this.viewManager.root.deserialize(profile.app));
+            push(this.viewManager.loadLayout(profile.layout));
         });
     }
 

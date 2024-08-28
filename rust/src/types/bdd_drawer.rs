@@ -20,6 +20,7 @@ use crate::util::rc_refcell::MutRcRefCell;
 use crate::util::rectangle::Rectangle;
 use crate::wasm_interface::NodeGroupID;
 use crate::wasm_interface::NodeID;
+use crate::wasm_interface::StepData;
 use crate::wasm_interface::TargetID;
 use crate::wasm_interface::TargetIDType;
 use oxidd::bdd;
@@ -50,9 +51,13 @@ use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
 use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition_layout::TransitionLayout;
+use super::util::drawing::layouts::util::color_label::Color;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
+use super::util::drawing::renderers::webgl::util::mix_color::mix_color;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
+use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
+use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder;
 use super::util::graph_structure::graph_structure::DrawTag;
 use super::util::graph_structure::graph_structure::EdgeType;
 use super::util::graph_structure::graph_structure::GraphStructure;
@@ -94,13 +99,21 @@ where
         Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramDrawer> {
+        let c0 = (0., 0., 0.);
+        let c1 = (0.6, 0.6, 0.6);
+
+        let hover_color = ((0.0, 0.0, 1.0), 0.3);
+        let select_color = ((0.0, 0.0, 1.0), 0.8);
+
         let renderer = WebglRenderer::from_canvas(
             canvas,
             HashMap::from([
                 (
                     EdgeType::new((), 0),
                     EdgeRenderingType {
-                        color: (0., 0., 0.),
+                        color: c0,
+                        hover_color: mix_color(c0, hover_color.0, hover_color.1),
+                        select_color: mix_color(c0, select_color.0, select_color.1),
                         width: 0.15,
                         dash_solid: 1.0,
                         dash_transparent: 0.0, // No dashing, just solid
@@ -109,13 +122,17 @@ where
                 (
                     EdgeType::new((), 1),
                     EdgeRenderingType {
-                        color: (0.6, 0.6, 0.6),
+                        color: c1,
+                        hover_color: mix_color(c1, hover_color.0, hover_color.1),
+                        select_color: mix_color(c1, select_color.0, select_color.1),
                         width: 0.1,
                         dash_solid: 0.2,
                         dash_transparent: 0.1,
                     },
                 ),
             ]),
+            hover_color,
+            select_color,
         )
         .unwrap();
         let layout = LayeredLayout::new(
@@ -135,24 +152,29 @@ pub struct BDDDiagramDrawer<
     T: DrawTag,
     G: GraphStructure<T, NodeLabel<String>, String> + 'static,
     R: Renderer<T>,
-    L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+    L: LayoutRules<T, Color, String, GMGraph<T, G>>,
 > {
-    group_manager: MutRcRefCell<GroupManager<T, NodeLabel<String>, String, G>>,
-    drawer: Drawer<T, R, L, GroupManager<T, NodeLabel<String>, String, G>>,
+    group_manager: MutRcRefCell<GM<T, G>>,
+    drawer: Drawer<T, Color, R, L, GMGraph<T, G>>,
 }
+type GraphLabel = NodeLabel<String>;
+type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<G>>;
+type MGraph<G> = G;
+type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, (f32, f32, f32)>;
 
 impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > BDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> BDDDiagramDrawer<T, G, R, L> {
         let root = graph.get_root();
         let group_manager = MutRcRefCell::new(GroupManager::new(graph));
+        let grouped_graph = GMGraph::new_shared(group_manager.clone(), |nodes| (0., 0., 0.));
         let mut out = BDDDiagramDrawer {
-            group_manager: group_manager.clone(),
+            group_manager: group_manager,
             drawer: Drawer::new(
                 renderer,
                 // Box::new(TransitionLayout::new(Box::new(RandomTestLayout))),
@@ -175,7 +197,7 @@ impl<
                 //     Box::new(RandomTestLayout),
                 //     Box::new(SugiyamaLayout),
                 // ])))),
-                group_manager,
+                MutRcRefCell::new(grouped_graph),
             ),
         };
         out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
@@ -206,7 +228,7 @@ impl<
         T: DrawTag + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, String, String, GroupManager<T, NodeLabel<String>, String, G>>,
+        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > DiagramDrawer for BDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
@@ -228,22 +250,15 @@ impl<
         self.drawer.set_transform(width, height, x, y, scale);
     }
 
-    fn set_step(&mut self, step: i32) -> Option<crate::wasm_interface::StepData> {
+    fn set_step(&mut self, step: i32) -> Option<StepData> {
         todo!()
     }
 
-    fn set_group(
-        &mut self,
-        from: Vec<crate::wasm_interface::TargetID>,
-        to: crate::wasm_interface::NodeGroupID,
-    ) -> bool {
+    fn set_group(&mut self, from: Vec<TargetID>, to: NodeGroupID) -> bool {
         self.group_manager.get().set_group(from, to)
     }
 
-    fn create_group(
-        &mut self,
-        from: Vec<crate::wasm_interface::TargetID>,
-    ) -> crate::wasm_interface::NodeGroupID {
+    fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
         self.group_manager.get().create_group(from)
     }
 
@@ -251,7 +266,9 @@ impl<
         self.group_manager.get().split_edges(group, fully);
     }
 
-    fn get_nodes(&self, area: Rectangle) -> Vec<crate::wasm_interface::NodeGroupID> {
+    fn get_nodes(&self, area: Rectangle) -> Vec<NodeGroupID> {
         self.drawer.get_nodes(area)
     }
+
+    fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) -> () {}
 }

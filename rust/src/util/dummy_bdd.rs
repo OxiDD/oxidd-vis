@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryInto;
 use std::hash::Hasher;
 use std::hash::{DefaultHasher, Hash};
+use std::iter::Cloned;
 use std::rc::Rc;
 use std::slice::Iter;
 use std::sync::Arc;
@@ -98,7 +99,7 @@ impl DummyFunction {
     pub fn from_dddmp(manager_ref: &mut DummyManagerRef, data: &str) -> DummyFunction {
         manager_ref.with_manager_exclusive(|manager| {
             console::log!("Started loading graph");
-            let mut terminals = Vec::new();
+            let mut terminals = HashMap::new();
             let node_text = &data[data.find(".nodes").unwrap()..data.find(".end").unwrap()];
             let nodes_data = node_text.split("\n").filter_map(|node| {
                 let parts = node.trim().split(" ").collect::<Vec<&str>>();
@@ -138,7 +139,10 @@ impl DummyFunction {
                 );
 
                 if level_num.is_err() {
-                    terminals.push(DummyEdge::new(Arc::new(id), manager_ref.clone()))
+                    terminals.insert(
+                        level.to_string(),
+                        DummyEdge::new(Arc::new(id), manager_ref.clone()),
+                    );
                 }
 
                 if level_num == Ok(0) {
@@ -290,20 +294,25 @@ impl Edge for DummyEdge {
 /// Dummy manager that does not actually manage anything. It is only useful to
 /// clone and drop edges.
 // #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct DummyManager(BTreeMap<NodeID, DummyNode>, Vec<DummyEdge>);
+#[derive(Clone, PartialEq, Eq)]
+pub struct DummyManager(BTreeMap<NodeID, DummyNode>, HashMap<String, DummyEdge>);
 impl DummyManager {
     pub fn new() -> DummyManager {
-        DummyManager(BTreeMap::new(), Vec::new())
+        DummyManager(BTreeMap::new(), HashMap::new())
     }
-    fn init_terminals(&mut self, terminals: Vec<DummyEdge>) {
+    fn init_terminals(&mut self, terminals: HashMap<String, DummyEdge>) {
         self.1.extend(terminals);
+    }
+}
+impl Hash for DummyManager {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
 }
 
 /// Dummy diagram rules
 pub struct DummyRules;
-impl DiagramRules<DummyEdge, DummyNode, u8> for DummyRules {
+impl DiagramRules<DummyEdge, DummyNode, String> for DummyRules {
     // type Cofactors<'a> = Iter<'a, Borrowed<'a, DummyEdge>>;
     type Cofactors<'a> = <DummyNode as InnerNode<DummyEdge>>::ChildrenIter<'a> where DummyNode: 'a, DummyEdge: 'a;
 
@@ -352,9 +361,9 @@ unsafe impl Manager for DummyManager {
     type Edge = DummyEdge;
     type EdgeTag = ();
     type InnerNode = DummyNode;
-    type Terminal = u8;
-    type TerminalRef<'a> = &'a u8;
-    type TerminalIterator<'a> = std::vec::IntoIter<DummyEdge> where Self: 'a;
+    type Terminal = String;
+    type TerminalRef<'a> = &'a String;
+    type TerminalIterator<'a> = Cloned<std::collections::hash_map::Values<'a, String, DummyEdge>> where Self: 'a;
     type Rules = DummyRules;
     type NodeSet = HashSet<NodeID>;
     type LevelView<'a> = DummyLevelView where Self: 'a;
@@ -365,7 +374,11 @@ unsafe impl Manager for DummyManager {
             .0
             .get(&*edge.0)
             .expect("Edge should refer to defined node");
-        Node::Inner(to_node)
+        if let Some(terminal) = &to_node.2 {
+            Node::Terminal(terminal)
+        } else {
+            Node::Inner(to_node)
+        }
     }
 
     fn clone_edge(&self, edge: &Self::Edge) -> Self::Edge {
@@ -404,9 +417,8 @@ unsafe impl Manager for DummyManager {
     }
 
     fn get_terminal(&self, terminal: Self::Terminal) -> AllocResult<Self::Edge> {
-        let index = usize::from(terminal);
-        if index < self.1.len() {
-            AllocResult::Ok(self.1.get(index).unwrap().clone())
+        if let Some(terminal) = self.1.get(&terminal) {
+            AllocResult::Ok(terminal.clone())
         } else {
             AllocResult::Err(OutOfMemory)
         }
@@ -417,7 +429,7 @@ unsafe impl Manager for DummyManager {
     }
 
     fn terminals(&self) -> Self::TerminalIterator<'_> {
-        self.1.clone().into_iter()
+        self.1.values().into_iter().cloned()
     }
 
     fn gc(&self) -> usize {

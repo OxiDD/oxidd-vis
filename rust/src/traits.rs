@@ -1,4 +1,7 @@
-use crate::util::rectangle::Rectangle;
+use crate::{
+    types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder,
+    util::rectangle::Rectangle,
+};
 
 use super::wasm_interface::{NodeGroupID, StepData, TargetID};
 use web_sys::HtmlCanvasElement;
@@ -17,4 +20,5 @@ pub trait DiagramDrawer {
     fn get_nodes(&self, area: Rectangle) -> Vec<NodeGroupID>;
     /// Splits the edges of a given group such that each edge type goes to a unique group, if fully is specified it also ensures that each group that an edge goes to only contains a single node
     fn split_edges(&mut self, group: NodeGroupID, fully: bool) -> ();
+    fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) -> ();
 }
