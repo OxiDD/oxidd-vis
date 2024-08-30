@@ -40,7 +40,9 @@ pub struct TransitionLayout<
     L: LayoutRules<T, GL, LL, G>,
 > {
     layout: L,
-    duration: u32,
+    transition_duration: u32,
+    delete_duration: u32,
+    insert_duration: u32,
     group_label: PhantomData<GL>,
     level_label: PhantomData<LL>,
     // TODO: see if these generics and  phantom data is even needed
@@ -54,7 +56,9 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
     pub fn new(layout: L) -> TransitionLayout<T, GL, LL, G, L> {
         TransitionLayout {
             layout,
-            duration: 1000,
+            insert_duration: 900,
+            transition_duration: 600,
+            delete_duration: 300,
             tag: PhantomData,
             graph: PhantomData,
             group_label: PhantomData,
@@ -73,7 +77,9 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
         sources: &G::Tracker,
         time: u32,
     ) -> DiagramLayout<T> {
-        let duration = self.duration;
+        let duration = self.transition_duration;
+        let insert_duration = self.insert_duration;
+        let delete_duration = self.delete_duration;
         let old_time = time;
         let new = self.layout.layout(graph, old, sources, time);
 
@@ -96,7 +102,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
             (r, g, b)
         };
 
-        let (node_mapping, edge_mapping) =
+        let (node_mapping, edge_mapping, deleted_edge_mapping) =
             relate_elements(graph, old, &new, sources, &get_current_point);
 
         let map_edge = |from: NodeGroupID,
@@ -177,7 +183,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                                     + edge.end_offset.new,
                             },
                             exists: Transition {
-                                duration,
+                                duration: delete_duration,
                                 old_time,
                                 old: get_current_float(point.exists),
                                 new: 0.0,
@@ -199,7 +205,12 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                         new: edge.end_offset.new,
                     },
                     points: new_points,
-                    exists: edge.exists,
+                    exists: Transition {
+                        duration,
+                        old_time,
+                        old: get_current_float(old_edge_layout.exists),
+                        new: edge.exists.new,
+                    },
                     curve_offset: Transition {
                         duration,
                         old_time,
@@ -229,7 +240,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                     points: points,
                     exists: Transition {
                         old_time,
-                        duration,
+                        duration: insert_duration,
                         old: 0.,
                         new: edge.exists.new,
                     },
@@ -251,6 +262,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                     }),
             )
         });
+
         let updated_groups = groups
             .clone()
             .filter_map(|(id, group, old_group_data)| {
@@ -268,6 +280,30 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                         y: f32::min(cur_size.y, group.size.new.y),
                     }
                 };
+
+                let deleted_edges = deleted_edge_mapping.get(id).map(|edges| {
+                    edges.iter().filter_map(|edge_data| {
+                        old_group.edges.get(edge_data).and_then(|edge| {
+                            let exists = get_current_float(edge.exists);
+                            if exists > 0. {
+                                Some((
+                                    edge_data.clone(),
+                                    EdgeLayout {
+                                        exists: Transition {
+                                            old_time,
+                                            duration: delete_duration,
+                                            old: exists,
+                                            new: 0.,
+                                        },
+                                        ..edge.clone()
+                                    },
+                                ))
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                });
                 (
                     *id,
                     NodeGroupLayout {
@@ -290,12 +326,14 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                             old: get_current_float(old_group.exists),
                             new: group.exists.new,
                         },
+                        level_range: group.level_range.clone(),
                         edges: group
                             .edges
                             .iter()
                             .map(|(edge_data, edge)| {
                                 (edge_data.clone(), map_edge(*id, edge_data, edge, old_group))
                             })
+                            .chain(deleted_edges.into_iter().flatten())
                             .collect(),
                         color: Transition {
                             old_time,
@@ -329,8 +367,14 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                             position: Transition {
                                 old_time,
                                 duration,
-                                old: parent.position.old,
+                                old: get_current_point(parent.position),
                                 new: group.position.new,
+                            },
+                            color: Transition {
+                                old_time,
+                                duration,
+                                old: get_current_color(parent.color),
+                                new: group.color.new,
                             },
                             edges: group
                                 .edges
@@ -361,15 +405,91 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                         },
                     )
                 } else {
-                    (*id, group.clone())
+                    (
+                        *id,
+                        NodeGroupLayout {
+                            exists: Transition {
+                                old_time,
+                                duration: insert_duration,
+                                old: 0.,
+                                new: group.exists.new,
+                            },
+                            edges: group
+                                .edges
+                                .iter()
+                                .map(|(edge_data, edge)| {
+                                    (
+                                        edge_data.clone(),
+                                        EdgeLayout {
+                                            exists: Transition {
+                                                old_time,
+                                                duration: insert_duration,
+                                                old: 0.,
+                                                new: edge.exists.new,
+                                            },
+                                            ..edge.clone()
+                                        },
+                                    )
+                                })
+                                .collect(),
+                            ..group.clone()
+                        },
+                    )
                 }
             })
             .collect_vec();
+
+        let used_old_groups = new
+            .groups
+            .iter()
+            .filter_map(|(id, _)| node_mapping.get(&id).map(|&(old_id, _, _)| old_id))
+            .collect::<HashSet<_>>();
+        let old_groups = old
+            .groups
+            .iter()
+            .filter(|(id, group)| {
+                let not_used = !used_old_groups.contains(*id);
+                let still_exists = get_current_float(group.exists) > 0.;
+                not_used && still_exists
+            })
+            .map(|(&id, group)| {
+                (
+                    id,
+                    NodeGroupLayout {
+                        exists: Transition {
+                            old_time,
+                            duration: delete_duration,
+                            old: get_current_float(group.exists),
+                            new: 0.,
+                        },
+                        edges: group
+                            .edges
+                            .iter()
+                            .map(|(edge_data, edge)| {
+                                (
+                                    edge_data.clone(),
+                                    EdgeLayout {
+                                        exists: Transition {
+                                            old_time,
+                                            duration: delete_duration,
+                                            old: get_current_float(edge.exists),
+                                            new: 0.,
+                                        },
+                                        ..edge.clone()
+                                    },
+                                )
+                            })
+                            .collect(),
+                        ..group.clone()
+                    },
+                )
+            });
 
         DiagramLayout {
             groups: new_groups
                 .into_iter()
                 .chain(updated_groups.into_iter())
+                .chain(old_groups)
                 .collect(),
             layers: transition_layers(
                 &old.layers,
@@ -393,6 +513,8 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
     HashMap<NodeGroupID, (NodeGroupID, Point, bool)>,
     /* A mapping from an edge (including source node) to another edge */
     HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, EdgeData<T>)>,
+    /* A mapping from a node to deleted edge-datas it should fade out */
+    HashMap<NodeGroupID, HashSet<EdgeData<T>>>,
 ) {
     let mut edge_mapping: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, EdgeData<T>)> =
         HashMap::new();
@@ -404,14 +526,18 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
         .map(|(&group_id, data)| {
             (
                 group_id,
-                (sources.get_source(group_id), Point { x: 0., y: 0. }, false),
+                (
+                    if old.groups.contains_key(&group_id) {
+                        group_id
+                    } else {
+                        sources.get_source(group_id).unwrap_or(group_id)
+                    },
+                    Point { x: 0., y: 0. },
+                    false,
+                ),
             )
         })
         .collect();
-    let reverse_map = node_mapping
-        .iter()
-        .map(|(&new_group_id, &(old_group_id, _, _))| (old_group_id, new_group_id))
-        .collect::<MultiMap<_, _>>();
 
     // Decide which node should represent the old source, and hence copy the size
     let mut source_dests: HashMap<NodeGroupID, HashSet<NodeGroupID>> = HashMap::new();
@@ -447,8 +573,23 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
                 continue;
             };
 
+            let mut to_level = edge.to_level;
+            // Try to account for terminals that move between layers:
+            if let Some(to_level_range) = new.groups.get(&edge.to).map(|group| group.level_range) {
+                if to_level_range.0 == to_level_range.1 {
+                    if let Some(to_source_level_range) =
+                        old.groups.get(&to_source).map(|group| group.level_range)
+                    {
+                        if to_source_level_range.0 == to_source_level_range.1 {
+                            to_level = to_level - to_level_range.0 + to_source_level_range.0
+                        }
+                    }
+                }
+            };
+
             let old_edge = &EdgeData {
                 to: to_source,
+                to_level,
                 ..edge
             };
 
@@ -457,14 +598,6 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
                     .edges
                     .get(&old_edge)
                     .map(|edge_layout| (old_edge, edge_layout))
-                    .or_else(|| {
-                        // Fallback to ignoring the to-level
-                        group.edges.iter().find(|(edge_data, _)| {
-                            to_source == old_edge.to
-                                && old_edge.edge_type == edge_data.edge_type
-                                && old_edge.from_level == edge_data.from_level
-                        })
-                    })
             }) else {
                 continue;
             };
@@ -490,7 +623,41 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
         }
     }
 
-    (node_mapping, edge_mapping)
+    // For all deleted edges, decide which node should show them fading out
+    let mut reverse_node_mapping = HashMap::new();
+    let mut deleted_edges: HashMap<NodeGroupID, HashSet<&EdgeData<T>>> = old
+        .groups
+        .keys()
+        .filter_map(|&group_id| {
+            old.groups
+                .get(&group_id)
+                .map(|group| (group_id, group.edges.keys().collect()))
+        })
+        .collect();
+    for (&node, &(source, _, _)) in &node_mapping.clone() {
+        let insert = !reverse_node_mapping.contains_key(&source) || node == source;
+        if insert {
+            reverse_node_mapping.insert(source, node);
+        }
+
+        for edge in graph.get_children(node) {
+            if let Some((source, old_edge)) = edge_mapping.get(&(node, edge.drop_count())) {
+                deleted_edges.entry(*source).and_modify(|edges| {
+                    edges.remove(old_edge);
+                });
+            }
+        }
+    }
+    let deleted_edges: HashMap<NodeGroupID, HashSet<EdgeData<T>>> = deleted_edges
+        .into_iter()
+        .filter_map(|(source_group_id, edges)| {
+            reverse_node_mapping
+                .get(&source_group_id)
+                .map(|&group_id| (group_id, edges.into_iter().cloned().collect()))
+        })
+        .collect();
+
+    (node_mapping, edge_mapping, deleted_edges)
 }
 
 fn transition_layers(

@@ -47,6 +47,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> LayoutRules<T, GL,
                                 old_time: time,
                                 duration: 1000,
                             },
+                            level_range: graph.get_level_range(group_id),
                             // size: Transition::plain(Point {
                             //     x: width,
                             //     y: height,

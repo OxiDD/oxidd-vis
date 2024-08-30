@@ -13,12 +13,17 @@ in vec3 color;
 in vec3 colorOld;
 in vec2 colorTransition;
 
+in float exists;
+in float existsOld;
+in vec2 existsTransition;
+
 uniform mat4 transform;
 uniform float time;
 
 out vec2 cornerPos;
 out vec2 curSize;
 out vec3 curColor;
+out float curExists;
 
 float getPer(vec2 transition) {
     return min((time - transition.x) / transition.y, 1.0f);
@@ -33,6 +38,9 @@ void main() {
 
     float colorPer = getPer(colorTransition);
     curColor = sqrt(mix(colorOld * colorOld, color * color, colorPer));
+
+    float existsPer = getPer(existsTransition);
+    curExists = mix(existsOld, exists, existsPer);
 
     int corner = gl_VertexID % 6; // two triangles
     cornerPos = curSize * (

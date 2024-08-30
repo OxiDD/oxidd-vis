@@ -491,6 +491,7 @@ fn format_layout<T: DrawTag, GL: ColorLabel>(
                                     - layer_positions.get(&e).unwrap_or(&0.))
                                     * node_size,
                         }),
+                        level_range: (s, e),
                         color: Transition::plain(graph.get_group_label(group_id).get_color()),
                         exists: Transition::plain(1.),
                         edges: graph
@@ -615,12 +616,17 @@ fn format_edge<T: DrawTag>(
                 let bend_points = nodes
                     .iter()
                     .map(|dummy_id| *node_positions.get(&dummy_id).unwrap() + edge_center_offset);
-                let all_bend_points = (Some(start_pos.unwrap_or_default() + edge_center_offset))
-                    .into_iter()
-                    .chain(bend_points)
-                    .chain(Some(end_pos.unwrap_or_default() + edge_center_offset));
-                let reduced_points = remove_redundant_bendpoints(&all_bend_points.collect());
-                reduced_points[1..reduced_points.len() - 1]
+
+                // // We can consider the start/end points when reducing, but this can cause nasty animations when bend points are introduced in the first layers
+                // let all_bend_points = (Some(start_pos.unwrap_or_default() + edge_center_offset))
+                //     .into_iter()
+                //     .chain(bend_points)
+                //     .chain(Some(end_pos.unwrap_or_default() + edge_center_offset));
+                // let reduced_points = remove_redundant_bendpoints(&all_bend_points.collect());
+                // let reduced_bend_points = reduced_points[1..reduced_points.len() - 1];
+
+                let reduced_bend_points = remove_redundant_bendpoints(&bend_points.collect());
+                reduced_bend_points
                     .iter()
                     .map(|&point| EdgePoint {
                         point: Transition::plain(point),

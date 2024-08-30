@@ -1,11 +1,12 @@
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops::Deref,
     rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use itertools::Itertools;
 use js_sys::Date;
 use oxidd::{Function, Manager};
 use oxidd_core::Tag;
@@ -15,7 +16,7 @@ use crate::{
     types::util::{
         graph_structure::{
             graph_structure::DrawTag,
-            grouped_graph_structure::{GroupedGraphStructure, SourceReader, SourceTracker},
+            grouped_graph_structure::{GroupedGraphStructure, NodeTracker, SourceReader},
         },
         group_manager::GroupManager,
     },
@@ -58,7 +59,7 @@ impl<
 {
     pub fn new(renderer: R, layout_rules: L, graph: MutRcRefCell<G>) -> Drawer<T, GL, R, L, G> {
         Drawer {
-            sources: graph.get().get_source_reader(),
+            sources: graph.get().create_node_tracker(),
             renderer,
             layout_rules,
             graph: graph.clone(),
@@ -75,9 +76,11 @@ impl<
         self.layout =
             self.layout_rules
                 .layout(&*self.graph.read(), &self.layout, &self.sources, time);
-        for group_id in self.sources.get_sourced_nodes() {
-            self.sources.delete_source(group_id);
-        }
+        let used_ids = self.layout.groups.keys().collect::<HashSet<_>>();
+
+        self.sources.retain(|group_id| used_ids.contains(&group_id));
+        self.sources.remove_sources();
+
         self.renderer.update_layout(&self.layout);
     }
     pub fn set_transform(&mut self, width: u32, height: u32, x: f32, y: f32, scale: f32) {

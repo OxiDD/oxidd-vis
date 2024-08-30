@@ -93,6 +93,14 @@ impl NodeRenderer {
         );
 
         set_animated_data(
+            "exists",
+            nodes6.clone().map(|n| n.exists),
+            |v| [v],
+            context,
+            &mut self.vertex_renderer,
+        );
+
+        set_animated_data(
             "color",
             nodes6.map(|n| n.color),
             |v| [v.0, v.1, v.2],

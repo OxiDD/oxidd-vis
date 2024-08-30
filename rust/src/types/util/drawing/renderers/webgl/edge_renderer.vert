@@ -54,13 +54,13 @@ void main() {
     float halfWidth = 0.5f * edgeTypes[int(type)].width;
 
     float endPer = getPer(endTransition);
-    curEnd = endPer * end + (1.0f - endPer) * endOld;
+    curEnd = mix(endOld, end, endPer);
 
     float curvePer = getPer(curveOffsetTransition);
-    curCurveOffset = curvePer * curveOffset + (1.0f - curvePer) * curveOffsetOld;
+    curCurveOffset = mix(curveOffsetOld, curveOffset, curvePer);
 
     float existsPer = getPer(existsTransition);
-    curExists = existsPer * exists + (1.0f - curvePer) * existsOld;
+    curExists = mix(existsOld, exists, existsPer);
 
     vec2 delta = curEnd - curStart;
     vec2 dir = normalize(delta);

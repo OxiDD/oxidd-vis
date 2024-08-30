@@ -3,6 +3,7 @@ use std::{
     iter::repeat,
 };
 
+use itertools::Itertools;
 use multimap::MultiMap;
 use web_sys::{WebGl2RenderingContext, WebGlTexture};
 

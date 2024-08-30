@@ -96,7 +96,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> GroupedGraphS
         self.graph.get().refresh()
     }
 
-    fn get_source_reader(&mut self) -> Self::Tracker {
-        self.graph.get().get_source_reader()
+    fn create_node_tracker(&mut self) -> Self::Tracker {
+        self.graph.get().create_node_tracker()
     }
 }

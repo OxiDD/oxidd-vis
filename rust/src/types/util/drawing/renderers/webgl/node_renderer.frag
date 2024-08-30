@@ -5,6 +5,7 @@ out vec4 outColor;
 in vec2 cornerPos;
 in vec2 curSize;
 in vec3 curColor;
+in float curExists;
 
 uniform mat4 transform;
 float cornerSize = 0.3;
@@ -28,5 +29,5 @@ void main() {
             alpha = 0.0;
     }
 
-    outColor = vec4(curColor, alpha);
+    outColor = vec4(curColor, curExists * alpha);
 }

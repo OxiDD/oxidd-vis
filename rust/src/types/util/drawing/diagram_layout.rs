@@ -158,6 +158,7 @@ pub struct NodeGroupLayout<T: DrawTag> {
     pub label: String,
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
     pub edges: HashMap<EdgeData<T>, EdgeLayout>,
+    pub level_range: (LevelNo, LevelNo),
     pub color: Transition<(f32, f32, f32)>,
 }
 impl<T: DrawTag> NodeGroupLayout<T> {

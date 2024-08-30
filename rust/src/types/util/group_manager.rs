@@ -26,7 +26,7 @@ use super::{
         grouped_graph_structure::{EdgeCountData, EdgeData, GroupedGraphStructure},
         oxidd_graph_structure::NodeLabel,
     },
-    source_tracker_manager::{SourceReader, SourceTrackerManager},
+    node_tracker_manager::{NodeTrackerM, NodeTrackerManager},
 };
 
 pub struct GroupManager<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> {
@@ -40,10 +40,10 @@ pub struct GroupManager<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, N
     /// - or !group_id_by_node.contains(node) && !exists g. group_by_id[g].nodes.contains(node)
     group_id_by_node: HashMap<NodeID, NodeGroupID>,
     group_by_id: HashMap<NodeGroupID, NodeGroup<T>>,
-    free_ids: FreeIdManager<usize>,
-    returned_ids: HashSet<usize>,
+    // free_ids: FreeIdManager<usize>,
+    // returned_ids: HashSet<usize>,
     /// Source trackers to manage sources obtained from the groupedGraphStructure
-    sources: SourceTrackerManager,
+    group_ids: NodeTrackerManager,
 }
 
 type EdgeCounts<T: DrawTag> = HashMap<EdgeData<T>, usize>;
@@ -114,6 +114,28 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                 }
                 Change::NodeInsertion { node, source } => {
                     let add_group = source.and_then(|source| {
+                        // TODO: better way of deciding where to put a node
+
+                        // Choose the most common parent group, if it has more than 1 item
+                        let parents = self.graph.get_known_parents(node);
+                        let parent_groups =
+                            parents.iter().map(|&(_, parent)| self.get_group(parent));
+                        let group_counts = parent_groups.fold(HashMap::new(), |mut acc, parent| {
+                            *acc.entry(parent).or_insert(0) += 1;
+                            acc
+                        });
+                        let max_group = group_counts.iter().max_by_key(|&(_, count)| count);
+                        if let Some((&group, &count)) = max_group {
+                            // if count > 1 {
+                            //     return Some(group);
+                            // }
+                            if self.get_nodes_of_group(group).len() > 1 {
+                                return Some(group);
+                            } else {
+                                return None;
+                            }
+                        }
+
                         // A source may have been removed and replaced by something (1 thing) else, in which case we want to place this thing int he original group
                         if !used_sources.contains(&source) {
                             used_sources.insert(source);
@@ -122,21 +144,21 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                             }
                         }
 
-                        // Otherwise, a source may have been in a group together with all its parents, in which case we don't want to separate the new node
-                        let source_group = removed_from
-                            .get(&source)
-                            .cloned()
-                            .unwrap_or_else(|| self.get_group(source));
-                        let source_group_exists = self.group_by_id.contains_key(&source_group);
-                        let all_parents_in_group = source_group_exists
-                            && self
-                                .graph
-                                .get_known_parents(node)
-                                .iter()
-                                .all(|(_, parent)| self.get_group(*parent) == source_group);
-                        if all_parents_in_group {
-                            return Some(source_group);
-                        }
+                        // // Otherwise, a source may have been in a group together with all its parents, in which case we don't want to separate the new node
+                        // let source_group = removed_from
+                        //     .get(&source)
+                        //     .cloned()
+                        //     .unwrap_or_else(|| self.get_group(source));
+                        // let source_group_exists = self.group_by_id.contains_key(&source_group);
+                        // let all_parents_in_group = source_group_exists
+                        //     && self
+                        //         .graph
+                        //         .get_known_parents(node)
+                        //         .iter()
+                        //         .all(|(_, parent)| self.get_group(*parent) == source_group);
+                        // if all_parents_in_group {
+                        //     return Some(source_group);
+                        // }
 
                         // Otherwise a new group may be created
                         None
@@ -157,7 +179,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                                 .get(&source)
                                 .or_else(|| self.group_id_by_node.get(&source))
                             {
-                                self.sources.add_source(group_id, source_group_id);
+                                self.group_ids.add_source(group_id, source_group_id);
                             }
                         }
                     }
@@ -191,21 +213,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 
     fn remove_group(&mut self, id: NodeGroupID) {
         self.group_by_id.remove(&id);
-
-        // We are not allowed to reuse an ID, until it's no longer a source
-        if self.sources.is_tracked_source(id) {
-            self.returned_ids.insert(id);
-        } else {
-            self.free_ids.make_available(id);
-        }
-
-        // Perform some cleanup of earlier returned ids
-        for returned in self.returned_ids.clone() {
-            if !self.sources.is_tracked_source(returned) {
-                self.returned_ids.remove(&returned);
-                self.free_ids.make_available(returned);
-            }
-        }
+        self.group_ids.make_available(id);
     }
 
     fn remove_edges_to_set(edges: &mut EdgeCounts<T>, edge_data: EdgeData<T>, count: usize) {
@@ -235,8 +243,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                 count,
             );
             from_group.nodes.entry(from_source).and_modify(|cd| {
-                let removed = cd
-                    .children
+                cd.children
                     .remove(&(from_level, to_level, edge_type, to_source));
             });
         }
@@ -248,8 +255,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                 count,
             );
             to_group.nodes.entry(to_source).and_modify(|cd| {
-                let removed = cd
-                    .parents
+                cd.parents
                     .remove(&(from_level, to_level, edge_type, from_source));
             });
         }
@@ -431,6 +437,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
     pub fn new(mut graph: G) -> GroupManager<T, NL, LL, G> {
         let root_id = graph.get_root();
         let root_level = graph.get_level(root_id);
+        let mut group_ids = NodeTrackerManager::new(1);
+        group_ids.add_group_id(0);
         GroupManager {
             level_label: PhantomData,
             node_label: PhantomData,
@@ -455,9 +463,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                     },
                 },
             )]),
-            free_ids: FreeIdManager::new(1),
-            returned_ids: HashSet::new(),
-            sources: SourceTrackerManager::new(),
+            group_ids,
         }
     }
 
@@ -582,7 +588,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                 _ => id,
             });
 
-        let new_id = self.free_ids.get_next();
+        let new_id = self.group_ids.get_free_group_id_and_add();
         self.group_by_id.insert(
             new_id,
             NodeGroup {
@@ -595,7 +601,10 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         );
         self.set_group(from, new_id);
         if let Some(source) = maybe_source {
-            self.sources.add_source(new_id, source);
+            let source_exists = self.group_by_id.contains_key(&source);
+            if source_exists {
+                self.group_ids.add_source(new_id, source);
+            }
         }
         new_id
     }
@@ -644,7 +653,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     GroupedGraphStructure<T, Vec<NL>, LL> for GroupManager<T, NL, LL, G>
 {
-    type Tracker = SourceReader;
+    type Tracker = NodeTrackerM;
     fn get_root(&self) -> NodeGroupID {
         let root_node = &self.graph.get_root();
         self.get_node_group_id(*root_node)
@@ -742,8 +751,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         self.get_node_group_id(node)
     }
 
-    fn get_source_reader(&mut self) -> SourceReader {
-        self.sources.get_reader()
+    fn create_node_tracker(&mut self) -> Self::Tracker {
+        self.group_ids.create_reader()
     }
 
     fn get_level_label(&self, level: LevelNo) -> LL {

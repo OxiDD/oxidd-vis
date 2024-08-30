@@ -158,15 +158,17 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
                 .flat_map(|(&id, group)| {
                     let start = group.position;
                     let edge_type_ids = &edge_type_ids;
-                    group.edges.iter().map(move |(edge_data, edge)| Edge {
-                        start: start + edge.start_offset,
-                        start_node: id,
-                        points: edge.points.iter().map(|point| point.point).collect(),
-                        end: layout.groups.get(&edge_data.to).unwrap().position + edge.end_offset,
-                        end_node: edge_data.to,
-                        edge_type: *edge_type_ids.get(&edge_data.edge_type).unwrap(),
-                        shift: edge.curve_offset,
-                        exists: edge.exists,
+                    group.edges.iter().filter_map(move |(edge_data, edge)| {
+                        Some(Edge {
+                            start: start + edge.start_offset,
+                            start_node: id,
+                            points: edge.points.iter().map(|point| point.point).collect(),
+                            end: layout.groups.get(&edge_data.to)?.position + edge.end_offset,
+                            end_node: edge_data.to,
+                            edge_type: *edge_type_ids.get(&edge_data.edge_type)?,
+                            shift: edge.curve_offset,
+                            exists: edge.exists,
+                        })
                     })
                 })
                 .collect(),

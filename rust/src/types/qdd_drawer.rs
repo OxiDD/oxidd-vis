@@ -218,16 +218,17 @@ impl<
             presence_adjuster,
             drawer: Drawer::new(renderer, layout, MutRcRefCell::new(grouped_graph)),
         };
-        out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+        let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
-        out.reveal_all(30000);
-        // out.reveal_all(10);
+        // out.reveal_all(from, 30000);
+        // out.reveal_all(from, 10);
         out
     }
 
-    pub fn reveal_all(&mut self, limit: u32) {
+    pub fn reveal_all(&mut self, from_id: NodeGroupID, limit: u32) {
         let nodes = {
-            let explored_group = self.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+            let explored_group =
+                self.create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
             self.group_manager.read().get_nodes_of_group(explored_group)
         };
         let mut count = 0;
