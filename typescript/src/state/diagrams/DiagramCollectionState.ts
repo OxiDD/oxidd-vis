@@ -55,7 +55,28 @@ export class DiagramCollectionState extends ViewState {
      */
     public addDiagram(): IMutator<DiagramState> {
         return chain(push => {
-            const source = new FileSource();
+            const source = new FileSource(`.ver DDDMP-2.0
+.mode A
+.varinfo 4
+.dd qdd
+.nnodes 5
+.nvars 3
+.nsuppvars 3
+.suppvarnames x1 x2 x3
+.orderedvarnames x1 x2 x3
+.ids 0 1 2
+.permids 0 1 2
+.nroots 1
+.rootids 5
+.rootnames f
+.nodes
+1 F 0 0
+2 T 0 0
+3 3 1 2 2
+4 2 3 2 2
+5 1 1 4 4
+6 0 1 5 3
+.end`);
             const diagram = new DiagramState(source);
             push(this._diagrams.set([...this.diagrams.get(), diagram]));
             push(diagram.addVisualization());

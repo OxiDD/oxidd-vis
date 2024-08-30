@@ -1,4 +1,4 @@
-import {DiagramBox, create_diagram} from "oxidd-viz-rust";
+import {DiagramBox, create_diagram_from_dddmp} from "oxidd-viz-rust";
 import {Field} from "../../watchables/Field";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
@@ -31,7 +31,7 @@ export class DiagramState extends ViewState {
         this.source = source;
 
         // TODO: connect the source
-        this.diagram = create_diagram()!;
+        this.diagram = create_diagram_from_dddmp(source.diagram.get())!;
         if (!this.diagram) throw Error("Failed to create diagram");
     }
 

@@ -9,10 +9,6 @@ use super::traits::{Diagram, DiagramDrawer};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
-// pub trait VisualizationManager: ReturnWasmAbi {
-//     fn addDiagram(&self) -> &Drawable; // And some DD type param
-//     fn removeDiagram(&self, diagram: &Drawable) -> ();
-// }
 #[wasm_bindgen]
 pub struct DiagramBox(Box<dyn Diagram>);
 

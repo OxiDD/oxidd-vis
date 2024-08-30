@@ -8,6 +8,14 @@ import {IDiagramSource} from "../_types/IDiagramSource";
 export class FileSource implements IDiagramSource<string> {
     protected data = new Field("");
 
+    /**
+     * Creates a new diagram source
+     * @param dddmp The dddmp contents of the file
+     */
+    public constructor(dddmp?: string) {
+        if (dddmp) this.data.set(dddmp).commit();
+    }
+
     /** @override */
     public readonly diagram: IWatchable<string> = this.data;
 
