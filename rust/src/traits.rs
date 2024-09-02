@@ -4,13 +4,23 @@ use crate::{
 };
 
 use super::wasm_interface::{NodeGroupID, StepData, TargetID};
+use oxidd::NodeID;
 use web_sys::HtmlCanvasElement;
 
 pub trait Diagram {
-    fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramDrawer>;
+    fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>>; // TODO: error type
+    fn create_section_from_id(
+        &self,
+        section: &Box<dyn DiagramSection>,
+        id: NodeID,
+    ) -> Option<Box<dyn DiagramSection>>;
 }
 
-pub trait DiagramDrawer {
+pub trait DiagramSection {
+    fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer>;
+}
+
+pub trait DiagramSectionDrawer {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> ();
     fn layout(&mut self, time: u32) -> ();
     fn set_transform(&mut self, width: u32, height: u32, x: f32, y: f32, scale: f32) -> ();

@@ -5,7 +5,7 @@ export type IDiagramCollectionSerialization = IBaseViewSerialization & {
     diagrams: IDiagramTypeSerialization[];
 };
 export type IDiagramTypeSerialization = {
-    type: string;
-    source: unknown;
+    type: IDiagramType;
     state: IDiagramSerialization;
 };
+export type IDiagramType = "BDD" | "QDD";

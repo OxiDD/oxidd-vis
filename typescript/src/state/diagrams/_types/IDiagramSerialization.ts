@@ -3,7 +3,13 @@ import {IDiagramVisualizationSerialization} from "./IDiagramVisualizationSeriali
 import {INodeSelectionSerialization} from "./INodeSelectionSerialization";
 
 export type IDiagramSerialization = IBaseViewSerialization & {
-    visualizations: IDiagramVisualizationSerialization[];
+    sections: IDiagramSectionTypeSerialization[];
     selectedNodes: INodeSelectionSerialization;
     highlightedNodes: INodeSelectionSerialization;
+};
+export type IDiagramSectionTypeSerialization = {
+    type: string;
+    source: unknown;
+    ID: string;
+    visualization: IDiagramVisualizationSerialization;
 };

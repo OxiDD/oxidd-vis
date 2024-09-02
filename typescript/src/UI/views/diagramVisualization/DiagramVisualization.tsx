@@ -21,7 +21,10 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
         const el = ref.current;
         if (el) {
             const setSize = () => {
-                visualization.size.set({x: el.clientWidth, y: el.clientHeight}).commit();
+                const width = el.clientWidth;
+                const height = el.clientHeight;
+                if (width <= 0 || height <= 0) return;
+                visualization.size.set({x: width, y: height}).commit();
             };
             setSize();
             const resizeObserver = new ResizeObserver(() => setTimeout(setSize)); // timeout used to prevent UI updates resulting from UI size change

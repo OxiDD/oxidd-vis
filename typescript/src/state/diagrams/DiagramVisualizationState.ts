@@ -1,4 +1,4 @@
-import {DiagramBox, DiagramDrawerBox} from "oxidd-viz-rust";
+import {DiagramBox, DiagramSectionDrawerBox} from "oxidd-viz-rust";
 import {ViewState} from "../views/ViewState";
 import {IPoint} from "../../utils/_types/IPoint";
 import {DerivedField} from "../../utils/DerivedField";
@@ -19,7 +19,7 @@ export class DiagramVisualizationState extends ViewState {
     public readonly canvas: HTMLCanvasElement;
 
     /** The diagram drawer */
-    protected readonly drawer: DiagramDrawerBox;
+    protected readonly drawer: DiagramSectionDrawerBox;
 
     /** The start date */
     protected start = Date.now();
@@ -44,7 +44,7 @@ export class DiagramVisualizationState extends ViewState {
      * @param sharedState The state shared between visualizations of this diagram
      */
     public constructor(
-        drawer: DiagramDrawerBox,
+        drawer: DiagramSectionDrawerBox,
         canvas: HTMLCanvasElement,
         sharedState: ISharedVisualizationState
     ) {

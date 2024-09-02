@@ -1,4 +1,3 @@
-import {DiagramDrawerBox} from "oxidd-viz-rust";
 import {Field} from "../../watchables/Field";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
@@ -12,6 +11,7 @@ import {SelectionToolState} from "./SelectionToolState";
 import {ExpansionToolState} from "./ExpansionToolState";
 import {Constant} from "../../watchables/Constant";
 import {IToolEvent} from "./_types/IToolEvent";
+import {DiagramSectionDrawerBox} from "oxidd-viz-rust";
 
 export class ToolbarState extends ViewState implements ITool {
     /** The currently selected tool */
@@ -63,7 +63,7 @@ export class ToolbarState extends ViewState implements ITool {
     /** @override */
     public apply(
         visualization: DiagramVisualizationState,
-        drawer: DiagramDrawerBox,
+        drawer: DiagramSectionDrawerBox,
         nodes: Uint32Array,
         event: IToolEvent
     ): boolean | void {

@@ -5,7 +5,7 @@ use crate::{
     util::rectangle::Rectangle,
 };
 
-use super::traits::{Diagram, DiagramDrawer};
+use super::traits::{Diagram, DiagramSection, DiagramSectionDrawer};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
@@ -20,15 +20,39 @@ impl DiagramBox {
 // Mirror Diagram trait in terms of interface, but using non-dynamic structs
 #[wasm_bindgen()]
 impl DiagramBox {
-    pub fn create_drawer(&self, canvas: HtmlCanvasElement) -> DiagramDrawerBox {
-        DiagramDrawerBox(self.0.create_drawer(canvas))
+    pub fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<DiagramSectionBox> {
+        Some(DiagramSectionBox(self.0.create_section_from_dddmp(dddmp)?))
+    }
+    pub fn create_section_from_id(
+        &self,
+        section: &DiagramSectionBox,
+        id: NodeID,
+    ) -> Option<DiagramSectionBox> {
+        Some(DiagramSectionBox(
+            self.0.create_section_from_id(&section.0, id)?,
+        ))
     }
 }
 
 #[wasm_bindgen]
-pub struct DiagramDrawerBox(Box<dyn DiagramDrawer>);
+pub struct DiagramSectionBox(Box<dyn DiagramSection>);
+
+impl DiagramSectionBox {
+    pub fn new(diagram: Box<dyn DiagramSection>) -> DiagramSectionBox {
+        DiagramSectionBox(diagram)
+    }
+}
+// Mirror Diagram trait in terms of interface, but using non-dynamic structs
+#[wasm_bindgen()]
+impl DiagramSectionBox {
+    pub fn create_drawer(&self, canvas: HtmlCanvasElement) -> DiagramSectionDrawerBox {
+        DiagramSectionDrawerBox(self.0.create_drawer(canvas))
+    }
+}
 #[wasm_bindgen]
-impl DiagramDrawerBox {
+pub struct DiagramSectionDrawerBox(Box<dyn DiagramSectionDrawer>);
+#[wasm_bindgen]
+impl DiagramSectionDrawerBox {
     pub fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         self.0.render(time, selected_ids, hovered_ids);
     }

@@ -1,23 +1,31 @@
-import {Constant} from "../../../watchables/Constant";
+import {DiagramBox} from "oxidd-viz-rust";
+import {Derived} from "../../../watchables/Derived";
 import {Field} from "../../../watchables/Field";
-import {IWatchable} from "../../../watchables/_types/IWatchable";
 import {IMutator} from "../../../watchables/mutator/_types/IMutator";
-import {IDiagramSource} from "../_types/IDiagramSource";
+import {AbstractDiagramSectionState} from "../AbstractDiagramSectionState";
+import {DiagramState} from "../DiagramState";
 
 /** The diagram source, coming from textual input  */
-export class FileSource implements IDiagramSource<string> {
+export class FileSource extends AbstractDiagramSectionState<string> {
     protected data = new Field("");
 
     /**
      * Creates a new diagram source
+     * @param diagram The diagram this source is for
+     * @param diagramBox The diagram box that lives in rust
      * @param dddmp The dddmp contents of the file
      */
-    public constructor(dddmp?: string) {
+    public constructor(diagram: DiagramState, diagramBox: DiagramBox, dddmp?: string) {
+        super(
+            diagram,
+            new Derived(() => {
+                const diagram = diagramBox.create_section_from_dddmp(this.data.get());
+                if (!diagram) throw Error("Diagram could not be created from dddmp");
+                return diagram;
+            })
+        );
         if (dddmp) this.data.set(dddmp).commit();
     }
-
-    /** @override */
-    public readonly diagram: IWatchable<string> = this.data;
 
     /** @override */
     serialize(): string {

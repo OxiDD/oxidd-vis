@@ -27,11 +27,8 @@ export const DiagramCollection: FC<{collection: DiagramCollectionState}> = ({
                 horizontal
                 tokens={{childrenGap: theme.spacing.m}}
                 style={{marginTop: theme.spacing.m}}>
-                <AddDiagramButton onClick={() => collection.addDiagram().commit()}>
-                    From File
-                </AddDiagramButton>
-                <AddDiagramButton onClick={() => collection.addDiagram().commit()}>
-                    From Formula
+                <AddDiagramButton onClick={() => collection.addDiagram("QDD").commit()}>
+                    Add local DD
                 </AddDiagramButton>
             </Stack>
         </CenteredContainer>

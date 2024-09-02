@@ -1,17 +1,20 @@
 import React, {FC, useCallback} from "react";
 import {DiagramState} from "../../../state/diagrams/DiagramState";
 import {IconButton, Stack, useTheme} from "@fluentui/react";
-import {DiagramVisualizationState} from "../../../state/diagrams/DiagramVisualizationState";
 import {css} from "@emotion/css";
 import {useDragStart} from "../../../utils/useDragStart";
 import {useWatch} from "../../../watchables/react/useWatch";
 import {useViewManager} from "../../providers/ViewManagerContext";
+import {IDiagramSection} from "../../../state/diagrams/_types/IDiagramSection";
+import {DiagramVisualizationState} from "../../../state/diagrams/DiagramVisualizationState";
 
-export const DiagramVisualizationSummary: FC<{
-    visualization: DiagramVisualizationState;
+export const DiagramSectionSummary: FC<{
+    section: IDiagramSection<unknown>;
     onDelete: () => void;
-}> = ({visualization, onDelete}) => {
+}> = ({section, onDelete}) => {
     const theme = useTheme();
+    const watch = useWatch();
+    const visualization = watch(section.visualization);
     const viewManager = useViewManager();
     const ref = useDragStart((position, offset) => {
         const layout = viewManager.layoutState;

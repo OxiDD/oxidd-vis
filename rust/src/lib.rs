@@ -14,7 +14,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, HtmlElement, Window};
 
 use oxidd::{bdd::BDDFunction, util::AllocResult, BooleanFunction};
-use types::{bdd_drawer::BDDDiagram, qdd_drawer::QDDDiagram};
+use types::qdd_drawer::QDDDiagram;
 
 use swash::{
     proxy::{CharmapProxy, MetricsProxy},
@@ -29,28 +29,7 @@ use crate::{
 };
 
 #[wasm_bindgen]
-pub fn create_diagram_from_dddmp(dddmp: String) -> Option<DiagramBox> // And some DD type param
+pub fn create_qdd_diagram() -> Option<DiagramBox> // And some DD type param
 {
-    util::panic_hook::set_panic_hook();
-
-    let build = || -> AllocResult<DiagramBox> {
-        let manager_ref = DummyManagerRef::from(&DummyManager::new());
-
-        Ok(DiagramBox::new(Box::new(QDDDiagram::<
-            DummyManagerRef,
-            DummyFunction,
-        >::new(
-            manager_ref,
-            |manager_ref| {
-                // let res =
-                //     DummyFunction::from_dddmp(manager_ref, include_str!(r"..\..\data\qdd.dddmp"));
-                let res = DummyFunction::from_dddmp(manager_ref, &dddmp[..]);
-                res
-            },
-        ))))
-    };
-    match build() {
-        Ok(res) => Some(res),
-        _ => None,
-    }
+    Some(DiagramBox::new(Box::new(QDDDiagram::new())))
 }

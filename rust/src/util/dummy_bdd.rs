@@ -62,7 +62,7 @@ impl ManagerRef for DummyManagerRef {
 }
 
 #[derive(Hash, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct DummyFunction(DummyEdge);
+pub struct DummyFunction(pub DummyEdge);
 impl DummyFunction {
     pub fn from(manager_ref: &mut DummyManagerRef, data: &str) -> DummyFunction {
         manager_ref.with_manager_exclusive(|manager| {
@@ -151,6 +151,9 @@ impl DummyFunction {
             }
 
             for (id, level, children) in nodes_data {
+                if manager.has_edges(id) {
+                    continue; // This node was already loaded
+                }
                 if level.parse::<i32>().is_err() {
                     continue;
                 }; // Filter out terminals
@@ -354,6 +357,10 @@ impl DummyManager {
         let from_children = &mut self.0.get_mut(&from).unwrap().1;
         let edge = DummyEdge::new(Arc::new(to), mr);
         from_children.push(edge);
+    }
+    fn has_edges(&self, node: NodeID) -> bool {
+        let from_children = &self.0.get(&node).unwrap().1;
+        from_children.len() > 0
     }
 }
 

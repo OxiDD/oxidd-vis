@@ -1,3 +1,4 @@
+import {create_qdd_diagram, DiagramBox} from "oxidd-viz-rust";
 import {Constant} from "../../watchables/Constant";
 import {Derived} from "../../watchables/Derived";
 import {PlainField} from "../../watchables/PlainField";
@@ -8,11 +9,14 @@ import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
 import {ViewState} from "../views/ViewState";
 import {sidebarLocationHint} from "../views/locations/sidebarLocationHint";
 import {DiagramState} from "./DiagramState";
-import {IDiagramCollectionSerialization} from "./_types/IDiagramCollectionSerialization";
-import {IDiagramSourceType} from "./_types/IDiagramSource";
+import {
+    IDiagramCollectionSerialization,
+    IDiagramType,
+} from "./_types/IDiagramCollectionSerialization";
 import {FileSource} from "./sources/FileSource";
+import {IDiagramSectionType} from "./_types/IDiagramSection";
 
-const sourceTypes: Record<string, IDiagramSourceType<unknown>> = {
+const sourceTypes: Record<string, IDiagramSectionType<unknown>> = {
     file: FileSource,
 };
 
@@ -39,49 +43,30 @@ export class DiagramCollectionState extends ViewState {
     /** @override */
     public readonly children = new Derived(watch => watch(this.diagrams));
 
-    // TODO: remove this after testing
-    /** @override */
-    public readonly groups = new Derived(watch => {
-        const targets = watch(this._diagrams).flatMap(diagram =>
-            watch(diagram.visualizations).flatMap(({ID}) => ID)
-        );
-        return [{sources: [this.ID], targets}];
-    });
-
     /**
      * Creates a new diagram to store
-     * TODO: add different functions for different diagram source types
+     * @param type The type of diagram to create
      * @returns The mutator to commit the change, resulting in the created diagram
      */
-    public addDiagram(): IMutator<DiagramState> {
+    public addDiagram(type: IDiagramType): IMutator<DiagramState> {
         return chain(push => {
-            const source = new FileSource(`.ver DDDMP-2.0
-.mode A
-.varinfo 4
-.dd qdd
-.nnodes 5
-.nvars 3
-.nsuppvars 3
-.suppvarnames x1 x2 x3
-.orderedvarnames x1 x2 x3
-.ids 0 1 2
-.permids 0 1 2
-.nroots 1
-.rootids 5
-.rootnames f
-.nodes
-1 F 0 0
-2 T 0 0
-3 3 1 2 2
-4 2 3 2 2
-5 1 1 4 4
-6 0 1 5 3
-.end`);
-            const diagram = new DiagramState(source);
+            const diagramBox = this.createDiagramBox(type);
+            const diagram = new DiagramState(diagramBox, "QDD");
             push(this._diagrams.set([...this.diagrams.get(), diagram]));
-            push(diagram.addVisualization());
             return diagram;
         });
+    }
+
+    /**
+     * Creates a new diagram box depending on the passed diagram type
+     * @param type The diagram type to create
+     * @returns The created diagram box
+     */
+    protected createDiagramBox(type: IDiagramType): DiagramBox {
+        // TODO: create different types here
+        const diagramBox = create_qdd_diagram();
+        if (!diagramBox) throw Error("Could not create a new QDD");
+        return diagramBox;
     }
 
     /**
@@ -111,11 +96,7 @@ export class DiagramCollectionState extends ViewState {
         return {
             ...super.serialize(),
             diagrams: this._diagrams.get().map(diagram => ({
-                type:
-                    Object.entries(sourceTypes).find(
-                        ([typeName, type]) => diagram.source instanceof type
-                    )?.[0] ?? "unknown",
-                source: diagram.source.serialize(),
+                type: diagram.type,
                 state: diagram.serialize(),
             })),
         };
@@ -127,16 +108,11 @@ export class DiagramCollectionState extends ViewState {
             push(super.deserialize(data));
 
             const diagrams: DiagramState[] = [];
-            for (const {type: typeName, source: sourceData, state} of data.diagrams) {
-                const type = sourceTypes[typeName];
-                if (!type) continue;
+            for (const {type, state} of data.diagrams) {
+                const diagramBox = this.createDiagramBox(type);
+                const diagram = new DiagramState(diagramBox, type);
 
-                const source = new type();
-                push(source.deserialize(sourceData));
-
-                const diagram = new DiagramState(source);
                 push(diagram.deserialize(state));
-
                 diagrams.push(diagram);
             }
 

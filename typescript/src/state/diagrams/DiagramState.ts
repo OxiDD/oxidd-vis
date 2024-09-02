@@ -1,4 +1,4 @@
-import {DiagramBox, create_diagram_from_dddmp} from "oxidd-viz-rust";
+import {DiagramBox} from "oxidd-viz-rust";
 import {Field} from "../../watchables/Field";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
@@ -6,37 +6,31 @@ import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
 import {ViewState} from "../views/ViewState";
 import {DiagramVisualizationState} from "./DiagramVisualizationState";
 import {IDiagramSerialization} from "./_types/IDiagramSerialization";
-import {IDiagramSource} from "./_types/IDiagramSource";
 import {Derived} from "../../watchables/Derived";
 import {Mutator} from "../../watchables/mutator/Mutator";
 import {NodeSelectionState} from "./NodeSelectionState";
+import {IDiagramSection, IDiagramSectionType} from "./_types/IDiagramSection";
+import {FileSource} from "./sources/FileSource";
+import {IDiagramType} from "./_types/IDiagramCollectionSerialization";
+import {IDiagramVisualizationSerialization} from "./_types/IDiagramVisualizationSerialization";
+
+const sourceTypes: Record<string, IDiagramSectionType<unknown>> = {
+    file: FileSource,
+};
 
 /** The state of a single diagram, which may contain multiple functions and views */
 export class DiagramState extends ViewState {
-    /** The source of the diagram */
-    public readonly source: IDiagramSource<unknown>;
+    /** The type of diagram */
+    public readonly type: IDiagramType;
 
-    /** All current visualizations of the diagram */
-    protected _visualizations = new Field<DiagramVisualizationState[]>([]);
+    /** All the sections that are part of this diagram */
+    protected _sections = new Field<IDiagramSection<unknown>[]>([]);
 
     /** The actual rust diagram being visualized */
     protected readonly diagram: DiagramBox;
 
-    /**
-     * Creates a new diagram state from the given source
-     * @param source The source data of the diagram
-     */
-    public constructor(source: IDiagramSource<unknown>) {
-        super();
-        this.source = source;
-
-        // TODO: connect the source
-        this.diagram = create_diagram_from_dddmp(source.diagram.get())!;
-        if (!this.diagram) throw Error("Failed to create diagram");
-    }
-
-    /** The current visualizations of this diagram */
-    public readonly visualizations = this._visualizations.readonly();
+    /** The current sections of this diagram */
+    public readonly sections = this._sections.readonly();
 
     /** The currently selected nodes in this diagram */
     public readonly selectedNodes = new NodeSelectionState();
@@ -46,61 +40,55 @@ export class DiagramState extends ViewState {
 
     /** @override */
     public readonly children = new Derived(watch => [
-        ...watch(this.visualizations),
+        ...watch(this.sections).map(section => watch(section.visualization)),
         this.selectedNodes,
         this.highlightNodes,
     ]);
 
-    // Visualization management
     /**
-     * Creates a new visualization for this diagram
-     * @returns The mutator to commit the change, resulting in the created visualization
+     * Creates a new diagram state from the given rust diagram
+     * @param diagram The rust diagram
+     * @param type THe diagram type
      */
-    public addVisualization(): IMutator<DiagramVisualizationState> {
+    public constructor(diagram: DiagramBox, type: IDiagramType) {
+        super();
+        this.diagram = diagram;
+        this.type = type;
+    }
+
+    // Section management
+    /**
+     * Creates a new section for this diagram, based on the given decision diagram dump
+     * @param dddmp The dddmp contents
+     * @returns The mutator to commit the change, resulting in the created section
+     */
+    public createSectionFromDDDMP(dddmp: string): IMutator<FileSource> {
         return chain(push => {
-            const visualization = this.createVisualization();
-            push(
-                this._visualizations.set([...this._visualizations.get(), visualization])
-            );
-            return visualization;
+            const section = new FileSource(this, this.diagram, dddmp);
+            push(this._sections.set([...this._sections.get(), section]));
+            return section;
         });
     }
 
+    // public craeteSectionFromID(section: IDiagramSection<unknown>, id: number): IMutator<>
+
     /**
-     * Removes the given visualization from the diagram
-     * @param visualization The visualization to be removed and disposed
-     * @returns The mutator to commit the change, resulting in whether the visualization was present and has now been disposed
+     * Removes the given section from this diagram, and disposes it
+     * @param section The section to remove
+     * @returns The mutator to commit the change
      */
-    public removeVisualization(
-        visualization: DiagramVisualizationState
-    ): IMutator<boolean> {
+    public removeSection(section: IDiagramSection<unknown>): IMutator {
         return chain(push => {
-            const visualizations = this._visualizations.get();
-            const index = visualizations.findIndex(v => v == visualization);
-            if (index == -1) return false;
+            const current = this._sections.get();
+            const index = current.indexOf(section);
+            if (index == -1) return;
             push(
-                this._visualizations.set([
-                    ...visualizations.slice(0, index),
-                    ...visualizations.slice(index + 1),
+                this._sections.set([
+                    ...current.slice(0, index),
+                    ...current.slice(index + 1),
                 ])
             );
-            visualization.dispose();
-
-            return true;
-        });
-    }
-
-    /**
-     * Creates a new visualization for this diagram
-     * @returns The created visualization
-     */
-    protected createVisualization(): DiagramVisualizationState {
-        const canvas = document.createElement("canvas");
-        const drawer = this.diagram.create_drawer(canvas);
-
-        return new DiagramVisualizationState(drawer, canvas, {
-            highlight: this.highlightNodes,
-            selection: this.selectedNodes,
+            section.dispose();
         });
     }
 
@@ -109,7 +97,7 @@ export class DiagramState extends ViewState {
      * Disposes the data held by this diagram and corresponding visualizations (drops the rust data)
      */
     public dispose() {
-        this.visualizations.get().forEach(visualization => visualization.dispose());
+        this.sections.get().forEach(section => section.dispose());
 
         this.diagram.free();
         (this.diagram as any) = undefined;
@@ -119,9 +107,15 @@ export class DiagramState extends ViewState {
     public serialize(): IDiagramSerialization {
         return {
             ...super.serialize(),
-            visualizations: this._visualizations
-                .get()
-                .map(visualization => visualization.serialize()),
+            sections: this.sections.get().map(section => ({
+                type:
+                    Object.entries(sourceTypes).find(
+                        ([typeName, type]) => section instanceof type
+                    )?.[0] ?? "unknown",
+                source: section.serialize(),
+                ID: section.ID,
+                visualization: section.visualization.get().serialize(),
+            })),
             selectedNodes: this.selectedNodes.serialize(),
             highlightedNodes: this.highlightNodes.serialize(),
         };
@@ -132,15 +126,28 @@ export class DiagramState extends ViewState {
         return chain(push => {
             push(super.deserialize(data));
 
-            const visualizations: DiagramVisualizationState[] = [];
-            for (const visualizationData of data.visualizations) {
-                const visualization = this.createVisualization();
-                push(visualization.deserialize(visualizationData));
+            const sections: {
+                section: IDiagramSection<unknown>;
+                typeData: unknown;
+                visualization: IDiagramVisualizationSerialization;
+            }[] = [];
+            const sectionsMap: Map<string, IDiagramSection<unknown>> = new Map();
+            for (const {type: typeName, source, ID, visualization} of data.sections) {
+                const type = sourceTypes[typeName];
+                if (!type) continue;
 
-                visualizations.push(visualization);
+                const section = new type(this, this.diagram);
+                (section as any).ID = ID;
+                sections.push({section, typeData: source, visualization});
+                sectionsMap.set(section.ID, section);
             }
+            for (const {section, typeData: source} of sections)
+                push(section.deserialize(source, sectionsMap));
+            for (const {section, visualization} of sections)
+                push(section.visualization.get().deserialize(visualization));
 
-            push(this._visualizations.set(visualizations));
+            this._sections.get().forEach(section => section.dispose());
+            push(this._sections.set(sections.map(({section}) => section)));
             push(this.selectedNodes.deserialize(data.selectedNodes));
             push(this.highlightNodes.deserialize(data.highlightedNodes));
         });

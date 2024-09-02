@@ -1,4 +1,4 @@
-import {DiagramDrawerBox} from "oxidd-viz-rust";
+import {DiagramSectionDrawerBox} from "oxidd-viz-rust";
 import {DiagramVisualizationState} from "../diagrams/DiagramVisualizationState";
 import {ViewState} from "../views/ViewState";
 import {ITool} from "./_types/ITool";
@@ -12,7 +12,7 @@ export class ExpansionToolState extends ViewState implements ITool {
     /** @override */
     apply(
         visualization: DiagramVisualizationState,
-        drawer: DiagramDrawerBox,
+        drawer: DiagramSectionDrawerBox,
         nodes: Uint32Array,
         event: IToolEvent
     ): boolean {

@@ -11,12 +11,18 @@ use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::Arc;
 use web_sys::console::log;
 
 use crate::traits::Diagram;
-use crate::traits::DiagramDrawer;
+use crate::traits::DiagramSection;
+use crate::traits::DiagramSectionDrawer;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceGroups;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder;
+use crate::util::dummy_bdd::DummyEdge;
+use crate::util::dummy_bdd::DummyFunction;
+use crate::util::dummy_bdd::DummyManager;
+use crate::util::dummy_bdd::DummyManagerRef;
 use crate::util::free_id_manager::FreeIdManager;
 use crate::util::logging::console;
 use crate::util::rc_refcell::MutRcRefCell;
@@ -69,24 +75,42 @@ use super::util::graph_structure::oxidd_graph_structure::NodeLabel;
 use super::util::graph_structure::oxidd_graph_structure::OxiddGraphStructure;
 use super::util::group_manager::GroupManager;
 
-pub struct QDDDiagram<MR: ManagerRef, F: Function<ManagerRef = MR> + 'static>
+pub struct QDDDiagram<MR: ManagerRef>
 where
-    for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
+    for<'id> <<MR as oxidd::ManagerRef>::Manager<'id> as Manager>::InnerNode: HasLevel,
 {
     manager_ref: MR,
-    root: F,
 }
-impl<MR: ManagerRef, F: Function<ManagerRef = MR>> QDDDiagram<MR, F>
+impl QDDDiagram<DummyManagerRef> {
+    pub fn new() -> QDDDiagram<DummyManagerRef> {
+        let manager_ref = DummyManagerRef::from(&DummyManager::new());
+        QDDDiagram { manager_ref }
+    }
+}
+
+impl Diagram for QDDDiagram<DummyManagerRef> {
+    fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
+        let root = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp[..]);
+        Some(Box::new(QDDDiagramSection { root }))
+    }
+
+    fn create_section_from_id(
+        &self,
+        section: &Box<dyn DiagramSection>,
+        id: oxidd::NodeID,
+    ) -> Option<Box<dyn DiagramSection>> {
+        // TODO: check if section is the owner of this id
+        let root_edge = DummyEdge::new(Arc::new(id), self.manager_ref.clone());
+        let root = DummyFunction(root_edge);
+        Some(Box::new(QDDDiagramSection { root }))
+    }
+}
+
+pub struct QDDDiagramSection<F: Function>
 where
     for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
 {
-    pub fn new(mut manager_ref: MR, root: impl Fn(&mut MR) -> F) -> QDDDiagram<MR, F> {
-        // let mut manager_ref = manager_ref;
-        QDDDiagram {
-            root: root(&mut manager_ref),
-            manager_ref,
-        }
-    }
+    root: F,
 }
 
 impl<
@@ -94,14 +118,13 @@ impl<
         E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
         R: DiagramRules<E, N, T> + 'static,
-        MR: ManagerRef + 'static,
-        F: Function<ManagerRef = MR> + 'static,
-    > Diagram for QDDDiagram<MR, F>
+        F: Function + 'static,
+    > DiagramSection for QDDDiagramSection<F>
 where
     for<'id> F::Manager<'id>:
         Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
-    fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramDrawer> {
+    fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
         let c0 = (0., 0., 0.);
         let c1 = (0.4, 0.4, 0.4);
         let c2 = (0.6, 0.6, 0.6);
@@ -249,7 +272,7 @@ impl<
         G: GraphStructure<T, NodeLabel<String>, String> + 'static,
         R: Renderer<T>,
         L: LayoutRules<T, Color, String, GMGraph<T, G>>,
-    > DiagramDrawer for QDDDiagramDrawer<T, G, R, L>
+    > DiagramSectionDrawer for QDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
         self.drawer.render(time, selected_ids, hovered_ids);
