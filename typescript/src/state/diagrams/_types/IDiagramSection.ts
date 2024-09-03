@@ -9,10 +9,10 @@ export type IDiagramSection<T> = {
     readonly ID: string;
 
     /** The section box in rust */
-    readonly source: IWatchable<DiagramSectionBox>;
+    readonly source: IWatchable<DiagramSectionBox | null>;
 
     /** The visualization of this diagram */
-    readonly visualization: IWatchable<DiagramVisualizationState>;
+    readonly visualization: IWatchable<DiagramVisualizationState | null>;
 
     /**
      * Serializes the given source

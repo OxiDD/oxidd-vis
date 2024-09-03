@@ -34,8 +34,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone> AbstractedGraph<T, NL, LL> {
 }
 
 impl<T: DrawTag, NL: Clone, LL: Clone> GraphStructure<T, NL, LL> for AbstractedGraph<T, NL, LL> {
-    fn get_root(&self) -> NodeID {
-        self.graph.get_root()
+    fn get_roots(&self) -> Vec<NodeID> {
+        self.graph.get_roots()
     }
 
     fn get_terminals(&self) -> Vec<NodeID> {
@@ -68,5 +68,13 @@ impl<T: DrawTag, NL: Clone, LL: Clone> GraphStructure<T, NL, LL> for AbstractedG
 
     fn consume_events(&mut self, reader: &GraphEventsReader) -> Vec<Change> {
         self.graph.consume_events(reader)
+    }
+
+    fn local_nodes_to_sources(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
+        self.graph.local_nodes_to_sources(nodes)
+    }
+
+    fn source_nodes_to_local(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
+        self.graph.source_nodes_to_local(nodes)
     }
 }

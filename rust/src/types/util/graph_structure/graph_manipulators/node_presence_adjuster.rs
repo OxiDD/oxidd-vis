@@ -467,8 +467,12 @@ pub struct PresenceLabel<LL> {
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     GraphStructure<T, PresenceLabel<NL>, LL> for NodePresenceAdjuster<T, NL, LL, G>
 {
-    fn get_root(&self) -> NodeID {
-        from_sourced(Either::Left(self.graph.get_root()))
+    fn get_roots(&self) -> Vec<NodeID> {
+        self.graph
+            .get_roots()
+            .iter()
+            .map(|&root| from_sourced(Either::Left(root)))
+            .collect()
     }
     fn get_terminals(&self) -> Vec<NodeID> {
         self.graph
@@ -603,5 +607,22 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     fn consume_events(&mut self, reader: &GraphEventsReader) -> Vec<Change> {
         self.process_graph_changes();
         self.event_writer.read(reader)
+    }
+
+    fn local_nodes_to_sources(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
+        self.graph.local_nodes_to_sources(
+            nodes
+                .into_iter()
+                .map(|node| self.get_owner_id(node))
+                .collect(),
+        )
+    }
+
+    fn source_nodes_to_local(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
+        self.graph
+            .source_nodes_to_local(nodes)
+            .into_iter()
+            .flat_map(|node| self.get_all_copies(node))
+            .collect()
     }
 }

@@ -23,14 +23,8 @@ impl DiagramBox {
     pub fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<DiagramSectionBox> {
         Some(DiagramSectionBox(self.0.create_section_from_dddmp(dddmp)?))
     }
-    pub fn create_section_from_id(
-        &self,
-        section: &DiagramSectionBox,
-        id: NodeID,
-    ) -> Option<DiagramSectionBox> {
-        Some(DiagramSectionBox(
-            self.0.create_section_from_id(&section.0, id)?,
-        ))
+    pub fn create_section_from_ids(&self, ids: &[NodeID]) -> Option<DiagramSectionBox> {
+        Some(DiagramSectionBox(self.0.create_section_from_ids(ids)?))
     }
 }
 
@@ -65,12 +59,24 @@ impl DiagramSectionDrawerBox {
     pub fn set_step(&mut self, step: i32) -> Option<StepData> {
         self.0.set_step(step)
     }
+
+    /** Grouping */
     pub fn set_group(&mut self, from: Vec<TargetID>, to: NodeGroupID) -> bool {
         self.0.set_group(from, to)
     }
     pub fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
         self.0.create_group(from)
     }
+
+    /** Tools */
+    pub fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
+        self.0.split_edges(nodes, fully);
+    }
+    pub fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) {
+        self.0.set_terminal_mode(terminal, mode);
+    }
+
+    /** Node interaction */
     /// Coordinates in screen space (-0.5 to 0.5), not in world space. Additionally the max_group_expansion should be provided for determining the maximum number of nodes to select for every given group
     pub fn get_nodes(
         &self,
@@ -86,11 +92,13 @@ impl DiagramSectionDrawerBox {
     pub fn set_selected_nodes(&mut self, selected_ids: &[NodeID], hovered_ids: &[NodeID]) {
         self.0.set_selected_nodes(selected_ids, hovered_ids);
     }
-    pub fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
-        self.0.split_edges(nodes, fully);
+    /// Retrieves the sources (nodes of the source diagram) of the modified diagram
+    pub fn local_nodes_to_sources(&self, nodes: &[NodeID]) -> Vec<NodeID> {
+        self.0.local_nodes_to_sources(nodes)
     }
-    pub fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) {
-        self.0.set_terminal_mode(terminal, mode);
+    /// Retrieves the local nodes representing the collection of sources
+    pub fn source_nodes_to_local(&self, nodes: &[NodeID]) -> Vec<NodeID> {
+        self.0.source_nodes_to_local(nodes)
     }
 }
 

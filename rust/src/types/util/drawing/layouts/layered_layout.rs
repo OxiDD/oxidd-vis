@@ -388,6 +388,9 @@ fn remove_group_crossings(
 
         // Remove right to left downwards crossings
         shared_layer_groups.reverse();
+        if layer.len() == 0 {
+            continue;
+        }
         node_index = layer.len() - 1;
         for &(_group, from_index, to_index) in &shared_layer_groups {
             while node_index > from_index {

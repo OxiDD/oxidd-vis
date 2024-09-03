@@ -92,18 +92,21 @@ impl QDDDiagram<DummyManagerRef> {
 impl Diagram for QDDDiagram<DummyManagerRef> {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
         let root = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp[..]);
-        Some(Box::new(QDDDiagramSection { root }))
+        Some(Box::new(QDDDiagramSection {
+            roots: Vec::from([root]),
+        }))
     }
 
-    fn create_section_from_id(
-        &self,
-        section: &Box<dyn DiagramSection>,
-        id: oxidd::NodeID,
-    ) -> Option<Box<dyn DiagramSection>> {
-        // TODO: check if section is the owner of this id
-        let root_edge = DummyEdge::new(Arc::new(id), self.manager_ref.clone());
-        let root = DummyFunction(root_edge);
-        Some(Box::new(QDDDiagramSection { root }))
+    fn create_section_from_ids(&self, ids: &[oxidd::NodeID]) -> Option<Box<dyn DiagramSection>> {
+        let roots = ids
+            .iter()
+            .map(|&id| {
+                console::log!("for: {}", id);
+                let root_edge = DummyEdge::new(Arc::new(id), self.manager_ref.clone());
+                DummyFunction(root_edge)
+            })
+            .collect_vec();
+        Some(Box::new(QDDDiagramSection { roots }))
     }
 }
 
@@ -111,7 +114,7 @@ pub struct QDDDiagramSection<F: Function>
 where
     for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
 {
-    root: F,
+    roots: Vec<F>,
 }
 
 impl<
@@ -217,7 +220,8 @@ where
             0.3,
         );
         let layout = TransitionLayout::new(layout);
-        let graph = OxiddGraphStructure::new(self.root.clone(), |t| t.to_string());
+        let graph =
+            OxiddGraphStructure::new(self.roots.iter().cloned().collect(), |t| t.to_string());
         let diagram = QDDDiagramDrawer::new(graph, renderer, layout);
         Box::new(diagram)
     }
@@ -229,13 +233,19 @@ pub struct QDDDiagramDrawer<
     R: Renderer<T>,
     L: LayoutRules<T, Color, String, GMGraph<T, G>>,
 > {
+    graph: MGraph<T, G>,
     group_manager: MutRcRefCell<GM<T, G>>,
     presence_adjuster: MPresenceAdjuster<T, G>,
     drawer: Drawer<T, Color, R, L, GMGraph<T, G>>,
 }
 type GraphLabel = PresenceLabel<NodeLabel<String>>;
 type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
-type MGraph<T, G> = TerminalLevelAdjuster<T, GraphLabel, String, MPresenceAdjuster<T, G>>;
+type MGraph<T, G> = RCGraph<
+    T,
+    GraphLabel,
+    String,
+    TerminalLevelAdjuster<T, GraphLabel, String, MPresenceAdjuster<T, G>>,
+>;
 type MPresenceAdjuster<T, G> =
     RCGraph<T, GraphLabel, String, NodePresenceAdjuster<T, NodeLabel<String>, String, G>>;
 type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, (f32, f32, f32)>;
@@ -249,9 +259,9 @@ impl<
 {
     pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
         let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(graph));
-        let modified_graph = TerminalLevelAdjuster::new(presence_adjuster.clone());
-        let root = modified_graph.get_root();
-        let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph));
+        let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
+        let roots = modified_graph.get_roots();
+        let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
         let grouped_graph = GMGraph::new_shared(group_manager.clone(), |nodes| {
             match (nodes.get(0), nodes.get(1)) {
                 (
@@ -274,10 +284,13 @@ impl<
         let mut out = QDDDiagramDrawer {
             group_manager,
             presence_adjuster,
+            graph: modified_graph,
             drawer: Drawer::new(renderer, layout, MutRcRefCell::new(grouped_graph)),
         };
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
-        out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
+        for root in roots {
+            out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
+        }
         // out.reveal_all(from, 30000);
         // out.reveal_all(from, 10);
         out
@@ -336,15 +349,6 @@ impl<
     fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
         self.group_manager.get().split_edges(nodes, fully);
     }
-
-    fn get_nodes(&self, area: Rectangle, max_group_expansion: usize) -> Vec<NodeID> {
-        self.drawer.get_nodes(area, max_group_expansion)
-    }
-
-    fn set_selected_nodes(&mut self, selected_ids: &[NodeID], hovered_ids: &[NodeID]) {
-        self.drawer.select_nodes(selected_ids, hovered_ids);
-    }
-
     fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) -> () {
         let mut adjuster = self.presence_adjuster.get();
         let terminals = adjuster.get_terminals();
@@ -359,5 +363,23 @@ impl<
         };
 
         adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(mode));
+    }
+
+    fn get_nodes(&self, area: Rectangle, max_group_expansion: usize) -> Vec<NodeID> {
+        self.drawer.get_nodes(area, max_group_expansion)
+    }
+
+    fn set_selected_nodes(&mut self, selected_ids: &[NodeID], hovered_ids: &[NodeID]) {
+        self.drawer.select_nodes(selected_ids, hovered_ids);
+    }
+
+    fn local_nodes_to_sources(&self, nodes: &[NodeID]) -> Vec<NodeID> {
+        self.graph
+            .local_nodes_to_sources(nodes.iter().cloned().collect())
+    }
+
+    fn source_nodes_to_local(&self, nodes: &[NodeID]) -> Vec<NodeID> {
+        self.graph
+            .source_nodes_to_local(nodes.iter().cloned().collect())
     }
 }

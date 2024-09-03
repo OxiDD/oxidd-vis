@@ -19,7 +19,7 @@ use crate::{
 
 /// A graph structure trait used as the data to visualize
 pub trait GraphStructure<T: DrawTag, NL: Clone, LL: Clone> {
-    fn get_root(&self) -> NodeID;
+    fn get_roots(&self) -> Vec<NodeID>;
     fn get_terminals(&self) -> Vec<NodeID>;
     /// Only returns connections that have already been discovered by calling get_children
     fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)>;
@@ -34,6 +34,11 @@ pub trait GraphStructure<T: DrawTag, NL: Clone, LL: Clone> {
     /// Change events are created for all nodes that have been obtained from this interface before, but might not be invoked for not yet "discovered" nodes
     fn create_event_reader(&mut self) -> GraphEventsReader;
     fn consume_events(&mut self, reader: &GraphEventsReader) -> Vec<Change>;
+
+    /// Retrieves the sources (nodes of the source diagram) of the modified diagram
+    fn local_nodes_to_sources(&self, nodes: Vec<NodeID>) -> Vec<NodeID>;
+    /// Retrieves the local nodes representing the collection of sources
+    fn source_nodes_to_local(&self, nodes: Vec<NodeID>) -> Vec<NodeID>;
 }
 
 // pub type GraphListener = dyn Fn(&Vec<Change>) -> ();

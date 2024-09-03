@@ -1,16 +1,46 @@
-import React, {FC} from "react";
+import React, {FC, useCallback, useState} from "react";
 import {DiagramState} from "../../../state/diagrams/DiagramState";
-import {DefaultButton, IconButton, Stack, useTheme} from "@fluentui/react";
+import {
+    DefaultButton,
+    DirectionalHint,
+    IconButton,
+    Stack,
+    useTheme,
+} from "@fluentui/react";
 import {useWatch} from "../../../watchables/react/useWatch";
 import {DiagramSectionSummary} from "./DiagramSectionSummary";
 import {css} from "@emotion/css";
+import {StyledTooltipHost} from "../../components/StyledToolTipHost";
+import {TextSelectionModal} from "./TextSelectionModal";
 
 export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> = ({
     diagram,
     onDelete,
 }) => {
     const theme = useTheme();
+    const [showInputModal, setShowInputModal] = useState(false);
     const watch = useWatch();
+
+    const startCreatingDDDMPSection = useCallback(() => {
+        setShowInputModal(true);
+    }, []);
+    const stopCreatingDDDMPSection = useCallback(() => {
+        setShowInputModal(false);
+    }, []);
+    const createDDDMPSection = useCallback(
+        (input: string, name?: string) => {
+            setShowInputModal(false);
+            diagram.createSectionFromDDDMP(input, name).commit();
+        },
+        [diagram]
+    );
+
+    const canCreateFromSelection = watch(diagram.selectedNodes).length > 0;
+    const createSelectionSection = useCallback(() => {
+        const nodes = diagram.selectedNodes.get();
+        diagram.createSectionFromSelection(nodes).commit();
+    }, [diagram]);
+
     return (
         <div
             className={css({
@@ -34,7 +64,7 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                 </Stack.Item>
             </Stack>
             <Stack
-                tokens={{childrenGap: theme.spacing.m}}
+                tokens={{childrenGap: theme.spacing.s1}}
                 style={{padding: theme.spacing.s1}}>
                 {watch(diagram.sections).map(section => (
                     <Stack.Item align="stretch" key={section.ID}>
@@ -46,52 +76,40 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                 ))}
                 <Stack
                     horizontal
-                    tokens={{childrenGap: theme.spacing.m}}
-                    style={{marginTop: theme.spacing.m}}>
-                    <AddSectionButton
-                        onClick={() =>
-                            diagram
-                                .createSectionFromDDDMP(
-                                    `.ver DDDMP-2.0
-.mode A
-.varinfo 4
-.dd qdd
-.nnodes 5
-.nvars 3
-.nsuppvars 3
-.suppvarnames x1 x2 x3
-.orderedvarnames x1 x2 x3
-.ids 0 1 2
-.permids 0 1 2
-.nroots 1
-.rootids 5
-.rootnames f
-.nodes
-1 F 0 0
-2 T 0 0
-3 3 1 2 2
-4 2 3 2 2
-5 1 1 4 4
-6 0 1 5 3
-.end`
-                                )
-                                .commit()
-                        }>
+                    tokens={{childrenGap: theme.spacing.s1}}
+                    style={{marginTop: theme.spacing.s1}}>
+                    <AddSectionButton onClick={startCreatingDDDMPSection}>
                         Load from dddump
                     </AddSectionButton>
-                    <AddSectionButton onClick={() => {}}>
-                        Create from selection
-                    </AddSectionButton>
+                    <StyledTooltipHost
+                        content="Create a diagram visualization for the selected nodes"
+                        directionalHint={DirectionalHint.bottomCenter}>
+                        <AddSectionButton
+                            onClick={createSelectionSection}
+                            disabled={!canCreateFromSelection}>
+                            Create from selection
+                        </AddSectionButton>
+                    </StyledTooltipHost>
                 </Stack>
             </Stack>
+            <TextSelectionModal
+                visible={showInputModal}
+                onCancel={stopCreatingDDDMPSection}
+                onSelect={createDDDMPSection}
+            />
         </div>
     );
 };
 
-const AddSectionButton: FC<{onClick: () => void}> = ({onClick, children}) => (
+const AddSectionButton: FC<{onClick: () => void; disabled?: boolean}> = ({
+    onClick,
+    disabled,
+    children,
+}) => (
     <DefaultButton
         onClick={onClick}
         children={children}
+        disabled={disabled}
         style={{
             flexGrow: 1,
             width: 200,

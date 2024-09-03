@@ -435,34 +435,34 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 // Main methods
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManager<T, NL, LL, G> {
     pub fn new(mut graph: G) -> GroupManager<T, NL, LL, G> {
-        let root_id = graph.get_root();
-        let root_level = graph.get_level(root_id);
+        let root_ids = graph.get_roots();
         let mut group_ids = NodeTrackerManager::new(1);
         group_ids.add_group_id(0);
         GroupManager {
             level_label: PhantomData,
             node_label: PhantomData,
             graph_events: graph.create_event_reader(),
-            graph,
             group_id_by_node: HashMap::new(),
             group_by_id: HashMap::from([(
                 0,
                 NodeGroup {
-                    nodes: HashMap::from([(root_id, ConnectionData::new())]),
+                    nodes: root_ids
+                        .iter()
+                        .map(|&root_id| (root_id, ConnectionData::new()))
+                        .collect(),
                     out_edges: HashMap::new(),
                     in_edges: HashMap::new(),
-                    layer_min: {
-                        let mut q = PriorityQueue::new();
-                        q.push(root_id, Reverse(root_level));
-                        q
-                    },
-                    layer_max: {
-                        let mut q = PriorityQueue::new();
-                        q.push(root_id, root_level);
-                        q
-                    },
+                    layer_min: root_ids
+                        .iter()
+                        .map(|&root_id| (root_id, Reverse(graph.get_level(root_id))))
+                        .collect(),
+                    layer_max: root_ids
+                        .iter()
+                        .map(|&root_id| (root_id, graph.get_level(root_id)))
+                        .collect(),
                 },
             )]),
+            graph,
             group_ids,
         }
     }
@@ -633,9 +633,12 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     GroupedGraphStructure<T, Vec<NL>, LL> for GroupManager<T, NL, LL, G>
 {
     type Tracker = NodeTrackerM;
-    fn get_root(&self) -> NodeGroupID {
-        let root_node = &self.graph.get_root();
-        self.get_node_group_id(*root_node)
+    fn get_roots(&self) -> Vec<NodeGroupID> {
+        let root_nodes = self.graph.get_roots();
+        root_nodes
+            .into_iter()
+            .map(|root_node| self.get_node_group_id(root_node))
+            .collect()
     }
 
     fn get_all_groups(&self) -> Vec<NodeGroupID> {

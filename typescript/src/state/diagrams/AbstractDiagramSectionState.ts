@@ -12,36 +12,39 @@ export abstract class AbstractDiagramSectionState<T> implements IDiagramSection<
     protected readonly diagram: DiagramState;
 
     public readonly ID = uuid();
-    public readonly source: IWatchable<DiagramSectionBox>;
+    public readonly source: IWatchable<DiagramSectionBox | null>;
 
     protected sourceInitialized = false;
     protected visualizationInitialized = false;
-    public readonly visualization: IWatchable<DiagramVisualizationState> = new Derived(
-        (watch, prev) => {
+    public readonly visualization: IWatchable<DiagramVisualizationState | null> =
+        new Derived((watch, prev) => {
             this.visualizationInitialized = true;
             if (prev) prev.dispose();
             const source = watch(this.source);
+            if (!source) return null;
             const canvas = document.createElement("canvas");
             const drawer = source.create_drawer(canvas);
             return new DiagramVisualizationState(drawer, canvas, {
                 highlight: this.diagram.highlightNodes,
                 selection: this.diagram.selectedNodes,
             });
-        }
-    );
+        });
 
     /**
      * Creates a new abstract diagram section
      * @param diagram The diagram this section is for
      * @param source The source to use for this diagram, note that data freeing is taken care of by this class, and doesn't have to be done by the source
      */
-    public constructor(diagram: DiagramState, source: IWatchable<DiagramSectionBox>) {
+    public constructor(
+        diagram: DiagramState,
+        source: IWatchable<DiagramSectionBox | undefined>
+    ) {
         this.diagram = diagram;
         this.source = new Derived((watch, prev) => {
             const sourceVal = watch(source);
             if (prev) prev.free();
             this.sourceInitialized = true;
-            return sourceVal;
+            return sourceVal ?? null;
         });
     }
 
@@ -54,7 +57,7 @@ export abstract class AbstractDiagramSectionState<T> implements IDiagramSection<
     ): IMutator;
     /** @override */
     public dispose(): void {
-        if (this.visualizationInitialized) this.visualization.get().dispose();
-        if (this.sourceInitialized) this.source.get().free();
+        if (this.visualizationInitialized) this.visualization.get()?.dispose();
+        if (this.sourceInitialized) this.source.get()?.free();
     }
 }

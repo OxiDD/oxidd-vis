@@ -13,9 +13,11 @@ import {IDiagramSection, IDiagramSectionType} from "./_types/IDiagramSection";
 import {FileSource} from "./sources/FileSource";
 import {IDiagramType} from "./_types/IDiagramCollectionSerialization";
 import {IDiagramVisualizationSerialization} from "./_types/IDiagramVisualizationSerialization";
+import {ReferenceSource} from "./sources/ReferenceSource";
 
 const sourceTypes: Record<string, IDiagramSectionType<unknown>> = {
     file: FileSource,
+    reference: ReferenceSource,
 };
 
 /** The state of a single diagram, which may contain multiple functions and views */
@@ -40,7 +42,9 @@ export class DiagramState extends ViewState {
 
     /** @override */
     public readonly children = new Derived(watch => [
-        ...watch(this.sections).map(section => watch(section.visualization)),
+        ...watch(this.sections)
+            .map(section => watch(section.visualization))
+            .filter((child): child is DiagramVisualizationState => !!child),
         this.selectedNodes,
         this.highlightNodes,
     ]);
@@ -60,12 +64,44 @@ export class DiagramState extends ViewState {
     /**
      * Creates a new section for this diagram, based on the given decision diagram dump
      * @param dddmp The dddmp contents
+     * @param name The name of the diagram to load
      * @returns The mutator to commit the change, resulting in the created section
      */
-    public createSectionFromDDDMP(dddmp: string): IMutator<FileSource> {
+    public createSectionFromDDDMP(dddmp: string, name?: string): IMutator<FileSource> {
         return chain(push => {
             const section = new FileSource(this, this.diagram, dddmp);
             push(this._sections.set([...this._sections.get(), section]));
+            if (name)
+                try {
+                    const viz = section.visualization.get();
+                    if (viz) push(viz.name.set(name));
+                } catch (e) {}
+            return section;
+        });
+    }
+
+    /**
+     * Creates a new section for this diagram, based on the passed nodes
+     * @param nodes The nodes to make the section fro
+     * @returns The mutator to commit the change, resulting in the created section
+     */
+    public createSectionFromSelection(nodes: Uint32Array): IMutator<ReferenceSource> {
+        return chain(push => {
+            const parents = this._sections.get();
+            const section = new ReferenceSource(this, this.diagram, parents, nodes);
+            push(this._sections.set([...this._sections.get(), section]));
+            try {
+                const viz = section.visualization.get();
+                if (viz)
+                    push(
+                        viz.name.set(
+                            "Node" +
+                                (nodes.length > 1 ? "s" : "") +
+                                " " +
+                                [...nodes].toSorted().join(", ")
+                        )
+                    );
+            } catch (e) {}
             return section;
         });
     }
@@ -114,7 +150,7 @@ export class DiagramState extends ViewState {
                     )?.[0] ?? "unknown",
                 source: section.serialize(),
                 ID: section.ID,
-                visualization: section.visualization.get().serialize(),
+                visualization: section.visualization.get()?.serialize(),
             })),
             selectedNodes: this.selectedNodes.serialize(),
             highlightedNodes: this.highlightNodes.serialize(),
@@ -129,7 +165,7 @@ export class DiagramState extends ViewState {
             const sections: {
                 section: IDiagramSection<unknown>;
                 typeData: unknown;
-                visualization: IDiagramVisualizationSerialization;
+                visualization?: IDiagramVisualizationSerialization;
             }[] = [];
             const sectionsMap: Map<string, IDiagramSection<unknown>> = new Map();
             for (const {type: typeName, source, ID, visualization} of data.sections) {
@@ -143,8 +179,11 @@ export class DiagramState extends ViewState {
             }
             for (const {section, typeData: source} of sections)
                 push(section.deserialize(source, sectionsMap));
-            for (const {section, visualization} of sections)
-                push(section.visualization.get().deserialize(visualization));
+            for (const {section, visualization} of sections) {
+                const sectionVisualization = section.visualization.get();
+                if (visualization && sectionVisualization)
+                    push(sectionVisualization.deserialize(visualization));
+            }
 
             this._sections.get().forEach(section => section.dispose());
             push(this._sections.set(sections.map(({section}) => section)));

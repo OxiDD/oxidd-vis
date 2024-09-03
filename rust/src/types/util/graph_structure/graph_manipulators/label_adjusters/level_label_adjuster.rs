@@ -49,8 +49,8 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> GroupedGraphS
 {
     type Tracker = G::Tracker;
 
-    fn get_root(&self) -> NodeGroupID {
-        self.graph.read().get_root()
+    fn get_roots(&self) -> Vec<NodeGroupID> {
+        self.graph.read().get_roots()
     }
 
     fn get_all_groups(&self) -> Vec<NodeGroupID> {

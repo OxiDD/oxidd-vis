@@ -45,6 +45,9 @@ pub fn count_crossings(order: (&Order, &Order), edges: &EdgeMap) -> usize {
 
     let mut total = 0;
     let len = ordered_nodes.len();
+    if len == 0 {
+        return 0; // Prevent underflow in the loop
+    }
     for i in 0..len - 1 {
         for j in i + 1..len {
             total += count_pair_crossings((

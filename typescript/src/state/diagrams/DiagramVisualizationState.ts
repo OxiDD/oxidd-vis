@@ -84,10 +84,13 @@ export class DiagramVisualizationState extends ViewState {
     }
 
     protected sendHighlight() {
-        this.drawer.set_selected_nodes(
-            this.sharedState.selection.get(),
+        const selectNodes = this.drawer.source_nodes_to_local(
+            this.sharedState.selection.get()
+        );
+        const highlightNodes = this.drawer.source_nodes_to_local(
             this.sharedState.highlight.get()
         );
+        this.drawer.set_selected_nodes(selectNodes, highlightNodes);
     }
 
     /**
@@ -112,7 +115,7 @@ export class DiagramVisualizationState extends ViewState {
     }
 
     /**
-     * Retrieves the nodes in the given rectangle
+     * Retrieves the local visualization node ids in the given rectangle
      * @param area The area for which to retrieve the nodes that lay (partially) inside it, with (0,0) being the top_left of the current view, and (width, height) being the bottom_right of the current view.
      * @returns The ids of the nodes that lay in this area
      */
@@ -125,10 +128,19 @@ export class DiagramVisualizationState extends ViewState {
         return this.drawer.get_nodes(xRel, -yRel - heightRel, widthRel, heightRel, 500); // TODO: create selection number setting
     }
 
+    /**
+     * Converts the ids of local visualization nodes, to the source node ids (in the overall diagram) that they represent
+     * @param nodes The nodes for which to obtain the source ids
+     * @return The source ids
+     */
+    public getNodeSources(nodes: Uint32Array): Uint32Array {
+        return this.drawer.local_nodes_to_sources(nodes);
+    }
+
     /** Renders a frame to the canvas */
     public render() {
         const time = Date.now() - this.start;
-        this.drawer.render(time);
+        this.drawer?.render(time);
     }
 
     // State management

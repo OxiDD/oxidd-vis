@@ -9,6 +9,8 @@ use std::{
 use oxidd::{Edge, Function, InnerNode, LevelNo, Manager, NodeID};
 use oxidd_core::{DiagramRules, HasLevel, Node};
 
+use crate::util::logging::console;
+
 use super::graph_structure::{
     Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
 };
@@ -17,7 +19,7 @@ pub struct OxiddGraphStructure<DT: DrawTag, F: Function, T, S: Fn(&T) -> String>
 where
     for<'id> F::Manager<'id>: Manager<EdgeTag = DT>,
 {
-    root: F,
+    roots: Vec<F>,
     node_by_id: HashMap<NodeID, F>,
     node_parents: HashMap<NodeID, HashSet<(EdgeType<DT>, NodeID)>>,
     terminal_to_string: S,
@@ -35,13 +37,18 @@ impl<DT: DrawTag, F: Function, T, S: Fn(&T) -> String> OxiddGraphStructure<DT, F
 where
     for<'id> F::Manager<'id>: Manager<EdgeTag = DT, Terminal = T>,
 {
-    pub fn new(root: F, terminal_to_string: S) -> OxiddGraphStructure<DT, F, T, S> {
+    pub fn new(roots: Vec<F>, terminal_to_string: S) -> OxiddGraphStructure<DT, F, T, S> {
         OxiddGraphStructure {
-            node_by_id: HashMap::from([(
-                root.with_manager_shared(|manager, edge| edge.node_id()),
-                root.clone(),
-            )]),
-            root,
+            node_by_id: roots
+                .iter()
+                .map(|root| {
+                    (
+                        root.with_manager_shared(|manager, edge| edge.node_id()),
+                        root.clone(),
+                    )
+                })
+                .collect(),
+            roots,
             node_parents: HashMap::new(),
             terminal_to_string,
             event_writer: GraphEventsWriter::new(),
@@ -84,14 +91,21 @@ where
     for<'id> F::Manager<'id>:
         Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
-    fn get_root(&self) -> NodeID {
-        self.root
-            .with_manager_shared(|manager, edge| edge.node_id())
+    fn get_roots(&self) -> Vec<NodeID> {
+        self.roots
+            .iter()
+            .map(|root| root.with_manager_shared(|manager, edge| edge.node_id()))
+            .collect()
     }
 
     fn get_terminals(&self) -> Vec<NodeID> {
-        self.root
-            .with_manager_shared(|manager, edge| manager.terminals().map(|t| t.node_id()).collect())
+        if let Some(root) = self.roots.first() {
+            root.with_manager_shared(|manager, edge| {
+                manager.terminals().map(|t| t.node_id()).collect()
+            })
+        } else {
+            Vec::new()
+        }
     }
 
     fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<ET>, NodeID)> {
@@ -133,10 +147,8 @@ where
 
     fn get_level(&mut self, node_id: NodeID) -> LevelNo {
         if let Some(node) = self.get_node_by_id(node_id) {
-            return node.with_manager_shared(|manager, edge| {
-                // manager.get_node(edge).unwrap_inner().level()
-                manager.get_node(edge).level()
-            });
+            let r = node.with_manager_shared(|manager, edge| manager.get_node(edge).level());
+            return r;
         }
         0
     }
@@ -162,5 +174,12 @@ where
     }
     fn consume_events(&mut self, reader: &GraphEventsReader) -> Vec<Change> {
         self.event_writer.read(reader)
+    }
+
+    fn local_nodes_to_sources(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
+        nodes
+    }
+    fn source_nodes_to_local(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
+        nodes
     }
 }

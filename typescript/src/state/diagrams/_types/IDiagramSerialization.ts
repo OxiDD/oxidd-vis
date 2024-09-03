@@ -11,5 +11,5 @@ export type IDiagramSectionTypeSerialization = {
     type: string;
     source: unknown;
     ID: string;
-    visualization: IDiagramVisualizationSerialization;
+    visualization?: IDiagramVisualizationSerialization;
 };

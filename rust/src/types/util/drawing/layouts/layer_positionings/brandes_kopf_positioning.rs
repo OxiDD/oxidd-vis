@@ -413,6 +413,9 @@ fn get_type1_conflicts(
             let last = l1 == layer_len - 1;
             if last || incident_inner_segment || incident_group_segment {
                 let inner_edge_node = node;
+                if prev_layer_seq.len() == 0 {
+                    continue;
+                }
                 let mut k1 = prev_layer_seq.len() - 1; // Currently considered inner segment at layer i (or the default last node place holder to correctly finish processing the previous inner segment)
                 if incident_inner_segment || incident_group_segment {
                     let upper_neighbors = reverse_edges.get(&inner_edge_node).unwrap();

@@ -20,7 +20,7 @@ export class FileSource extends AbstractDiagramSectionState<string> {
             diagram,
             new Derived(() => {
                 const diagram = diagramBox.create_section_from_dddmp(this.data.get());
-                if (!diagram) throw Error("Diagram could not be created from dddmp");
+                if (!diagram) console.error("Diagram could not be created from dddmp");
                 return diagram;
             })
         );

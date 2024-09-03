@@ -10,12 +10,13 @@ export class SelectionToolState extends ViewState implements ITool {
     }
 
     /** @override */
-    apply(
+    public apply(
         visualization: DiagramVisualizationState,
         drawer: DiagramSectionDrawerBox,
         nodes: Uint32Array,
         event: IToolEvent
     ): void {
+        nodes = drawer.local_nodes_to_sources(nodes);
         if (event.type == "release") {
             visualization.sharedState.selection.set(nodes).commit();
         } else {

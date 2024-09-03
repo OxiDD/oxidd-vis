@@ -56,8 +56,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> RCGraph<T, 
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStructure<T, NL, LL>
     for RCGraph<T, NL, LL, G>
 {
-    fn get_root(&self) -> NodeID {
-        self.graph.read().get_root()
+    fn get_roots(&self) -> Vec<NodeID> {
+        self.graph.read().get_roots()
     }
 
     fn get_terminals(&self) -> Vec<NodeID> {
@@ -90,5 +90,13 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
 
     fn consume_events(&mut self, reader: &GraphEventsReader) -> Vec<Change> {
         self.graph.get().consume_events(reader)
+    }
+
+    fn local_nodes_to_sources(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
+        self.graph.read().local_nodes_to_sources(nodes)
+    }
+
+    fn source_nodes_to_local(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
+        self.graph.read().source_nodes_to_local(nodes)
     }
 }

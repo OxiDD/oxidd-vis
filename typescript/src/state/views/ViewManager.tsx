@@ -169,6 +169,7 @@ export class ViewManager implements IViewManager {
             h
     ): IMutator {
         const locationHints = locationHintsModifier(view.openLocationHints.get());
+        console.log(locationHints);
 
         const layout = this.layoutState;
         const getContainer = (ID: string | null | undefined) =>
@@ -186,7 +187,10 @@ export class ViewManager implements IViewManager {
                     (cur, hint) => {
                         if (cur) return cur;
 
-                        if (hint.targetId == undefined) return hint;
+                        if (hint.targetId == undefined) {
+                            return {...hint, targetId: hint.createId};
+                        }
+
                         if (!hint.targetType || hint.targetType == "view") {
                             const container = this.getTabParent(hint.targetId);
                             if (container)
@@ -200,6 +204,7 @@ export class ViewManager implements IViewManager {
                             const container = getContainer(hint.targetId);
                             if (container) return hint;
                         }
+
                         return null;
                     },
                     null

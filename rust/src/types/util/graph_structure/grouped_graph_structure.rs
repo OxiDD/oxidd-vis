@@ -9,7 +9,7 @@ use super::graph_structure::{DrawTag, EdgeType};
 
 pub trait GroupedGraphStructure<T: DrawTag, GL, LL> {
     type Tracker: NodeTracker;
-    fn get_root(&self) -> NodeGroupID;
+    fn get_roots(&self) -> Vec<NodeGroupID>;
     fn get_all_groups(&self) -> Vec<NodeGroupID>;
     fn get_hidden(&self) -> Option<NodeGroupID>;
     fn get_group(&self, node: NodeID) -> NodeGroupID;
