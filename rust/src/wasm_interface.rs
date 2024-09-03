@@ -53,8 +53,8 @@ impl DiagramSectionBox {
 pub struct DiagramSectionDrawerBox(Box<dyn DiagramSectionDrawer>);
 #[wasm_bindgen]
 impl DiagramSectionDrawerBox {
-    pub fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
-        self.0.render(time, selected_ids, hovered_ids);
+    pub fn render(&mut self, time: u32) -> () {
+        self.0.render(time);
     }
     pub fn layout(&mut self, time: u32) -> () {
         self.0.layout(time);
@@ -71,12 +71,23 @@ impl DiagramSectionDrawerBox {
     pub fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
         self.0.create_group(from)
     }
-    /// Coordinates in screen space (-0.5 to 0.5), not in world space
-    pub fn get_nodes(&self, x: f32, y: f32, width: f32, height: f32) -> Vec<NodeGroupID> {
-        self.0.get_nodes(Rectangle::new(x, y, width, height))
+    /// Coordinates in screen space (-0.5 to 0.5), not in world space. Additionally the max_group_expansion should be provided for determining the maximum number of nodes to select for every given group
+    pub fn get_nodes(
+        &self,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        max_group_expansion: usize,
+    ) -> Vec<NodeGroupID> {
+        self.0
+            .get_nodes(Rectangle::new(x, y, width, height), max_group_expansion)
     }
-    pub fn split_edges(&mut self, group: NodeGroupID, fully: bool) {
-        self.0.split_edges(group, fully);
+    pub fn set_selected_nodes(&mut self, selected_ids: &[NodeID], hovered_ids: &[NodeID]) {
+        self.0.set_selected_nodes(selected_ids, hovered_ids);
+    }
+    pub fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
+        self.0.split_edges(nodes, fully);
     }
     pub fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) {
         self.0.set_terminal_mode(terminal, mode);

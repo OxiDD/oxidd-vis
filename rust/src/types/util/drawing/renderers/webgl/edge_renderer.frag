@@ -7,6 +7,8 @@ struct EdgeType {
     vec3 color;
     vec3 hoverColor;
     vec3 selectColor;
+    vec3 partialHoverColor;
+    vec3 partialSelectColor;
     float width;
     float dashSolid;
     float dashTransparent;
@@ -110,7 +112,9 @@ void main() {
 
 
     vec3 typeColor = typeData.color;
-    if (outState >= 1.) typeColor = typeData.hoverColor;
-    if (outState >= 2.) typeColor = typeData.selectColor;
+    if (outState >= 1.) typeColor = typeData.partialHoverColor;
+    if (outState >= 2.) typeColor = typeData.hoverColor;
+    if (outState >= 3.) typeColor = typeData.partialSelectColor;
+    if (outState >= 4.) typeColor = typeData.selectColor;
     outColor = vec4(typeColor, curExists * alpha);
 }

@@ -12,6 +12,7 @@ import {ISharedVisualizationState} from "./_types/ISharedVisualizationState";
 import {IRectangle} from "../../utils/_types/IRectangle";
 import {ITool} from "../toolbar/_types/ITool";
 import {IToolEvent} from "../toolbar/_types/IToolEvent";
+import {Derived} from "../../watchables/Derived";
 
 /** The state of a single visualization of a diagram */
 export class DiagramVisualizationState extends ViewState {
@@ -36,6 +37,10 @@ export class DiagramVisualizationState extends ViewState {
 
     /** Visualization state shared between visualizations of this diagram */
     public readonly sharedState: ISharedVisualizationState;
+    protected selectionObserver: Observer<{
+        selected: Uint32Array;
+        highlight: Uint32Array;
+    }>;
 
     /**
      * Creates a new diagram visualization
@@ -55,6 +60,12 @@ export class DiagramVisualizationState extends ViewState {
         this.sharedState = sharedState;
 
         this.drawer.layout(Date.now() - this.start);
+        this.selectionObserver = new Observer(
+            new Derived(watch => ({
+                selected: watch(sharedState.selection),
+                highlight: watch(sharedState.highlight),
+            }))
+        ).add(() => this.sendHighlight(), true);
     }
 
     /** Updates the transform on rust's side */
@@ -69,6 +80,13 @@ export class DiagramVisualizationState extends ViewState {
             transform.offset.x,
             transform.offset.y,
             transform.scale
+        );
+    }
+
+    protected sendHighlight() {
+        this.drawer.set_selected_nodes(
+            this.sharedState.selection.get(),
+            this.sharedState.highlight.get()
         );
     }
 
@@ -104,17 +122,13 @@ export class DiagramVisualizationState extends ViewState {
         const yRel = area.left_top.y / canvasArea.height - 0.5;
         const widthRel = area.size.x / canvasArea.width;
         const heightRel = area.size.y / canvasArea.height;
-        return this.drawer.get_nodes(xRel, -yRel - heightRel, widthRel, heightRel);
+        return this.drawer.get_nodes(xRel, -yRel - heightRel, widthRel, heightRel, 500); // TODO: create selection number setting
     }
 
     /** Renders a frame to the canvas */
     public render() {
         const time = Date.now() - this.start;
-        this.drawer.render(
-            time,
-            this.sharedState.selection.get(),
-            this.sharedState.highlight.get()
-        );
+        this.drawer.render(time);
     }
 
     // State management

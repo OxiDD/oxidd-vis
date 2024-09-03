@@ -88,15 +88,8 @@ impl LayerRenderer {
     //     self.text_renderer.set_screen_height(context, height);
     // }
 
-    pub fn render(
-        &mut self,
-        context: &WebGl2RenderingContext,
-        time: u32,
-        selected_ids: &[u32],
-        hovered_ids: &[u32],
-    ) {
-        self.division_renderer
-            .render(context, time, selected_ids, hovered_ids);
+    pub fn render(&mut self, context: &WebGl2RenderingContext, time: u32) {
+        self.division_renderer.render(context, time);
 
         self.text_renderer.render(context, time);
     }
@@ -110,12 +103,6 @@ impl LayerRenderer {
 pub trait LayerDivisionRenderer {
     fn set_layers(&mut self, context: &WebGl2RenderingContext, layers: &Vec<Layer>);
     fn set_transform(&mut self, context: &WebGl2RenderingContext, transform: &Matrix4);
-    fn render(
-        &mut self,
-        context: &WebGl2RenderingContext,
-        time: u32,
-        selected_ids: &[u32],
-        hovered_ids: &[u32],
-    );
+    fn render(&mut self, context: &WebGl2RenderingContext, time: u32);
     fn dispose(&mut self, context: &WebGl2RenderingContext);
 }

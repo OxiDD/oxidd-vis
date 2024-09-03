@@ -29,6 +29,7 @@ use crate::util::rc_refcell::MutRcRefCell;
 use crate::util::rectangle::Rectangle;
 use crate::wasm_interface::NodeGroupID;
 use crate::wasm_interface::NodeID;
+use crate::wasm_interface::StepData;
 use crate::wasm_interface::TargetID;
 use crate::wasm_interface::TargetIDType;
 use oxidd::bdd::BDDFunction;
@@ -129,8 +130,10 @@ where
         let c1 = (0.4, 0.4, 0.4);
         let c2 = (0.6, 0.6, 0.6);
 
+        let select_color = ((0.3, 0.3, 1.0), 0.8);
+        let partial_select_color = ((0.6, 0.0, 1.0), 0.7);
         let hover_color = ((0.0, 0.0, 1.0), 0.3);
-        let select_color = ((0.0, 0.0, 1.0), 0.8);
+        let partial_hover_color = ((1.0, 0.0, 0.8), 0.2);
 
         let renderer = WebglRenderer::from_canvas(
             canvas,
@@ -141,6 +144,16 @@ where
                         color: c0,
                         hover_color: mix_color(c0, hover_color.0, hover_color.1),
                         select_color: mix_color(c0, select_color.0, select_color.1),
+                        partial_hover_color: mix_color(
+                            c0,
+                            partial_hover_color.0,
+                            partial_hover_color.1,
+                        ),
+                        partial_select_color: mix_color(
+                            c0,
+                            partial_select_color.0,
+                            partial_select_color.1,
+                        ),
                         width: 0.15,
                         dash_solid: 1.0,
                         dash_transparent: 0.0, // No dashing, just solid
@@ -152,6 +165,16 @@ where
                         color: c1,
                         hover_color: mix_color(c1, hover_color.0, hover_color.1),
                         select_color: mix_color(c1, select_color.0, select_color.1),
+                        partial_hover_color: mix_color(
+                            c1,
+                            partial_hover_color.0,
+                            partial_hover_color.1,
+                        ),
+                        partial_select_color: mix_color(
+                            c1,
+                            partial_select_color.0,
+                            partial_select_color.1,
+                        ),
                         width: 0.15,
                         dash_solid: 0.2,
                         dash_transparent: 0.1,
@@ -163,14 +186,26 @@ where
                         color: c2,
                         hover_color: mix_color(c2, hover_color.0, hover_color.1),
                         select_color: mix_color(c2, select_color.0, select_color.1),
+                        partial_hover_color: mix_color(
+                            c2,
+                            partial_hover_color.0,
+                            partial_hover_color.1,
+                        ),
+                        partial_select_color: mix_color(
+                            c2,
+                            partial_select_color.0,
+                            partial_select_color.1,
+                        ),
                         width: 0.1,
                         dash_solid: 1.0,
                         dash_transparent: 0.0,
                     },
                 ),
             ]),
-            hover_color,
             select_color,
+            partial_select_color,
+            hover_color,
+            partial_hover_color,
         )
         .unwrap();
         let layout = LayeredLayout::new(
@@ -274,8 +309,8 @@ impl<
         L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > DiagramSectionDrawer for QDDDiagramDrawer<T, G, R, L>
 {
-    fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) -> () {
-        self.drawer.render(time, selected_ids, hovered_ids);
+    fn render(&mut self, time: u32) -> () {
+        self.drawer.render(time);
     }
 
     fn layout(&mut self, time: u32) -> () {
@@ -286,31 +321,28 @@ impl<
         self.drawer.set_transform(width, height, x, y, scale);
     }
 
-    fn set_step(&mut self, step: i32) -> Option<crate::wasm_interface::StepData> {
+    fn set_step(&mut self, step: i32) -> Option<StepData> {
         todo!()
     }
 
-    fn set_group(
-        &mut self,
-        from: Vec<crate::wasm_interface::TargetID>,
-        to: crate::wasm_interface::NodeGroupID,
-    ) -> bool {
+    fn set_group(&mut self, from: Vec<TargetID>, to: NodeGroupID) -> bool {
         self.group_manager.get().set_group(from, to)
     }
 
-    fn create_group(
-        &mut self,
-        from: Vec<crate::wasm_interface::TargetID>,
-    ) -> crate::wasm_interface::NodeGroupID {
+    fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
         self.group_manager.get().create_group(from)
     }
 
-    fn split_edges(&mut self, group: NodeGroupID, fully: bool) {
-        self.group_manager.get().split_edges(group, fully);
+    fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
+        self.group_manager.get().split_edges(nodes, fully);
     }
 
-    fn get_nodes(&self, area: Rectangle) -> Vec<crate::wasm_interface::NodeGroupID> {
-        self.drawer.get_nodes(area)
+    fn get_nodes(&self, area: Rectangle, max_group_expansion: usize) -> Vec<NodeID> {
+        self.drawer.get_nodes(area, max_group_expansion)
+    }
+
+    fn set_selected_nodes(&mut self, selected_ids: &[NodeID], hovered_ids: &[NodeID]) {
+        self.drawer.select_nodes(selected_ids, hovered_ids);
     }
 
     fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) -> () {

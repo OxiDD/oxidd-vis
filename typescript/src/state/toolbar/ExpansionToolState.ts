@@ -19,9 +19,7 @@ export class ExpansionToolState extends ViewState implements ITool {
         if (event.type != "release") return false;
         console.log("expanding"); // TODO:
 
-        for (let node of nodes) {
-            drawer.split_edges(node, true);
-        }
+        drawer.split_edges(nodes, true);
         return true;
     }
 }

@@ -3,6 +3,8 @@ struct EdgeType {
     vec3 color;
     vec3 hoverColor;
     vec3 selectColor;
+    vec3 partialHoverColor;
+    vec3 partialSelectColor;
     float width;
     float dashSolid;
     float dashTransparent;

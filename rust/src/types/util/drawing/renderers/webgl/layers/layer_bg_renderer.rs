@@ -104,13 +104,7 @@ impl LayerDivisionRenderer for LayerBgRenderer {
         });
     }
 
-    fn render(
-        &mut self,
-        context: &WebGl2RenderingContext,
-        time: u32,
-        selected_ids: &[u32],
-        hovered_ids: &[u32],
-    ) {
+    fn render(&mut self, context: &WebGl2RenderingContext, time: u32) {
         self.bg_renderer
             .set_uniform(context, "time", |u| context.uniform1f(u, time as f32));
 

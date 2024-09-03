@@ -123,7 +123,7 @@ impl LayerDivisionRenderer for LayerLinesRenderer {
         });
     }
 
-    fn render(&mut self, context: &Gl, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) {
+    fn render(&mut self, context: &Gl, time: u32) {
         self.vertex_renderer
             .set_uniform(context, "time", |u| context.uniform1f(u, time as f32));
 

@@ -609,42 +609,21 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         new_id
     }
 
-    pub fn split_edges(&mut self, group_id: NodeGroupID, fully: bool) {
-        // TODO: rethink this entire approach, one nodeID can end up in multiple splits atm
-        let Some(group) = &self.group_by_id.get(&group_id) else {
-            return;
-        };
-        let group_nodes = group.nodes.keys().cloned().collect_vec();
-        let mut splits: HashMap<(EdgeType<T>, NodeGroupID), HashSet<NodeID>> = HashMap::new();
-        for node in group_nodes {
-            let children = &self.graph.get_children(node);
-            for (edge_type, to) in children {
-                let to_group = self.get_group(*to);
-                splits
-                    .entry((*edge_type, to_group))
-                    .or_insert_with(|| HashSet::new())
-                    .insert(*to);
-            }
-        }
-
-        for ((_, group_id), nodes) in splits {
-            let already_group = self.get_nodes_of_group(group_id).eq(nodes.clone());
-            if already_group {
-                continue;
-            }
-
-            if fully {
-                for node in nodes {
-                    self.create_group(vec![TargetID(TargetIDType::NodeID, node)]);
+    pub fn split_edges(&mut self, node_ids: &[NodeID], fully: bool) {
+        // TODO: come up with a better splitting approach that considers nodes together
+        let mut split = HashSet::new();
+        for &node_id in node_ids {
+            let children = &self.graph.get_children(node_id);
+            for &(_, child) in children {
+                if split.contains(&child) {
+                    continue;
                 }
-            } else {
-                console::log!("create-group: {}", nodes.iter().join(", "));
-                self.create_group(
-                    nodes
-                        .iter()
-                        .map(|&node| TargetID(TargetIDType::NodeID, node))
-                        .collect(),
-                );
+
+                split.insert(child);
+                if self.get_nodes_of_group(self.get_group(child)).len() == 1 {
+                    continue;
+                }
+                self.create_group(vec![TargetID(TargetIDType::NodeID, child)]);
             }
         }
     }

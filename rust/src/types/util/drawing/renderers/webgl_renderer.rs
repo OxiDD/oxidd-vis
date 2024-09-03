@@ -12,11 +12,12 @@ use crate::{
         drawing::{
             diagram_layout::{DiagramLayout, Point, Transition},
             layouts::util::color_label::Color,
-            renderer::Renderer,
+            renderer::{GroupSelection, Renderer},
         },
         graph_structure::graph_structure::{DrawTag, EdgeType},
     },
     util::{logging::console, transformation::Transformation},
+    wasm_interface::NodeGroupID,
 };
 
 use super::webgl::{
@@ -39,8 +40,6 @@ pub struct WebglRenderer<T: DrawTag> {
     layer_renderer: LayerRenderer,
     edge_type_ids: HashMap<EdgeType<T>, usize>,
     screen_texture: ScreenTexture,
-    old_selected_ids: Vec<u32>,
-    old_hovered_ids: Vec<u32>,
 }
 
 impl<T: DrawTag> WebglRenderer<T> {
@@ -48,8 +47,10 @@ impl<T: DrawTag> WebglRenderer<T> {
         context: WebGl2RenderingContext,
         screen_texture: ScreenTexture,
         edge_types: HashMap<EdgeType<T>, EdgeRenderingType>,
-        hover_color: (Color, f32),
         select_color: (Color, f32),
+        partial_select_color: (Color, f32),
+        hover_color: (Color, f32),
+        partial_hover_color: (Color, f32),
     ) -> Result<WebglRenderer<T>, JsValue> {
         let (edge_type_ids, edge_rendering_types): (
             HashMap<EdgeType<T>, usize>,
@@ -62,7 +63,13 @@ impl<T: DrawTag> WebglRenderer<T> {
             })
             .unzip();
         Ok(WebglRenderer {
-            node_renderer: NodeRenderer::new(&context, hover_color, select_color),
+            node_renderer: NodeRenderer::new(
+                &context,
+                select_color,
+                partial_select_color,
+                hover_color,
+                partial_hover_color,
+            ),
             edge_renderer: EdgeRenderer::new(&context, edge_rendering_types),
             layer_renderer: LayerRenderer::new(
                 &context,
@@ -80,15 +87,15 @@ impl<T: DrawTag> WebglRenderer<T> {
             webgl_context: context,
             screen_texture,
             edge_type_ids,
-            old_selected_ids: Vec::new(),
-            old_hovered_ids: Vec::new(),
         })
     }
     pub fn from_canvas(
         canvas: HtmlCanvasElement,
         edge_types: HashMap<EdgeType<T>, EdgeRenderingType>,
-        hover_color: (Color, f32),
         select_color: (Color, f32),
+        partial_select_color: (Color, f32),
+        hover_color: (Color, f32),
+        partial_hover_color: (Color, f32),
     ) -> Result<WebglRenderer<T>, JsValue> {
         let context = canvas
             .get_context("webgl2")
@@ -109,8 +116,10 @@ impl<T: DrawTag> WebglRenderer<T> {
                 (1.0, 1.0, 1.0, 1.0),
             ),
             edge_types,
-            hover_color,
             select_color,
+            partial_select_color,
+            hover_color,
+            partial_hover_color,
         )
     }
 }
@@ -187,52 +196,17 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
                 })
                 .collect(),
         );
-
-        self.node_renderer.update_selection(
-            &self.webgl_context,
-            &self.old_selected_ids,
-            &[],
-            &self.old_hovered_ids,
-            &[],
-        );
-        self.edge_renderer.update_selection(
-            &self.webgl_context,
-            &self.old_selected_ids,
-            &[],
-            &self.old_hovered_ids,
-            &[],
-        );
     }
 
-    fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) {
-        let selection_changed = selected_ids != &self.old_selected_ids[..];
-        let hover_changed = hovered_ids != &self.old_hovered_ids[..];
-        if selection_changed || hover_changed {
-            self.node_renderer.update_selection(
-                &self.webgl_context,
-                selected_ids,
-                &self.old_selected_ids,
-                hovered_ids,
-                &self.old_hovered_ids,
-            );
-            self.edge_renderer.update_selection(
-                &self.webgl_context,
-                selected_ids,
-                &self.old_selected_ids,
-                hovered_ids,
-                &self.old_hovered_ids,
-            );
-        }
-        if selection_changed {
-            self.old_selected_ids = Vec::from(selected_ids);
-        }
-        if hover_changed {
-            self.old_hovered_ids = Vec::from(hovered_ids);
-        }
-
+    fn select_groups(&mut self, selection: GroupSelection, old_selection: GroupSelection) {
+        self.node_renderer
+            .update_selection(&self.webgl_context, &selection, &old_selection);
+        self.edge_renderer
+            .update_selection(&self.webgl_context, &selection, &old_selection);
+    }
+    fn render(&mut self, time: u32) {
         self.screen_texture.clear(&self.webgl_context);
-        self.layer_renderer
-            .render(&self.webgl_context, time, selected_ids, hovered_ids);
+        self.layer_renderer.render(&self.webgl_context, time);
         self.edge_renderer.render(&self.webgl_context, time);
         self.node_renderer.render(&self.webgl_context, time);
     }

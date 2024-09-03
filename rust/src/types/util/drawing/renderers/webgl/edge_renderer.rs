@@ -10,6 +10,7 @@ use web_sys::{WebGl2RenderingContext, WebGlTexture};
 use crate::{
     types::util::drawing::{
         diagram_layout::{Point, Transition},
+        renderer::GroupSelection,
         renderers::webgl::util::set_animated_data::{self, set_animated_data},
     },
     util::{logging::console, matrix4::Matrix4},
@@ -38,8 +39,10 @@ pub struct Edge {
 #[derive(Clone)]
 pub struct EdgeRenderingType {
     pub color: (f32, f32, f32),
-    pub hover_color: (f32, f32, f32),
     pub select_color: (f32, f32, f32),
+    pub partial_select_color: (f32, f32, f32),
+    pub hover_color: (f32, f32, f32),
+    pub partial_hover_color: (f32, f32, f32),
     pub width: f32,
     pub dash_solid: f32, // The distance per period over which this dash should be solid
     pub dash_transparent: f32, // The distance per
@@ -162,12 +165,10 @@ impl EdgeRenderer {
     pub fn update_selection(
         &mut self,
         context: &WebGl2RenderingContext,
-        selected_ids: &[u32],
-        prev_selected_ids: &[u32],
-        hover_ids: &[u32],
-        prev_hover_ids: &[u32],
+        selection: &GroupSelection,
+        old_selection: &GroupSelection,
     ) {
-        let to_indices = |ids: &[u32]| {
+        let to_indices = |ids: &[NodeGroupID]| {
             ids.iter()
                 .filter_map(|id| self.node_edge_indices.get_vec(&(*id as usize)))
                 .flatten()
@@ -175,29 +176,45 @@ impl EdgeRenderer {
                 .collect::<HashSet<usize>>()
         };
 
-        let new_selected_indices = to_indices(selected_ids);
-        let new_hover_indices = to_indices(hover_ids);
-        let old_selected_indices = to_indices(prev_selected_ids);
-        let old_hover_indices = to_indices(prev_hover_ids);
+        let new_selected_indices = to_indices(selection.0);
+        let new_partially_selected_indices = to_indices(selection.1);
+        let new_hover_indices = to_indices(selection.2);
+        let new_partially_hover_indices = to_indices(selection.3);
+        let old_selected_indices = to_indices(old_selection.0);
+        let old_partially_selected_indices = to_indices(old_selection.1);
+        let old_hover_indices = to_indices(old_selection.2);
+        let old_partially_hover_indices = to_indices(old_selection.3);
 
         let indices = new_selected_indices
             .iter()
             .chain(old_selected_indices.iter())
+            .chain(new_partially_selected_indices.iter())
+            .chain(old_partially_selected_indices.iter())
             .chain(new_hover_indices.iter())
-            .chain(old_hover_indices.iter());
+            .chain(old_hover_indices.iter())
+            .chain(new_partially_hover_indices.iter())
+            .chain(old_partially_hover_indices.iter());
 
         let state_updates = indices.filter_map(|index| {
             let new_state = if new_selected_indices.contains(&index) {
-                2
+                4
+            } else if new_partially_selected_indices.contains(&index) {
+                3
             } else if new_hover_indices.contains(&index) {
+                2
+            } else if new_partially_hover_indices.contains(&index) {
                 1
             } else {
                 0
             };
 
             let old_state = if old_selected_indices.contains(&index) {
-                2
+                4
+            } else if old_partially_selected_indices.contains(&index) {
+                3
             } else if old_hover_indices.contains(&index) {
+                2
+            } else if old_partially_hover_indices.contains(&index) {
                 1
             } else {
                 0
@@ -239,6 +256,18 @@ impl EdgeRenderer {
             self.vertex_renderer.set_uniform(
                 context,
                 &format!("edgeTypes[{index}].selectColor"),
+                |u| context.uniform3f(u, c.0, c.1, c.2),
+            );
+            let c = edge_type.partial_hover_color;
+            self.vertex_renderer.set_uniform(
+                context,
+                &format!("edgeTypes[{index}].partialHoverColor"),
+                |u| context.uniform3f(u, c.0, c.1, c.2),
+            );
+            let c = edge_type.partial_select_color;
+            self.vertex_renderer.set_uniform(
+                context,
+                &format!("edgeTypes[{index}].partialSelectColor"),
                 |u| context.uniform3f(u, c.0, c.1, c.2),
             );
             self.vertex_renderer

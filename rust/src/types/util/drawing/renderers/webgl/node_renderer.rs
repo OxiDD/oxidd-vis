@@ -9,6 +9,7 @@ use crate::{
     types::util::drawing::{
         diagram_layout::{Point, Transition},
         layouts::util::color_label::Color,
+        renderer::GroupSelection,
         renderers::webgl::util::set_animated_data::set_animated_data,
     },
     util::{logging::console, matrix4::Matrix4},
@@ -19,9 +20,11 @@ use super::util::{mix_color::mix_color, vertex_renderer::VertexRenderer};
 
 pub struct NodeRenderer {
     vertex_renderer: VertexRenderer,
-    node_indices: HashMap<u32, NodeData>,
+    node_indices: HashMap<NodeGroupID, NodeData>,
     hover_color: (Color, f32),
     select_color: (Color, f32),
+    partial_hover_color: (Color, f32),
+    partial_select_color: (Color, f32),
 }
 pub struct NodeData {
     index: usize,
@@ -42,8 +45,10 @@ pub struct Node {
 impl NodeRenderer {
     pub fn new(
         context: &WebGl2RenderingContext,
-        hover_color: (Color, f32),
         select_color: (Color, f32),
+        partial_select_color: (Color, f32),
+        hover_color: (Color, f32),
+        partial_hover_color: (Color, f32),
     ) -> NodeRenderer {
         let vertex_renderer = VertexRenderer::new(
             context,
@@ -56,6 +61,8 @@ impl NodeRenderer {
             node_indices: HashMap::new(),
             hover_color,
             select_color,
+            partial_hover_color,
+            partial_select_color,
         }
     }
 
@@ -65,7 +72,7 @@ impl NodeRenderer {
             .enumerate()
             .map(|(index, node)| {
                 (
-                    node.ID as u32,
+                    node.ID,
                     NodeData {
                         index: index,
                         color: node.color.new.clone(),
@@ -114,38 +121,55 @@ impl NodeRenderer {
     pub fn update_selection(
         &mut self,
         context: &WebGl2RenderingContext,
-        selected_ids: &[u32],
-        prev_selected_ids: &[u32],
-        hover_ids: &[u32],
-        prev_hover_ids: &[u32],
+        selection: &GroupSelection,
+        old_selection: &GroupSelection,
     ) {
         let select_color = self.select_color.clone();
+        let partial_select_color = self.partial_select_color.clone();
         let hover_color = self.hover_color.clone();
+        let partial_hover_color = self.partial_hover_color.clone();
 
-        let ids = selected_ids
+        let ids = selection
+            .0
             .iter()
-            .chain(prev_selected_ids.iter())
-            .chain(hover_ids.iter())
-            .chain(prev_hover_ids.iter());
+            .chain(selection.1.iter())
+            .chain(selection.2.iter())
+            .chain(selection.3.iter())
+            .chain(old_selection.0.iter())
+            .chain(old_selection.1.iter())
+            .chain(old_selection.2.iter())
+            .chain(old_selection.3.iter());
 
-        let new_select: HashSet<u32> = selected_ids.iter().cloned().collect();
-        let new_hover: HashSet<u32> = hover_ids.iter().cloned().collect();
-        let old_select: HashSet<u32> = prev_selected_ids.iter().cloned().collect();
-        let old_hover: HashSet<u32> = prev_hover_ids.iter().cloned().collect();
+        let new_select: HashSet<NodeGroupID> = selection.0.iter().cloned().collect();
+        let new_partial_select: HashSet<NodeGroupID> = selection.1.iter().cloned().collect();
+        let new_hover: HashSet<NodeGroupID> = selection.2.iter().cloned().collect();
+        let new_partial_hover: HashSet<NodeGroupID> = selection.3.iter().cloned().collect();
+        let old_select: HashSet<NodeGroupID> = old_selection.0.iter().cloned().collect();
+        let old_partial_select: HashSet<NodeGroupID> = old_selection.1.iter().cloned().collect();
+        let old_hover: HashSet<NodeGroupID> = old_selection.2.iter().cloned().collect();
+        let old_partial_hover: HashSet<NodeGroupID> = old_selection.3.iter().cloned().collect();
 
         let color_updates = ids.filter_map(|id| {
             let new_color = if new_select.contains(&id) {
                 Some(select_color)
+            } else if new_partial_select.contains(&id) {
+                Some(partial_select_color)
             } else if new_hover.contains(&id) {
                 Some(hover_color)
+            } else if new_partial_hover.contains(&id) {
+                Some(partial_hover_color)
             } else {
                 None
             };
 
             let old_color = if old_select.contains(&id) {
                 Some(select_color)
+            } else if old_partial_select.contains(&id) {
+                Some(partial_select_color)
             } else if old_hover.contains(&id) {
                 Some(hover_color)
+            } else if old_partial_hover.contains(&id) {
+                Some(partial_hover_color)
             } else {
                 None
             };

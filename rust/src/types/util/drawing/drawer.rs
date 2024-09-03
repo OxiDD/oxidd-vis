@@ -6,9 +6,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use js_sys::Date;
-use oxidd::{Function, Manager};
+use oxidd::{Function, Manager, NodeID};
 use oxidd_core::Tag;
 use web_sys::WebGl2RenderingContext;
 
@@ -26,12 +26,13 @@ use crate::{
         rectangle::Rectangle,
         transformation::Transformation,
     },
+    wasm_interface::NodeGroupID,
 };
 
 use super::{
     diagram_layout::{DiagramLayout, Point},
     layout_rules::LayoutRules,
-    renderer::Renderer,
+    renderer::{GroupSelection, Renderer},
 };
 
 pub struct Drawer<
@@ -47,7 +48,10 @@ pub struct Drawer<
     graph: MutRcRefCell<G>,
     sources: G::Tracker,
     transform: Transformation,
+    selection: SelectionData,
 }
+
+type SelectionData = (Vec<NodeGroupID>, Vec<NodeGroupID>);
 
 impl<
         T: DrawTag,
@@ -68,6 +72,7 @@ impl<
                 layers: Vec::new(),
             },
             transform: Transformation::default(),
+            selection: (Vec::new(), Vec::new()),
         }
     }
 
@@ -81,7 +86,10 @@ impl<
         self.sources.retain(|group_id| used_ids.contains(&group_id));
         self.sources.remove_sources();
 
+        let old_selection = self.selection.clone();
+        self.select_nodes(&[], &[]);
         self.renderer.update_layout(&self.layout);
+        self.select_nodes(&old_selection.0[..], &old_selection.1[..]);
     }
     pub fn set_transform(&mut self, width: u32, height: u32, x: f32, y: f32, scale: f32) {
         let transform = Transformation {
@@ -94,17 +102,76 @@ impl<
         self.transform = transform.clone();
         self.renderer.set_transform(transform);
     }
-    pub fn render(&mut self, time: u32, selected_ids: &[u32], hovered_ids: &[u32]) {
-        self.renderer.render(time, selected_ids, hovered_ids);
+
+    pub fn render(&mut self, time: u32) {
+        self.renderer.render(time);
     }
 
-    pub fn get_nodes(&self, area: Rectangle) -> Vec<crate::wasm_interface::NodeGroupID> {
+    pub fn get_nodes(&self, area: Rectangle, max_group_expansion: usize) -> Vec<NodeID> {
         let area = area.transform(self.transform.get_inverse_matrix());
-        self.layout
+        let groups = self
+            .layout
             .groups
             .iter()
             .filter(|(_, node_layout)| node_layout.get_rect().overlaps(&area))
-            .map(|(&group_id, _)| group_id)
+            .map(|(&group_id, _)| group_id);
+        groups
+            .flat_map(|group_id| {
+                self.graph
+                    .read()
+                    .get_nodes_of_group(group_id)
+                    .take(max_group_expansion)
+            })
             .collect()
+    }
+
+    pub fn select_nodes(&mut self, selected_ids: &[NodeID], hovered_ids: &[NodeID]) {
+        if selected_ids == &self.selection.0[..] && hovered_ids == &self.selection.1[..] {
+            return;
+        }
+
+        let (old_selected_group_ids, old_partially_selected_group_ids) =
+            self.get_selection_groups(&self.selection.0[..]);
+        let (old_hovered_group_ids, old_partially_hovered_group_ids) =
+            self.get_selection_groups(&self.selection.1[..]);
+
+        let (selected_group_ids, partially_selected_group_ids) =
+            self.get_selection_groups(selected_ids);
+        let (hovered_group_ids, partially_hovered_group_ids) =
+            self.get_selection_groups(hovered_ids);
+
+        let selection = (
+            &selected_group_ids[..],
+            &partially_selected_group_ids[..],
+            &hovered_group_ids[..],
+            &partially_hovered_group_ids[..],
+        );
+        let old_selection = (
+            &old_selected_group_ids[..],
+            &old_partially_selected_group_ids[..],
+            &old_hovered_group_ids[..],
+            &old_partially_hovered_group_ids[..],
+        );
+        self.renderer.select_groups(selection, old_selection);
+
+        self.selection = (Vec::from(selected_ids), Vec::from(hovered_ids));
+    }
+    fn get_selection_groups(&self, node_ids: &[NodeID]) -> (Vec<NodeGroupID>, Vec<NodeGroupID>) {
+        // TODO: make the graph track sources, and use this info for selection (such that duplicate nodes select all duplications)
+
+        let graph = self.graph.read();
+        let mut group_counts = HashMap::<NodeGroupID, usize>::new();
+        for &node_id in node_ids {
+            let group_id = graph.get_group(node_id);
+            *group_counts.entry(group_id).or_insert(0) += 1;
+        }
+
+        group_counts.iter().partition_map(|(&group_id, &count)| {
+            if graph.get_nodes_of_group(group_id).len() == count {
+                Either::Left(group_id)
+            } else {
+                Either::Right(group_id)
+            }
+        })
     }
 }
