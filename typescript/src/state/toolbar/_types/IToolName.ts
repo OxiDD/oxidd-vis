@@ -1,1 +1,1 @@
-export type IToolName = "selection" | "expansion";
+export type IToolName = "selection" | "expansion" | "grouping";

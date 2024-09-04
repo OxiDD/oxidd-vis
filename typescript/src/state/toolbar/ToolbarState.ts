@@ -12,6 +12,7 @@ import {ExpansionToolState} from "./ExpansionToolState";
 import {Constant} from "../../watchables/Constant";
 import {IToolEvent} from "./_types/IToolEvent";
 import {DiagramSectionDrawerBox} from "oxidd-viz-rust";
+import {GroupingToolState} from "./GroupingToolState";
 
 export class ToolbarState extends ViewState implements ITool {
     /** The currently selected tool */
@@ -23,10 +24,14 @@ export class ToolbarState extends ViewState implements ITool {
     /** The node (children-)expansion tool */
     public readonly expansionTool = new ExpansionToolState();
 
+    /** The node combining tool */
+    public readonly groupingTool = new GroupingToolState();
+
     /** The currently selected tool, based on the selected tool name */
     protected readonly selectedTool = new Derived(watch => {
         const selectedName = watch(this.selectedToolName);
         if (selectedName == "expansion") return this.expansionTool;
+        if (selectedName == "grouping") return this.groupingTool;
         return this.selectionTool;
     });
 
@@ -53,6 +58,7 @@ export class ToolbarState extends ViewState implements ITool {
     public readonly children = new Constant<ViewState[]>([
         this.selectionTool,
         this.expansionTool,
+        this.groupingTool,
     ]);
 
     public constructor() {

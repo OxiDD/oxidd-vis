@@ -138,6 +138,12 @@ pub enum TargetIDType {
 #[derive(PartialEq)]
 #[wasm_bindgen]
 pub struct TargetID(pub TargetIDType, pub NodeID);
+#[wasm_bindgen]
+impl TargetID {
+    pub fn new(id_type: TargetIDType, id: NodeID) -> TargetID {
+        TargetID(id_type, id)
+    }
+}
 
 pub type NodeGroupID = usize;
 pub type NodeID = usize;

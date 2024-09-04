@@ -97,8 +97,8 @@ pub trait NodeTracker: SourceReader {
 }
 
 pub trait SourceReader {
-    /// Retrieves the group that the given group originates (is created/split up/merged) from, such that for Some(s) = get_source(group) we have get_source(s) = None
-    fn get_source(&self, group: NodeGroupID) -> Option<NodeGroupID>;
+    /// Retrieves the group(s) that the given group originates (is created/split up/merged) from, such that for Some(s) = get_source(group) we have get_source(s) = None
+    fn get_sources(&self, group: NodeGroupID) -> Vec<NodeGroupID>;
     /// Removes all of the sources from this reader, so they are no longer returned
     fn remove_sources(&mut self);
 }

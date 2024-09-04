@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::DerefMut,
+};
 
 use itertools::Itertools;
 use multimap::MultiMap;
@@ -27,25 +30,39 @@ impl NodeTrackerManager {
         }
     }
 
-    pub fn add_source(&mut self, group: NodeGroupID, source: NodeGroupID) {
+    pub fn add_sources(&mut self, group: NodeGroupID, sources: Vec<NodeGroupID>) {
         let mut shared = self.shared.get();
         for reader in shared.readers.values_mut() {
-            // Remove the current source
-            if let Some(&cur_source) = reader.sources.get(&group) {
-                reader
-                    .images
-                    .get_vec_mut(&cur_source)
-                    .map(|images| images.retain(|&image| image != group));
+            if !reader.nodes.contains(&group) {
+                continue;
             }
 
-            let source = if let Some(&source_source) = reader.sources.get(&source) {
-                source_source
-            } else {
-                source
-            };
+            let sources = sources
+                .iter()
+                .flat_map(|source| {
+                    reader
+                        .sources
+                        .get(&source)
+                        .map(|sources| sources.iter().collect_vec())
+                        .unwrap_or_else(|| vec![source])
+                })
+                .cloned()
+                .collect_vec();
 
-            reader.sources.insert(group, source);
-            reader.images.insert(source, group);
+            for source in sources {
+                reader
+                    .sources
+                    .entry(group)
+                    .or_insert_with(|| HashSet::new())
+                    .deref_mut()
+                    .insert(source);
+                reader
+                    .images
+                    .entry(source)
+                    .or_insert_with(|| HashSet::new())
+                    .deref_mut()
+                    .insert(group);
+            }
         }
     }
 
@@ -85,7 +102,7 @@ impl NodeTrackerManager {
         let reader = ReaderData {
             nodes,
             sources: HashMap::new(),
-            images: MultiMap::new(),
+            images: HashMap::new(),
         };
         shared.readers.insert(id, reader);
         NodeTrackerM {
@@ -104,39 +121,7 @@ struct SharedData {
     first_id: usize,
 }
 
-struct ReaderData {
-    nodes: HashSet<NodeGroupID>,
-    sources: HashMap<NodeGroupID, NodeGroupID>, // Per node, possibly the source of said node
-    images: MultiMap<NodeGroupID, NodeGroupID>, // Per node, possibly the images (nodes for which this is the source) of that node
-}
-
 impl SharedData {
-    fn remove_group(&mut self, group_id: NodeGroupID) {
-        for reader in self.readers.values_mut() {
-            // Remove source data
-            let source = reader.sources.remove(&group_id);
-            if let Some(source) = source {
-                let source_images = reader.images.get_vec_mut(&source);
-                if let Some(source_images) = source_images {
-                    source_images.retain(|&image| image != group_id);
-                }
-            }
-
-            // Remove image data
-            let images = reader.images.remove(&group_id);
-            if let Some(images) = images {
-                for image in images {
-                    reader.sources.remove(&image);
-                }
-            }
-        }
-
-        // Free the id
-        if group_id >= self.first_id {
-            self.free_group_ids.make_available(group_id);
-        }
-    }
-
     fn sub_ref_count(&mut self, group_id: NodeGroupID) {
         let count = self
             .node_remaining_readers_count
@@ -145,7 +130,51 @@ impl SharedData {
         *count -= 1;
         if *count <= 0 {
             self.node_remaining_readers_count.remove(&group_id);
-            self.remove_group(group_id);
+
+            if group_id >= self.first_id {
+                self.free_group_ids.make_available(group_id);
+            }
+        }
+    }
+}
+
+struct ReaderData {
+    nodes: HashSet<NodeGroupID>,
+    sources: HashMap<NodeGroupID, HashSet<NodeGroupID>>, // Per node, possibly the sources of said node
+    images: HashMap<NodeGroupID, HashSet<NodeGroupID>>, // Per node, possibly the images (nodes for which this is the source) of that node
+}
+
+impl ReaderData {
+    fn remove_group(&mut self, group_id: NodeGroupID) {
+        // Remove the group
+        self.nodes.remove(&group_id);
+
+        // Remove source data
+        let sources = self.sources.remove(&group_id);
+        if let Some(sources) = sources {
+            for source in sources {
+                let Some(source_images) = self.images.get_mut(&source) else {
+                    continue;
+                };
+                source_images.remove(&group_id);
+                if source_images.len() == 0 {
+                    self.images.remove(&source);
+                }
+            }
+        }
+
+        // Remove image data
+        let images = self.images.remove(&group_id);
+        if let Some(images) = images {
+            for image in images {
+                let Some(image_sources) = self.sources.get_mut(&image) else {
+                    continue;
+                };
+                image_sources.remove(&group_id);
+                if image_sources.len() == 0 {
+                    self.sources.remove(&image);
+                }
+            }
         }
     }
 }
@@ -155,19 +184,13 @@ pub struct NodeTrackerM {
     id: usize,
 }
 impl super::graph_structure::grouped_graph_structure::SourceReader for NodeTrackerM {
-    fn get_source(&self, group: NodeGroupID) -> Option<NodeGroupID> {
+    fn get_sources(&self, group: NodeGroupID) -> Vec<NodeGroupID> {
         let shared = self.shared.read();
         let reader = shared.readers.get(&self.id).unwrap();
-        if !reader.nodes.contains(&group) {
-            return None;
+        if let Some(sources) = reader.sources.get(&group) {
+            return sources.iter().cloned().sorted().collect();
         }
-
-        if let Some(source) = reader.sources.get(&group) {
-            if reader.nodes.contains(source) {
-                return Some(*source);
-            }
-        }
-        None
+        Vec::new()
     }
 
     fn remove_sources(&mut self) {
@@ -189,7 +212,7 @@ impl super::graph_structure::grouped_graph_structure::NodeTracker for NodeTracke
                 continue;
             }
 
-            reader.nodes.remove(&group);
+            reader.remove_group(group);
             removed.insert(group);
         }
 

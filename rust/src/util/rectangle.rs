@@ -45,9 +45,23 @@ impl Rectangle {
 
     pub fn contains(&self, other: &Rectangle) -> bool {
         self.x + self.width >= other.x + other.width
-            && other.x >= self.x
+            && self.x <= other.x
             && self.y + self.height >= other.y + other.height
-            && other.y >= self.y
+            && self.y <= other.y
+    }
+
+    pub fn x_range(&self) -> Range {
+        Range {
+            start: self.x,
+            end: self.x + self.width,
+        }
+    }
+
+    pub fn y_range(&self) -> Range {
+        Range {
+            start: self.y,
+            end: self.y + self.height,
+        }
     }
 
     pub fn pos(&self) -> Point {
@@ -81,5 +95,66 @@ impl Rectangle {
             width: x_max - x_min,
             height: y_max - y_min,
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct Range {
+    pub start: f32,
+    pub end: f32,
+}
+
+impl Range {
+    pub fn overlaps(&self, other: &Range) -> bool {
+        self.start >= other.end && other.start >= self.end
+    }
+
+    pub fn contains(&self, other: &Range) -> bool {
+        self.start <= other.start && self.end >= other.end
+    }
+
+    pub fn size(&self) -> f32 {
+        self.end - self.start
+    }
+
+    /// Creates a range x, such that x.size() == self.size() && (other.contains(X) || x.contains(other)), minimizing the distance between self and x
+    pub fn bounded_to(&self, other: &Range) -> Range {
+        if self.start > other.start && self.end > other.end {
+            let size_self_not_other = self.end - other.end;
+            let size_other_not_self = self.start - other.start;
+            if size_self_not_other < size_other_not_self {
+                Range {
+                    start: other.end - self.size(),
+                    end: other.end,
+                }
+            } else {
+                Range {
+                    start: other.start,
+                    end: other.start + self.size(),
+                }
+            }
+        } else if self.start < other.start && self.end < other.end {
+            let size_self_not_other = other.start - self.start;
+            let size_other_not_self = other.end - self.end;
+            if size_self_not_other < size_other_not_self {
+                Range {
+                    start: other.start,
+                    end: other.start + self.size(),
+                }
+            } else {
+                Range {
+                    start: other.end - self.size(),
+                    end: other.end,
+                }
+            }
+        } else {
+            self.clone()
+        }
+    }
+}
+
+impl Display for Range {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}..{}", self.start, self.end,)
     }
 }

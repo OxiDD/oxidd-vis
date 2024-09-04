@@ -14,7 +14,8 @@ export const Toolbar: FC<{toolbar: ToolbarState}> = ({toolbar}) => {
                 toolbar.selectedToolName.set(e?.props.itemKey as IToolName).commit()
             }>
             <PivotItem itemIcon="ClearSelection" itemKey="selection" />
-            <PivotItem itemIcon="MaximumValue" itemKey="expansion" />
+            <PivotItem itemIcon="Split" itemKey="expansion" />
+            <PivotItem itemIcon="Combine" itemKey="grouping" />
         </Pivot>
     );
 };

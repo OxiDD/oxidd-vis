@@ -6,7 +6,7 @@ import {IToolEvent} from "./_types/IToolEvent";
 
 export class SelectionToolState extends ViewState implements ITool {
     public constructor() {
-        super("SelectionTool");
+        super("Selection Tool");
     }
 
     /** @override */
@@ -16,11 +16,12 @@ export class SelectionToolState extends ViewState implements ITool {
         nodes: Uint32Array,
         event: IToolEvent
     ): void {
-        nodes = drawer.local_nodes_to_sources(nodes);
+        const sourceNodes = drawer.local_nodes_to_sources(nodes);
         if (event.type == "release") {
-            visualization.sharedState.selection.set(nodes).commit();
+            console.log("Selected ", [...nodes]);
+            visualization.sharedState.selection.set(sourceNodes).commit();
         } else {
-            visualization.sharedState.highlight.set(nodes).commit();
+            visualization.sharedState.highlight.set(sourceNodes).commit();
         }
     }
 }

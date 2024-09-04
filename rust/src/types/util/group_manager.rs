@@ -179,7 +179,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                                 .get(&source)
                                 .or_else(|| self.group_id_by_node.get(&source))
                             {
-                                self.group_ids.add_source(group_id, source_group_id);
+                                self.group_ids.add_sources(group_id, vec![source_group_id]);
                             }
                         }
                     }
@@ -581,12 +581,14 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         &mut self,
         from: Vec<crate::wasm_interface::TargetID>,
     ) -> crate::wasm_interface::NodeGroupID {
-        let maybe_source = from
-            .get(0)
+        let sources = from
+            .iter()
             .map(|&TargetID(target_type, id)| match target_type {
                 TargetIDType::NodeID => self.get_node_group_id(id),
                 _ => id,
-            });
+            })
+            .filter(|id| self.group_by_id.contains_key(id))
+            .collect_vec();
 
         let new_id = self.group_ids.get_free_group_id_and_add();
         self.group_by_id.insert(
@@ -599,13 +601,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                 layer_max: PriorityQueue::new(),
             },
         );
-        self.set_group(from, new_id);
-        if let Some(source) = maybe_source {
-            let source_exists = self.group_by_id.contains_key(&source);
-            if source_exists {
-                self.group_ids.add_source(new_id, source);
-            }
+
+        if sources.len() > 0 {
+            self.group_ids.add_sources(new_id, sources);
         }
+        self.set_group(from, new_id);
         new_id
     }
 
@@ -699,6 +699,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                             EdgeCountData::new(to, from_level, to_level, edge_type, count)
                         },
                     )
+                    .sorted()
                     .collect::<Vec<EdgeCountData<T>>>()
                     .into_iter()
             },

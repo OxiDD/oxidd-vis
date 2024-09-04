@@ -1,22 +1,26 @@
-import {DiagramSectionDrawerBox} from "oxidd-viz-rust";
+import {DiagramSectionDrawerBox, TargetID, TargetIDType} from "oxidd-viz-rust";
 import {DiagramVisualizationState} from "../diagrams/DiagramVisualizationState";
 import {ITool} from "./_types/ITool";
 import {IToolEvent} from "./_types/IToolEvent";
 import {TempHighlightToolState} from "./util/TempHighlightToolState";
 
-export class ExpansionToolState extends TempHighlightToolState implements ITool {
+export class GroupingToolState extends TempHighlightToolState implements ITool {
     public constructor() {
-        super("Expansion Tool");
+        super("Grouping Tool");
     }
 
     /** @override */
-    protected applyRelease(
+    public applyRelease(
         visualization: DiagramVisualizationState,
         drawer: DiagramSectionDrawerBox,
         nodes: Uint32Array,
         event: IToolEvent
     ): boolean {
-        drawer.split_edges(nodes, true);
+        if (nodes.length == 0) return false;
+
+        drawer.create_group(
+            [...nodes].map(node => TargetID.new(TargetIDType.NodeID, node))
+        );
         return true;
     }
 }

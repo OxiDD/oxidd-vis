@@ -54,11 +54,13 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
     TransitionLayout<T, GL, LL, G, L>
 {
     pub fn new(layout: L) -> TransitionLayout<T, GL, LL, G, L> {
+        let speed_modifier = 3; // for testing
+                                // TODO: add parameters
         TransitionLayout {
             layout,
-            insert_duration: 900,
-            transition_duration: 600,
-            delete_duration: 300,
+            insert_duration: 900 * speed_modifier,
+            transition_duration: 600 * speed_modifier,
+            delete_duration: 300 * speed_modifier,
             tag: PhantomData,
             graph: PhantomData,
             group_label: PhantomData,
@@ -111,28 +113,21 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                         old_group: &NodeGroupLayout<T>|
          -> EdgeLayout {
             let maybe_old_edge = edge_mapping.get(&(from, edge_data.clone())).and_then(
-                |(old_from, old_edge_data)| {
+                |(old_from, old_edge_data, start_offset, end_offset)| {
                     old.groups.get(old_from).and_then(|group| {
-                        group
-                            .edges
-                            .get(old_edge_data)
-                            .map(|old_edge_layout| (old_edge_data, old_edge_layout))
+                        group.edges.get(old_edge_data).map(|old_edge_layout| {
+                            (old_edge_data, old_edge_layout, start_offset, end_offset)
+                        })
                     })
                 },
             );
 
             // let edge_type = edge_data.edge_type;
-            if let Some((old_edge_data, old_edge_layout)) = maybe_old_edge {
-                let start_node_offset = node_mapping
-                    .get(&from)
-                    .map(|(_, offset, _)| *offset)
-                    .unwrap_or_default();
+            if let Some((old_edge_data, old_edge_layout, &start_node_offset, &end_node_offset)) =
+                maybe_old_edge
+            {
                 let start_offset =
                     get_current_point(old_edge_layout.start_offset) - start_node_offset;
-                let end_node_offset = node_mapping
-                    .get(&edge_data.to)
-                    .map(|(_, offset, _)| *offset)
-                    .unwrap_or_default();
                 let end_offset = get_current_point(old_edge_layout.end_offset) - end_node_offset;
 
                 // Add all points needed for the new layout, and transition from any old points
@@ -270,7 +265,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
             })
             .map(|(id, group, (&offset, old_group, &copy_size))| {
                 let cur_size = get_current_point(old_group.size);
-                let cur_center = get_current_point(old_group.position);
+                let cur_position = get_current_point(old_group.position);
                 let start_size = if copy_size {
                     cur_size
                 } else {
@@ -310,7 +305,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                         position: Transition {
                             old_time,
                             duration,
-                            old: cur_center + offset,
+                            old: cur_position + offset,
                             new: group.position.new,
                         },
                         size: Transition {
@@ -453,6 +448,30 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                 not_used && still_exists
             })
             .map(|(&id, group)| {
+                let deleted_edges = deleted_edge_mapping.get(&id).map(|edges| {
+                    edges.iter().filter_map(|edge_data| {
+                        group.edges.get(edge_data).and_then(|edge| {
+                            let exists = get_current_float(edge.exists);
+                            if exists > 0. {
+                                Some((
+                                    edge_data.clone(),
+                                    EdgeLayout {
+                                        exists: Transition {
+                                            old_time,
+                                            duration: delete_duration,
+                                            old: exists,
+                                            new: 0.,
+                                        },
+                                        ..edge.clone()
+                                    },
+                                ))
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                });
+
                 (
                     id,
                     NodeGroupLayout {
@@ -462,24 +481,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                             old: get_current_float(group.exists),
                             new: 0.,
                         },
-                        edges: group
-                            .edges
-                            .iter()
-                            .map(|(edge_data, edge)| {
-                                (
-                                    edge_data.clone(),
-                                    EdgeLayout {
-                                        exists: Transition {
-                                            old_time,
-                                            duration: delete_duration,
-                                            old: get_current_float(edge.exists),
-                                            new: 0.,
-                                        },
-                                        ..edge.clone()
-                                    },
-                                )
-                            })
-                            .collect(),
+                        edges: deleted_edges.into_iter().flatten().collect(),
                         ..group.clone()
                     },
                 )
@@ -511,30 +513,80 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
 ) -> (
     /* A mapping from a node to (old node, offset, whether to use source size)*/
     HashMap<NodeGroupID, (NodeGroupID, Point, bool)>,
-    /* A mapping from an edge (including source node) to another edge */
-    HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, EdgeData<T>)>,
+    /* A mapping from an edge (including source node) to another edge, and the start and end offset of this edge */
+    HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, EdgeData<T>, Point, Point)>,
     /* A mapping from a node to deleted edge-datas it should fade out */
     HashMap<NodeGroupID, HashSet<EdgeData<T>>>,
 ) {
-    let mut edge_mapping: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, EdgeData<T>)> =
-        HashMap::new();
+    let mut edge_mapping: HashMap<
+        (NodeGroupID, EdgeData<T>),
+        (NodeGroupID, EdgeData<T>, Point, Point),
+    > = HashMap::new();
 
-    // Perform initial node mapping without offsets
+    // Perform node mapping
+    // let mut raw_node_mapping: HashMap<NodeGroupID, HashSet<NodeGroupID>> = new
+    // .groups
+    // .iter()
+    // .map(|(&group_id, data)| {
+    //     if old.groups.contains_key(&group_id) {
+    //         (group_id, group_id.into())
+    //     } else {
+    //         let node_sources = sources.get_sources(group_id);
+    //         let deltas = node_sources
+    //             .iter()
+    //             .filter_map(|source| {
+    //                 old.groups.contains_key(source)
+    //             })
+    //             .collect_vec();
+    //     }
+    // }).collect();
     let mut node_mapping: HashMap<NodeGroupID, (NodeGroupID, Point, bool)> = new
         .groups
         .iter()
         .map(|(&group_id, data)| {
+            let y_range = data.get_rect().y_range();
+
             (
                 group_id,
-                (
-                    if old.groups.contains_key(&group_id) {
-                        group_id
+                if let Some(old_group) = old.groups.get(&group_id) {
+                    let source_y_range = old_group.get_rect().y_range();
+                    (
+                        group_id,
+                        Point {
+                            x: 0.,
+                            y: y_range.bounded_to(&source_y_range).start - source_y_range.start,
+                        },
+                        false,
+                    )
+                } else {
+                    let node_sources = sources.get_sources(group_id);
+                    let deltas = node_sources
+                        .iter()
+                        .filter_map(|source| {
+                            old.groups.get(source).map(|source_data| {
+                                let source_y_range = source_data.get_rect().y_range();
+                                let restricted_range = y_range.bounded_to(&source_y_range);
+                                (source, restricted_range.start - source_y_range.start)
+                            })
+                        })
+                        .collect_vec();
+                    if deltas.len() == 0 {
+                        (group_id, Point { x: 0., y: 0. }, false)
                     } else {
-                        sources.get_source(group_id).unwrap_or(group_id)
-                    },
-                    Point { x: 0., y: 0. },
-                    false,
-                ),
+                        let closest = deltas
+                            .iter()
+                            .min_by(|a, b| a.1.total_cmp(&b.1)) // TODO: check if it does compute the minimum as expected, or the maximum
+                            .unwrap();
+                        (
+                            *closest.0,
+                            Point {
+                                x: 0.,
+                                y: closest.1,
+                            },
+                            false,
+                        )
+                    }
+                },
             )
         })
         .collect();
@@ -562,64 +614,194 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
         };
         node_mapping
             .entry(*node)
-            .and_modify(|(_, _, copy_size)| *copy_size = true);
+            .and_modify(|(_, offset, copy_size)| {
+                *offset = Point { x: 0., y: 0. };
+                *copy_size = true;
+            });
     }
 
     // Perform edge mapping + derive offsets
-    for (&node, &(source, _, _)) in &node_mapping.clone() {
-        for edge in graph.get_children(node) {
+    for (&group_id, group) in new.groups.iter() {
+        let group_y_range = group.get_rect().y_range();
+
+        let group_sources = sources.get_sources(group_id);
+        let group_sources = if group_sources.len() == 0 {
+            vec![group_id]
+        } else {
+            group_sources
+        };
+
+        for edge in graph.get_children(group_id) {
             let edge = edge.drop_count();
-            let Some(&(to_source, _, _)) = node_mapping.get(&edge.to) else {
-                continue;
+
+            let to_group_sources = sources.get_sources(edge.to);
+            let to_group_sources = if to_group_sources.len() == 0 {
+                vec![edge.to]
+            } else {
+                to_group_sources
             };
 
-            let mut to_level = edge.to_level;
-            // Try to account for terminals that move between layers:
-            if let Some(to_level_range) = new.groups.get(&edge.to).map(|group| group.level_range) {
-                if to_level_range.0 == to_level_range.1 {
-                    if let Some(to_source_level_range) =
-                        old.groups.get(&to_source).map(|group| group.level_range)
-                    {
-                        if to_source_level_range.0 == to_source_level_range.1 {
-                            to_level = to_level - to_level_range.0 + to_source_level_range.0
+            for (&source, &to_source) in group_sources
+                .iter()
+                .cartesian_product(to_group_sources.iter())
+            {
+                let mut to_level = edge.to_level;
+                // Try to account for terminals that move between layers:
+                if let Some(to_level_range) =
+                    new.groups.get(&edge.to).map(|group| group.level_range)
+                {
+                    if to_level_range.0 == to_level_range.1 {
+                        if let Some(to_source_level_range) =
+                            old.groups.get(&to_source).map(|group| group.level_range)
+                        {
+                            if to_source_level_range.0 == to_source_level_range.1 {
+                                to_level = to_level - to_level_range.0 + to_source_level_range.0
+                            }
                         }
                     }
-                }
-            };
+                };
 
-            let old_edge = &EdgeData {
-                to: to_source,
-                to_level,
-                ..edge
-            };
+                let old_edge = &EdgeData {
+                    to: to_source,
+                    to_level,
+                    ..edge
+                };
 
-            let Some((old_edge, old_edge_layout)) = old.groups.get(&source).and_then(|group| {
-                group
-                    .edges
-                    .get(&old_edge)
-                    .map(|edge_layout| (old_edge, edge_layout))
-            }) else {
-                continue;
-            };
+                let Some((old_edge, old_edge_layout)) = old.groups.get(&source).and_then(|group| {
+                    group
+                        .edges
+                        .get(&old_edge)
+                        .map(|edge_layout| (old_edge, edge_layout))
+                }) else {
+                    console::log!("Detect not found");
+                    continue;
+                };
 
-            edge_mapping.insert((node, edge.clone()), (source, old_edge.clone()));
+                // let start_delta =
+                // let (start_delta, end_delta) = if let Some(new_edge_layout) = new
+                //     .groups
+                //     .get(&node)
+                //     .and_then(|group| group.edges.get(&edge))
+                // {
+                //     (
+                //         old_edge_layout.start_offset.new - new_edge_layout.start_offset.new,
+                //         old_edge_layout.end_offset.new
+                //             - new_edge_layout.end_offset.new
+                //             - node_offset,
+                //     )
+                // } else {
+                //     (Point::default(), Point::default())
+                // };
+                // let source
 
-            let Some(new_edge_layout) = new
-                .groups
-                .get(&node)
-                .and_then(|group| group.edges.get(&edge))
-            else {
-                continue;
-            };
+                let start_delta = old
+                    .groups
+                    .get(&source)
+                    .map(|source_group| {
+                        let source_y_range = source_group.get_rect().y_range();
+                        let restricted_range = group_y_range.bounded_to(&source_y_range);
+                        restricted_range.start - source_y_range.start
+                    })
+                    .unwrap_or_default();
+                let to_group_y_range = new.groups.get(&edge.to).unwrap().get_rect().y_range();
+                let end_delta = old
+                    .groups
+                    .get(&to_source)
+                    .map(|source_group| {
+                        let source_y_range = source_group.get_rect().y_range();
+                        let restricted_range = to_group_y_range.bounded_to(&source_y_range);
+                        restricted_range.start - source_y_range.start
+                    })
+                    .unwrap_or_default();
 
-            if let Some((_, offset, false)) = node_mapping.get_mut(&edge.to) {
-                *offset =
-                    get_current_point(old_edge_layout.end_offset) - new_edge_layout.end_offset.old;
+                let start_offset = node_mapping.get(&group_id).unwrap().1
+                    + Point {
+                        x: 0.,
+                        y: start_delta,
+                    };
+                let end_offset = node_mapping
+                    .get(&edge.to)
+                    .map(|&(_, offset, _)| offset)
+                    .unwrap_or_default()
+                    + Point {
+                        x: 0.,
+                        y: end_delta,
+                    };
+
+                edge_mapping.insert(
+                    (group_id, edge.clone()),
+                    (source, old_edge.clone(), start_offset, end_offset),
+                );
+
+                break;
             }
-            if let Some((_, offset, false)) = node_mapping.get_mut(&node) {
-                *offset = get_current_point(old_edge_layout.start_offset)
-                    - new_edge_layout.start_offset.old;
-            }
+
+            // for &source in &node_sources {
+            //     // if let Some((old_edge, old_edge_layout)) =
+            //     //     old.groups.get(&source).and_then(|group| {
+            //     //         group
+            //     //             .edges
+            //     //             .get(&old_edge)
+            //     //             .map(|edge_layout| (old_edge, edge_layout))
+            //     //     })
+            //     // {
+            //     //     edge_mapping.insert((node, edge.clone()), (source, old_edge.clone()));
+            //     //     break;
+            //     // };
+
+            //     let Some((old_edge, old_edge_layout)) = old.groups.get(&source).and_then(|group| {
+            //         group
+            //             .edges
+            //             .get(&old_edge)
+            //             .map(|edge_layout| (old_edge, edge_layout))
+            //     }) else {
+            //         console::log!("Detect not found");
+            //         continue;
+            //     };
+
+            //     // let start_delta =
+            //     // let (start_delta, end_delta) = if let Some(new_edge_layout) = new
+            //     //     .groups
+            //     //     .get(&node)
+            //     //     .and_then(|group| group.edges.get(&edge))
+            //     // {
+            //     //     (
+            //     //         old_edge_layout.start_offset.new - new_edge_layout.start_offset.new,
+            //     //         old_edge_layout.end_offset.new
+            //     //             - new_edge_layout.end_offset.new
+            //     //             - node_offset,
+            //     //     )
+            //     // } else {
+            //     //     (Point::default(), Point::default())
+            //     // };
+            //     // let source
+
+            //     let start_delta = node_offset;
+            //     let end_delta = to_node_offset;
+
+            //     edge_mapping.insert(
+            //         (node, edge.clone()),
+            //         (source, old_edge.clone(), start_delta, end_delta),
+            //     );
+
+            //     // let Some(new_edge_layout) = new
+            //     //     .groups
+            //     //     .get(&node)
+            //     //     .and_then(|group| group.edges.get(&edge))
+            //     // else {
+            //     //     break;
+            //     // };
+
+            //     // if let Some((_, offset, false)) = node_mapping.get_mut(&edge.to) {
+            //     //     *offset =
+            //     //         get_current_point(old_edge_layout.end_offset) - new_edge_layout.end_offset.old;
+            //     // }
+            //     // if let Some((_, offset, false)) = node_mapping.get_mut(&node) {
+            //     //     *offset = get_current_point(old_edge_layout.start_offset)
+            //     //         - new_edge_layout.start_offset.old;
+            //     // }
+            //     break;
+            // }
         }
     }
 
@@ -641,7 +823,7 @@ fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
         }
 
         for edge in graph.get_children(node) {
-            if let Some((source, old_edge)) = edge_mapping.get(&(node, edge.drop_count())) {
+            if let Some((source, old_edge, _, _)) = edge_mapping.get(&(node, edge.drop_count())) {
                 deleted_edges.entry(*source).and_modify(|edges| {
                     edges.remove(old_edge);
                 });
