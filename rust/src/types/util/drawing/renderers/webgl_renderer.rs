@@ -148,13 +148,16 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
             &layout
                 .groups
                 .iter()
-                .map(|(id, group)| Node {
-                    ID: *id,
-                    center_position: group.position + group.size * 0.5,
-                    size: group.size,
-                    label: group.label.clone(),
-                    exists: group.exists,
-                    color: group.color,
+                .map(|(id, group)| {
+                    // console::log!("pos: {}, {}", group.position, group.size * 0.5);
+                    Node {
+                        ID: *id,
+                        center_position: &group.position + &(&group.size * 0.5),
+                        size: group.size,
+                        label: group.label.clone(),
+                        exists: group.exists,
+                        color: group.color,
+                    }
                 })
                 .collect(),
         );
@@ -169,10 +172,10 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
                     let edge_type_ids = &edge_type_ids;
                     group.edges.iter().filter_map(move |(edge_data, edge)| {
                         Some(Edge {
-                            start: start + edge.start_offset,
+                            start: &start + &edge.start_offset,
                             start_node: id,
                             points: edge.points.iter().map(|point| point.point).collect(),
-                            end: layout.groups.get(&edge_data.to)?.position + edge.end_offset,
+                            end: &layout.groups.get(&edge_data.to)?.position + &edge.end_offset,
                             end_node: edge_data.to,
                             edge_type: *edge_type_ids.get(&edge_data.edge_type)?,
                             shift: edge.curve_offset,

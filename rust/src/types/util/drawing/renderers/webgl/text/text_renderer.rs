@@ -343,8 +343,8 @@ impl TextRenderer {
                     for glyph in cluster.glyphs {
                         chars.push((
                             glyph.id,
-                            text.position
-                                + Transition::plain(Point {
+                            &text.position
+                                + &Transition::plain(Point {
                                     x: glyph.x + x,
                                     y: glyph.y,
                                 }),

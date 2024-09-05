@@ -168,47 +168,48 @@ export class ViewManager implements IViewManager {
         locationHintsModifier: (hints: IViewLocationHint[]) => IViewLocationHint[] = h =>
             h
     ): IMutator {
-        const locationHints = locationHintsModifier(view.openLocationHints.get());
-        console.log(locationHints);
+        const locationHints = [
+            ...locationHintsModifier(view.openLocationHints.get()),
+            // The default location if the hints can find no other location
+            {createId: "default"},
+        ]
+            // Make sure that any creation is preceded by checking whether the location exists already
+            .flatMap(hint =>
+                hint.createId ? [{targetId: hint.createId}, hint] : [hint]
+            );
 
         const layout = this.layoutState;
         const getContainer = (ID: string | null | undefined) =>
             ID ? layout.allPanels.get().find(({id}) => id == ID) : undefined;
 
         return chain(push => {
-            const defaultHint: IViewLocationHint = {createId: "default"};
             const viewID = view.ID;
             const existingContainer = this.getTabParent(viewID);
             if (existingContainer) {
                 push(layout.selectTab(existingContainer.id, viewID));
             } else {
                 // Find the location hinting based on what container can be found
-                const location = [...(locationHints ?? []), defaultHint].reduce(
-                    (cur, hint) => {
-                        if (cur) return cur;
+                const location = locationHints.reduce((cur, hint) => {
+                    if (cur) return cur;
 
-                        if (hint.targetId == undefined) {
-                            return {...hint, targetId: hint.createId};
-                        }
+                    if (hint.targetId == undefined) return hint;
 
-                        if (!hint.targetType || hint.targetType == "view") {
-                            const container = this.getTabParent(hint.targetId);
-                            if (container)
-                                return {
-                                    ...hint,
-                                    targetId: container.id,
-                                    targetType: "panel",
-                                };
-                        }
-                        if (!hint.targetType || hint.targetType == "panel") {
-                            const container = getContainer(hint.targetId);
-                            if (container) return hint;
-                        }
+                    if (!hint.targetType || hint.targetType == "view") {
+                        const container = this.getTabParent(hint.targetId);
+                        if (container)
+                            return {
+                                ...hint,
+                                targetId: container.id,
+                                targetType: "panel",
+                            };
+                    }
+                    if (!hint.targetType || hint.targetType == "panel") {
+                        const container = getContainer(hint.targetId);
+                        if (container) return hint;
+                    }
 
-                        return null;
-                    },
-                    null
-                )!;
+                    return null;
+                }, null)!;
 
                 // Possibly create a new container relative to the target
                 const openSide = location?.side ?? "in";
@@ -239,6 +240,7 @@ export class ViewManager implements IViewManager {
                         )
                     );
                 }
+
                 const openContainer = getContainer(openContainerID);
                 if (!openContainer) return;
 

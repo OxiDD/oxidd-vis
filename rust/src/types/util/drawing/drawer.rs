@@ -161,7 +161,10 @@ impl<
 
         let graph = self.graph.read();
         let mut group_counts = HashMap::<NodeGroupID, usize>::new();
-        for &node_id in node_ids {
+        for &node_id in
+            //  Prevent counting the same node multiple times by using a set
+            node_ids.iter().collect::<HashSet<_>>()
+        {
             let group_id = graph.get_group(node_id);
             *group_counts.entry(group_id).or_insert(0) += 1;
         }

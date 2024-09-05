@@ -14,7 +14,7 @@ use crate::{
     wasm_interface::{NodeGroupID, NodeID},
 };
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -49,11 +49,6 @@ impl Sub for Point {
         }
     }
 }
-impl Display for Point {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {})", self.x, self.y)
-    }
-}
 impl<R: Clone> Mul<R> for Point
 where
     f32: Mul<R, Output = f32>,
@@ -67,7 +62,19 @@ where
         }
     }
 }
+impl<R: Clone> Mul<R> for &Point
+where
+    f32: Mul<R, Output = f32>,
+{
+    type Output = Point;
 
+    fn mul(self, rhs: R) -> Self::Output {
+        Point {
+            x: self.x * rhs.clone(),
+            y: self.y * rhs,
+        }
+    }
+}
 impl Mul<Point> for f32 {
     type Output = Point;
 
@@ -78,12 +85,9 @@ impl Mul<Point> for f32 {
         }
     }
 }
-impl Default for Point {
-    fn default() -> Self {
-        Self {
-            x: Default::default(),
-            y: Default::default(),
-        }
+impl Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
     }
 }
 
@@ -93,6 +97,17 @@ pub struct Transition<T> {
     pub duration: u32, // ms
     pub old: T,
     pub new: T,
+}
+impl<T> Transition<T>
+where
+    for<'a> &'a T: Mul<f32, Output = T>,
+    T: Add<Output = T>,
+{
+    pub fn get(&self, time: u32) -> T {
+        let per = (time as f32 - self.old_time as f32) / self.duration as f32;
+        let per = f32::max(0.0, f32::min(per, 1.0));
+        &self.old * (1.0 - per) + &self.new * per
+    }
 }
 impl<T: Copy> Transition<T> {
     pub fn plain(val: T) -> Transition<T> {
@@ -104,15 +119,22 @@ impl<T: Copy> Transition<T> {
         }
     }
 }
-impl<T: Add<Output = T>> Add for Transition<T> {
+impl<T> Add for &Transition<T>
+where
+    for<'a> &'a T: Mul<f32, Output = T>,
+    T: Add<Output = T>,
+{
     type Output = Transition<T>;
 
     fn add(self, rhs: Self) -> Self::Output {
+        let old_time = u32::max(rhs.old_time, self.old_time);
+        let duration = u32::max(rhs.duration, self.duration);
+
         Transition {
-            old_time: u32::max(rhs.old_time, self.old_time),
-            duration: u32::max(rhs.duration, self.duration),
-            old: self.old + rhs.old,
-            new: self.new + rhs.new,
+            old_time,
+            duration,
+            old: self.get(old_time) + rhs.get(old_time),
+            new: self.get(old_time + duration) + rhs.get(old_time + duration),
         }
     }
 }
@@ -138,15 +160,18 @@ impl<T: Display> Display for Transition<T> {
 //         }
 //     }
 // }
-impl<R: Clone, T: Mul<R, Output = T>> Mul<R> for Transition<T> {
+impl<R: Clone, T> Mul<R> for &Transition<T>
+where
+    for<'a> &'a T: Mul<R, Output = T>,
+{
     type Output = Transition<T>;
 
     fn mul(self, rhs: R) -> Self::Output {
         Transition {
             old_time: self.old_time,
             duration: self.duration,
-            old: self.old * rhs.clone(),
-            new: self.new * rhs,
+            old: &self.old * rhs.clone(),
+            new: &self.new * rhs,
         }
     }
 }

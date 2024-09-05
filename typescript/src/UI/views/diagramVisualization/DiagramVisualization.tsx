@@ -1,4 +1,4 @@
-import React, {FC, useEffect, useRef} from "react";
+import React, {FC, useCallback, useEffect, useRef} from "react";
 import {DiagramVisualizationState} from "../../../state/diagrams/DiagramVisualizationState";
 import {useTransformCallbacks} from "./useTransformCallbacks";
 import {css} from "@emotion/css";
@@ -49,6 +49,9 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
             };
         }
     }, []);
+    const preventDrag = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+    }, []);
     const moveListeners = useTransformCallbacks(visualization.transform);
     const modeRef = useRef(0);
     return (
@@ -74,6 +77,7 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
                     });
                 }}></BoxSelection>
             <div
+                onMouseDown={preventDrag}
                 className={css({
                     position: "absolute",
                     right: theme.spacing.m,
