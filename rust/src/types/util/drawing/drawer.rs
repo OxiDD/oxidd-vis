@@ -113,7 +113,7 @@ impl<
             .layout
             .groups
             .iter()
-            .filter(|(_, node_layout)| node_layout.get_rect().overlaps(&area))
+            .filter(|(_, node_layout)| node_layout.get_rect(None).overlaps(&area))
             .map(|(&group_id, _)| group_id);
         groups
             .flat_map(|group_id| {

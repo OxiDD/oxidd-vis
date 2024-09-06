@@ -57,7 +57,7 @@ use super::util::drawing::layouts::layered_layout::LayeredLayout;
 use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
 use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
-use super::util::drawing::layouts::transition_layout::TransitionLayout;
+use super::util::drawing::layouts::transition::transition_layout::TransitionLayout;
 use super::util::drawing::layouts::util::color_label::Color;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;

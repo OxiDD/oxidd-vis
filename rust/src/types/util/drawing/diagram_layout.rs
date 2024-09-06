@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
+    hash::Hash,
     ops::{Add, Mul, Sub},
     rc::Rc,
 };
@@ -18,6 +19,12 @@ use crate::{
 pub struct Point {
     pub x: f32,
     pub y: f32,
+}
+impl Hash for Point {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        ((self.x * 100.) as usize).hash(state);
+        ((self.y * 100.) as usize).hash(state);
+    }
 }
 impl Point {
     pub fn distance(&self, other: &Point) -> f32 {
@@ -188,10 +195,20 @@ pub struct NodeGroupLayout<T: DrawTag> {
 }
 impl<T: DrawTag> NodeGroupLayout<T> {
     // TODO: possibly consider the selection time? (animations should be quick and not have a huge effect however)
-    pub fn get_rect(&self) -> Rectangle {
-        let width = self.size.new.x;
-        let height = self.size.new.y;
-        Rectangle::new(self.position.new.x, self.position.new.y, width, height)
+
+    pub fn get_rect(&self, time: Option<u32>) -> Rectangle {
+        match time {
+            Some(time) => {
+                let pos = self.position.get(time);
+                let size = self.size.get(time);
+                Rectangle::new(pos.x, pos.y, size.x, size.y)
+            }
+            _ => {
+                let pos = self.position.new;
+                let size = self.size.new;
+                Rectangle::new(pos.x, pos.y, size.x, size.y)
+            }
+        }
     }
 }
 

@@ -151,6 +151,27 @@ impl Range {
             self.clone()
         }
     }
+
+    /// Creates a range x, such that x.size() == self.size() &&  x.intersect(other).size() is maximized while |x.start - self.start| is minimized
+    pub fn maximize_overlap(&self, other: &Range) -> Range {
+        if self.start < other.start {
+            if self.end >= other.end {
+                self.clone()
+            } else {
+                Range {
+                    start: other.end - self.size(),
+                    end: other.end,
+                }
+            }
+        } else if self.end > other.end {
+            Range {
+                start: other.start,
+                end: other.start + self.size(),
+            }
+        } else {
+            self.clone()
+        }
+    }
 }
 
 impl Display for Range {
