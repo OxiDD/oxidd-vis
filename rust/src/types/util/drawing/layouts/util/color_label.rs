@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 pub trait ColorLabel {
     fn get_color(&self) -> Color;
 }

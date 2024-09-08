@@ -117,6 +117,30 @@ impl Range {
         self.end - self.start
     }
 
+    /// Creates a range x, such that x.size() == self.size() && (other.size() > self.size() => other.contains(x), while minimizing |self.start - x.start|) && (other.size() > self.size() => other.start == x.start)
+    pub fn align_within(&self, other: &Range) -> Range {
+        if other.contains(&self) {
+            self.clone()
+        } else if self.size() <= other.size() {
+            if self.start < other.start {
+                Range {
+                    start: other.start,
+                    end: other.start + self.size(),
+                }
+            } else {
+                Range {
+                    start: other.end - self.size(),
+                    end: other.end,
+                }
+            }
+        } else {
+            Range {
+                start: other.start,
+                end: other.start + self.size(),
+            }
+        }
+    }
+
     /// Creates a range x, such that x.size() == self.size() && (other.contains(X) || x.contains(other)), minimizing the distance between self and x
     pub fn bounded_to(&self, other: &Range) -> Range {
         if self.start > other.start && self.end > other.end {

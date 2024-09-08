@@ -53,8 +53,16 @@ pub struct TargetGroup {
 pub struct DeletedEdge<T: DrawTag> {
     /// The edge data that was deleted
     pub edge_data: EdgeData<T>,
-    /// The edge that this should morph into
-    pub morph: Option<TargetEdge<T>>,
+    /// Whether the deleted edge should simply morph to a straight edge and apply the given start and end offset, rather than fading out
+    pub morph: Option<DeleteMorph>,
+}
+
+#[derive(Clone)]
+pub struct DeleteMorph {
+    /// An offset adjustment for the start of the edge
+    pub start_offset: Point,
+    /// An offset adjustment for the end of the edge
+    pub end_offset: Point,
 }
 
 #[derive(Clone)]
@@ -77,16 +85,17 @@ pub fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
     sources: &G::Tracker,
     time: u32,
 ) -> ElementRelations<T> {
-    let previous_nodes = map_groups::<T, GL, LL, G>(old, new, sources, time);
+    let mut previous_nodes = map_groups::<T, GL, LL, G>(old, new, sources, time);
+    select_node_representation(&mut previous_nodes, &new);
     let deleted_nodes =
         find_deleted_nodes::<T, GL, LL, G>(old, new, sources, &previous_nodes, time);
     let previous_edges = map_edges(graph, old, new, sources, &previous_nodes, time);
-    let deleted_edges = find_deleted_edges(
-        graph,
+    let deleted_edges = find_deleted_edges::<T, GL, LL, G>(
         old,
         new,
         sources,
         &previous_nodes,
+        &deleted_nodes,
         &previous_edges,
         time,
     );
@@ -115,7 +124,7 @@ pub fn map_groups<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
                 group_id,
                 if let Some(old_group_layout) = old.groups.get(&group_id) {
                     let source_y_range = old_group_layout.get_rect(Some(time)).y_range();
-                    let restricted_range = new_y_range.maximize_overlap(&source_y_range);
+                    let restricted_range = new_y_range.align_within(&source_y_range);
                     TargetGroup {
                         id: group_id,
                         offset: Point {
@@ -131,30 +140,25 @@ pub fn map_groups<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
                         .filter_map(|source| {
                             old.groups.get(source).map(|source_data| {
                                 let source_y_range = source_data.get_rect(Some(time)).y_range();
-                                let restricted_range =
-                                    new_y_range.maximize_overlap(&source_y_range);
-                                (source, restricted_range.start - source_y_range.start)
+                                let restricted_range = new_y_range.align_within(&source_y_range);
+                                let height_delta =
+                                    (source_y_range.size() - new_y_range.size()).abs();
+                                (
+                                    source,
+                                    restricted_range.start - source_y_range.start,
+                                    height_delta,
+                                )
                             })
                         })
-                        .min_by(|(_, a), (_, b)| a.total_cmp(&b)); // TODO: choose an appropriate criteria for choosing the best source
-                    if let Some((&source, shift)) = closest {
-                        console::log!(
-                            "Detect this {}, {} {} {}",
-                            shift,
-                            old.groups
-                                .get(&source)
-                                .unwrap()
-                                .get_rect(Some(time))
-                                .y_range(),
-                            new_y_range,
-                            new_y_range.bounded_to(
-                                &old.groups
-                                    .get(&source)
-                                    .unwrap()
-                                    .get_rect(Some(time))
-                                    .y_range()
-                            )
-                        );
+                        .min_by(|(_, a_pos, a_height), (_, b_pos, b_height)| {
+                            let height_comp = a_height.total_cmp(b_height);
+                            if !height_comp.is_eq() {
+                                height_comp
+                            } else {
+                                a_pos.total_cmp(&b_pos)
+                            }
+                        }); // TODO: choose an appropriate criteria for choosing the best source
+                    if let Some((&source, shift, _)) = closest {
                         TargetGroup {
                             id: source,
                             offset: Point { x: 0., y: shift },
@@ -172,6 +176,38 @@ pub fn map_groups<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
             )
         })
         .collect()
+}
+
+pub fn select_node_representation<T: DrawTag>(
+    previous_nodes: &mut HashMap<NodeGroupID, TargetGroup>,
+    new: &DiagramLayout<T>,
+) {
+    let mut reverse_node_mapping: HashMap<NodeGroupID, HashSet<NodeGroupID>> = HashMap::new();
+    for (&node, source_target) in previous_nodes.iter() {
+        reverse_node_mapping
+            .entry(source_target.id)
+            .or_insert_with(|| HashSet::new())
+            .insert(node);
+    }
+
+    for (_, images) in reverse_node_mapping {
+        let sizes = images
+            .iter()
+            .filter_map(|dest| new.groups.get(dest).map(|group| (dest, group.size.old)));
+        let Some((node, _)) = sizes.reduce(|(node1, size1), (node2, size2)| {
+            if size1.length() > size2.length() {
+                (node1, size1)
+            } else {
+                (node2, size2)
+            }
+        }) else {
+            continue;
+        };
+        previous_nodes.entry(*node).and_modify(|source_target| {
+            source_target.offset = Point { x: 0., y: 0. };
+            source_target.represents = true;
+        });
+    }
 }
 
 pub fn map_edges<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
@@ -338,11 +374,11 @@ pub fn find_deleted_nodes<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL
 }
 
 pub fn find_deleted_edges<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
-    graph: &G,
     old: &DiagramLayout<T>,
     new: &DiagramLayout<T>,
     sources: &G::Tracker,
     previous_nodes: &HashMap<NodeGroupID, TargetGroup>,
+    deleted_nodes: &HashMap<NodeGroupID, Option<TargetGroup>>,
     previous_edges: &HashMap<(NodeGroupID, EdgeData<T>), TargetEdge<T>>,
     time: u32,
 ) -> HashMap<NodeGroupID, Vec<DeletedEdge<T>>> {
@@ -351,11 +387,9 @@ pub fn find_deleted_edges<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL
     // let mut reverse_node_mapping: HashMap<usize, usize> = HashMap::new();
     let mut deleted_edges: HashSet<(NodeGroupID, &EdgeData<T>)> = old
         .groups
-        .keys()
-        .filter_map(|&group_id| {
-            old.groups
-                .get(&group_id)
-                .map(|group| once(group_id).zip(group.edges.keys()))
+        .iter()
+        .map(|(&group_id, group_layout)| {
+            once(group_id).cartesian_product(group_layout.edges.keys())
         })
         .flatten()
         .collect();
@@ -366,15 +400,20 @@ pub fn find_deleted_edges<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL
             reverse_node_mapping.insert(prev_group.id, group_id);
         }
 
-        for edge in graph.get_children(group_id) {
-            if let Some(edge_target) = previous_edges.get(&(group_id, edge.drop_count())) {
+        for edge in new
+            .groups
+            .get(&group_id)
+            .map(|group_layout| group_layout.edges.keys().collect_vec())
+            .unwrap_or_default()
+        {
+            if let Some(edge_target) = previous_edges.get(&(group_id, edge.clone())) {
                 deleted_edges.remove(&(edge_target.group_id, &edge_target.edge_data));
             }
         }
     }
     let deleted_edges = deleted_edges
         .into_iter()
-        .filter_map(|(source_group_id, old_edge)| {
+        .map(|(source_group_id, old_edge)| {
             let new_to = reverse_node_mapping
                 .get(&old_edge.to)
                 .cloned()
@@ -390,8 +429,48 @@ pub fn find_deleted_edges<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL
                 .cloned()
                 .unwrap_or(source_group_id);
 
-            // TODO: obtain edge transition data
-            Some(((new_from, new_edge), None))
+            let from_hide_group = deleted_nodes
+                .get(&new_from)
+                .and_then(|target| target.as_ref())
+                .map(|target| target.id)
+                .unwrap_or(new_from);
+            let to_hide_group = deleted_nodes
+                .get(&new_to)
+                .and_then(|target| target.as_ref())
+                .map(|target| target.id)
+                .unwrap_or(new_to);
+            if from_hide_group == to_hide_group {
+                // We compute the movement delta to make edges that shift layers because of a delete transition remain on the same vertical position
+                let from_delta_y = previous_nodes
+                    .get(&new_from)
+                    .and_then(|target| old.groups.get(&target.id).zip(new.groups.get(&new_from)))
+                    .map(|(old_group, new_group)| {
+                        old_group.position.get(time).y - new_group.position.new.y
+                    })
+                    .unwrap_or_default();
+                let to_delta_y = previous_nodes
+                    .get(&new_to)
+                    .and_then(|target| old.groups.get(&target.id).zip(new.groups.get(&new_to)))
+                    .map(|(old_group, new_group)| {
+                        old_group.position.get(time).y - new_group.position.new.y
+                    })
+                    .unwrap_or_default();
+                (
+                    (new_from, new_edge),
+                    Some(DeleteMorph {
+                        start_offset: Point {
+                            x: 0.,
+                            y: from_delta_y,
+                        },
+                        end_offset: Point {
+                            x: 0.,
+                            y: to_delta_y,
+                        },
+                    }),
+                )
+            } else {
+                ((new_from, new_edge), None)
+            }
         })
         .collect::<HashMap<_, _>>();
 

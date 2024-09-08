@@ -28,7 +28,10 @@ use crate::{
     wasm_interface::NodeGroupID,
 };
 
-use super::relate_elements::{relate_elements, ElementRelations};
+use super::{
+    relate_elements::{relate_elements, ElementRelations, TargetEdge},
+    transition_layers::transition_layers,
+};
 
 ///
 /// A layout builder that takes another layout approach, and applies transitioning to it.
@@ -42,9 +45,7 @@ pub struct TransitionLayout<
     L: LayoutRules<T, GL, LL, G>,
 > {
     layout: L,
-    transition_duration: u32,
-    delete_duration: u32,
-    insert_duration: u32,
+    durations: TransitionDurations,
     group_label: PhantomData<GL>,
     level_label: PhantomData<LL>,
     // TODO: see if these generics and  phantom data is even needed
@@ -56,19 +57,28 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
     TransitionLayout<T, GL, LL, G, L>
 {
     pub fn new(layout: L) -> TransitionLayout<T, GL, LL, G, L> {
-        let speed_modifier = 3; // for testing
+        let speed_modifier = 1; // for testing
                                 // TODO: add parameters
         TransitionLayout {
             layout,
-            insert_duration: 900 * speed_modifier,
-            transition_duration: 600 * speed_modifier,
-            delete_duration: 300 * speed_modifier,
+            durations: TransitionDurations {
+                insert_duration: 900 * speed_modifier,
+                transition_duration: 600 * speed_modifier,
+                delete_duration: 300 * speed_modifier,
+            },
             tag: PhantomData,
             graph: PhantomData,
             group_label: PhantomData,
             level_label: PhantomData,
         }
     }
+}
+
+#[derive(Clone)]
+pub struct TransitionDurations {
+    transition_duration: u32,
+    delete_duration: u32,
+    insert_duration: u32,
 }
 
 impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, GL, LL, G>>
@@ -81,183 +91,27 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
         sources: &G::Tracker,
         time: u32,
     ) -> DiagramLayout<T> {
-        let duration = self.transition_duration;
-        let insert_duration = self.insert_duration;
-        let delete_duration = self.delete_duration;
+        let duration = self.durations.transition_duration;
+        let insert_duration = self.durations.insert_duration;
+        let delete_duration = self.durations.delete_duration;
         let old_time = time;
         let new = self.layout.layout(graph, old, sources, time);
 
-        let get_current_point = |val: Transition<Point>| {
-            let per = get_per(time, val);
-            Point {
-                x: val.old.x * (1.0 - per) + val.new.x * per,
-                y: val.old.y * (1.0 - per) + val.new.y * per,
-            }
-        };
-        let get_current_float = |val: Transition<f32>| {
-            let per = get_per(time, val);
-            val.old * (1.0 - per) + val.new * per
-        };
         let get_current_color = |val: Transition<(f32, f32, f32)>| {
-            let per = get_per(time, val);
+            let per = val.get_per(time);
             let r = (val.old.0 * val.old.0 * (1.0 - per) + val.new.0 * val.new.0 * per).sqrt();
             let g = (val.old.1 * val.old.1 * (1.0 - per) + val.new.1 * val.new.1 * per).sqrt();
             let b = (val.old.2 * val.old.2 * (1.0 - per) + val.new.2 * val.new.2 * per).sqrt();
             (r, g, b)
         };
 
+        let relations = relate_elements(graph, old, &new, sources, time);
         let ElementRelations {
             previous_groups,
             deleted_groups,
             previous_edges,
             deleted_edges,
-        } = relate_elements(graph, old, &new, sources, time);
-
-        let map_edge = |from: NodeGroupID,
-                        edge_data: &EdgeData<T>,
-                        edge: &EdgeLayout,
-                        old_group: &NodeGroupLayout<T>|
-         -> EdgeLayout {
-            let maybe_old_edge =
-                previous_edges
-                    .get(&(from, edge_data.clone()))
-                    .and_then(|old_edge_target| {
-                        old.groups.get(&old_edge_target.group_id).and_then(|group| {
-                            group
-                                .edges
-                                .get(&old_edge_target.edge_data)
-                                .map(|old_edge_layout| {
-                                    (
-                                        &old_edge_target.edge_data,
-                                        old_edge_layout,
-                                        old_edge_target.start_offset,
-                                        old_edge_target.end_offset,
-                                    )
-                                })
-                        })
-                    });
-
-            // let edge_type = edge_data.edge_type;
-            if let Some((old_edge_data, old_edge_layout, start_node_offset, end_node_offset)) =
-                maybe_old_edge
-            {
-                let start_offset =
-                    get_current_point(old_edge_layout.start_offset) - start_node_offset;
-                let end_offset = get_current_point(old_edge_layout.end_offset) - end_node_offset;
-
-                // Add all points needed for the new layout, and transition from any old points
-                let mut new_points: Vec<EdgePoint> = edge
-                    .points
-                    .iter()
-                    .enumerate()
-                    .map(|(index, point)| {
-                        let out_point = if index >= old_edge_layout.points.len() {
-                            let to_pos = old.groups.get(&old_edge_data.to).unwrap().position;
-                            Transition {
-                                old: get_current_point(to_pos) + end_offset,
-                                new: point.point.new,
-                                duration,
-                                old_time: time,
-                            }
-                        } else {
-                            Transition {
-                                old: get_current_point(
-                                    old_edge_layout.points.get(index).unwrap().point,
-                                ),
-                                new: point.point.new,
-                                duration,
-                                old_time: time,
-                            }
-                        };
-
-                        EdgePoint {
-                            point: out_point,
-                            exists: point.exists,
-                        }
-                    })
-                    .collect();
-
-                // Add any extra nodes needed to finish previous animation if needed
-                new_points.extend(
-                    old_edge_layout
-                        .points
-                        .iter()
-                        .skip(edge.points.len())
-                        .filter(|point| get_current_float(point.exists) > 0.0)
-                        .map(|point| EdgePoint {
-                            point: Transition {
-                                duration,
-                                old_time,
-                                old: get_current_point(point.point),
-                                new: new.groups.get(&edge_data.to).unwrap().position.new
-                                    + edge.end_offset.new,
-                            },
-                            exists: Transition {
-                                duration: delete_duration,
-                                old_time,
-                                old: get_current_float(point.exists),
-                                new: 0.0,
-                            },
-                        }),
-                );
-
-                EdgeLayout {
-                    start_offset: Transition {
-                        duration,
-                        old_time,
-                        old: start_offset,
-                        new: edge.start_offset.new,
-                    },
-                    end_offset: Transition {
-                        duration,
-                        old_time,
-                        old: end_offset,
-                        new: edge.end_offset.new,
-                    },
-                    points: new_points,
-                    exists: Transition {
-                        duration,
-                        old_time,
-                        old: get_current_float(old_edge_layout.exists),
-                        new: edge.exists.new,
-                    },
-                    curve_offset: Transition {
-                        duration,
-                        old_time,
-                        old: get_current_float(old_edge_layout.curve_offset),
-                        new: edge.curve_offset.new,
-                    },
-                }
-            } else {
-                let points = edge
-                    .points
-                    .iter()
-                    .map(|point| EdgePoint {
-                        point: Transition {
-                            duration,
-                            old_time,
-                            // TODO: could also transition in from the new node's edge start position
-                            old: get_current_point(old_group.position)
-                                + get_current_point(edge.end_offset),
-                            new: point.point.new,
-                        },
-                        exists: point.exists,
-                    })
-                    .collect();
-                EdgeLayout {
-                    start_offset: edge.start_offset,
-                    end_offset: edge.end_offset,
-                    points: points,
-                    exists: Transition {
-                        old_time,
-                        duration: insert_duration,
-                        old: 0.,
-                        new: edge.exists.new,
-                    },
-                    curve_offset: edge.curve_offset,
-                }
-            }
-        };
+        } = &relations;
 
         let groups = new.groups.iter().map(|(id, group)| {
             (
@@ -277,8 +131,8 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                 old_group_data.map(|old_group_data| (id, group, old_group_data))
             })
             .map(|(id, group, (old_group, old_target_group))| {
-                let cur_size = get_current_point(old_group.size);
-                let cur_position = get_current_point(old_group.position);
+                let cur_size = old_group.size.get(time);
+                let cur_position = old_group.position.get(time);
                 let start_size = if old_target_group.represents {
                     cur_size
                 } else {
@@ -303,19 +157,15 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                         };
                         let old_edge_layout = old_group.edges.get(&old_edge)?;
 
-                        let exists = get_current_float(old_edge_layout.exists);
+                        let exists = old_edge_layout.exists.get(time);
                         if exists <= 0. {
                             return None;
                         }
 
-                        let moving_out = deleted_groups
-                            .get(&new_edge.to)
-                            .map(|target| target.is_some())
-                            .unwrap_or(false);
                         Some((
                             new_edge.clone(),
                             EdgeLayout {
-                                exists: if moving_out {
+                                exists: if target_edge.morph.is_some() {
                                     Transition {
                                         old_time: old_time + duration,
                                         duration: 1,
@@ -337,19 +187,44 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                                         exists: Transition {
                                             old_time,
                                             duration: delete_duration,
-                                            old: get_current_float(point.exists),
+                                            old: point.exists.get(time),
                                             new: 0.,
                                         },
                                         point: Transition {
                                             old_time,
                                             duration,
-                                            old: get_current_point(point.point),
+                                            old: point.point.get(time),
                                             new: group.position.new
                                                 + old_edge_layout.start_offset.new,
                                         },
                                     })
                                     .collect(),
-                                ..old_edge_layout.clone()
+                                start_offset: if let Some(morph) = &target_edge.morph {
+                                    Transition {
+                                        old_time,
+                                        duration,
+                                        old: old_edge_layout.start_offset.get(time),
+                                        new: old_edge_layout.start_offset.new + morph.start_offset,
+                                    }
+                                } else {
+                                    old_edge_layout.start_offset
+                                },
+                                end_offset: if let Some(morph) = &target_edge.morph {
+                                    Transition {
+                                        old_time,
+                                        duration,
+                                        old: old_edge_layout.end_offset.get(time),
+                                        new: old_edge_layout.end_offset.new + morph.end_offset,
+                                    }
+                                } else {
+                                    old_edge_layout.end_offset
+                                },
+                                curve_offset: Transition {
+                                    old_time,
+                                    duration: insert_duration,
+                                    old: old_edge_layout.curve_offset.get(time),
+                                    new: 0.,
+                                },
                             },
                         ))
                     })
@@ -382,7 +257,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                         exists: Transition {
                             old_time,
                             duration,
-                            old: get_current_float(old_group.exists),
+                            old: old_group.exists.get(time),
                             new: group.exists.new,
                         },
                         level_range: group.level_range.clone(),
@@ -390,7 +265,20 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                             .edges
                             .iter()
                             .map(|(edge_data, edge)| {
-                                (edge_data.clone(), map_edge(*id, edge_data, edge, old_group))
+                                (
+                                    edge_data.clone(),
+                                    map_edge(
+                                        *id,
+                                        edge_data,
+                                        edge,
+                                        old_group,
+                                        &old,
+                                        &new,
+                                        &self.durations,
+                                        &relations,
+                                        time,
+                                    ),
+                                )
                             })
                             .chain(deleted_edges_layout.into_iter().flatten())
                             .collect(),
@@ -426,7 +314,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                             position: Transition {
                                 old_time,
                                 duration,
-                                old: get_current_point(parent.position),
+                                old: parent.position.get(time),
                                 new: group.position.new,
                             },
                             color: Transition {
@@ -521,20 +409,15 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                     };
                     let old_edge_layout = group.edges.get(&old_edge)?;
 
-                    let exists = get_current_float(old_edge_layout.exists);
+                    let exists = old_edge_layout.exists.get(time);
                     if exists <= 0. {
                         return None;
                     }
 
-                    let moving_out = target.is_some()
-                        && deleted_groups
-                            .get(&new_edge.to)
-                            .map(|target| target.is_some())
-                            .unwrap_or(false);
                     Some((
                         new_edge.clone(),
                         EdgeLayout {
-                            exists: if moving_out {
+                            exists: if target_edge.morph.is_some() {
                                 Transition {
                                     old_time: old_time + duration,
                                     duration: 1,
@@ -556,13 +439,13 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                                     exists: Transition {
                                         old_time,
                                         duration: delete_duration,
-                                        old: get_current_float(point.exists),
+                                        old: point.exists.get(time),
                                         new: 0.,
                                     },
                                     point: Transition {
                                         old_time,
                                         duration,
-                                        old: get_current_point(point.point),
+                                        old: point.point.get(time),
                                         new: if let Some((target, offset)) = target {
                                             target.position.new + offset.clone()
                                         } else {
@@ -571,7 +454,32 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                                     },
                                 })
                                 .collect(),
-                            ..old_edge_layout.clone()
+                            start_offset: if let Some(morph) = &target_edge.morph {
+                                Transition {
+                                    old_time,
+                                    duration,
+                                    old: old_edge_layout.start_offset.get(time),
+                                    new: old_edge_layout.start_offset.new + morph.start_offset,
+                                }
+                            } else {
+                                old_edge_layout.start_offset
+                            },
+                            end_offset: if let Some(morph) = &target_edge.morph {
+                                Transition {
+                                    old_time,
+                                    duration,
+                                    old: old_edge_layout.end_offset.get(time),
+                                    new: old_edge_layout.end_offset.new + morph.end_offset,
+                                }
+                            } else {
+                                old_edge_layout.end_offset
+                            },
+                            curve_offset: Transition {
+                                old_time,
+                                duration: insert_duration,
+                                old: old_edge_layout.curve_offset.get(time),
+                                new: 0.,
+                            },
                         },
                     ))
                 })
@@ -581,7 +489,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                 id,
                 match target {
                     Some((target, offset)) => {
-                        let cur_pos = get_current_point(group.position);
+                        let cur_pos = group.position.get(time);
                         NodeGroupLayout {
                             position: Transition {
                                 old_time,
@@ -598,7 +506,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                             exists: Transition {
                                 old_time: old_time + duration,
                                 duration: 1,
-                                old: get_current_float(group.exists),
+                                old: group.exists.get(time),
                                 new: 0.,
                             },
                             edges: deleted_edges_layout.into_iter().flatten().collect(),
@@ -609,7 +517,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
                         exists: Transition {
                             old_time,
                             duration: delete_duration,
-                            old: get_current_float(group.exists),
+                            old: group.exists.get(time),
                             new: 0.,
                         },
                         edges: deleted_edges_layout.into_iter().flatten().collect(),
@@ -626,204 +534,173 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
             .collect::<HashMap<_, _>>();
         DiagramLayout {
             groups,
-            layers: transition_layers(
-                &old.layers,
-                &new.layers,
-                duration,
-                old_time,
-                &get_current_float,
-            ),
+            layers: transition_layers(&old.layers, &new.layers, duration, old_time, time),
         }
     }
 }
 
-fn transition_layers(
-    old: &Vec<LayerLayout>,
-    new: &Vec<LayerLayout>,
-    duration: u32,
-    old_time: u32,
-    get_current_float: &impl Fn(Transition<f32>) -> f32,
-) -> Vec<LayerLayout> {
-    let mut out = Vec::new();
+fn map_edge<T: DrawTag>(
+    from: NodeGroupID,
+    edge: &EdgeData<T>,
+    edge_layout: &EdgeLayout,
+    old_group: &NodeGroupLayout<T>,
+    old: &DiagramLayout<T>,
+    new: &DiagramLayout<T>,
+    durations: &TransitionDurations,
+    relations: &ElementRelations<T>,
+    time: u32,
+) -> EdgeLayout {
+    let old_time = time;
+    let duration = durations.transition_duration;
 
-    let transition_out = |old_layer: &LayerLayout, out: &mut Vec<LayerLayout>| {
-        let exists = get_current_float(old_layer.exists);
-        if exists > 0. {
-            out.push(LayerLayout {
-                exists: Transition {
-                    old_time,
-                    duration,
-                    old: exists,
-                    new: 0.,
-                },
-                ..old_layer.clone()
-            });
-        }
-    };
+    let maybe_old_edge = relations
+        .previous_edges
+        .get(&(from, edge.clone()))
+        .and_then(|old_edge_target| {
+            old.groups.get(&old_edge_target.group_id).and_then(|group| {
+                group
+                    .edges
+                    .get(&old_edge_target.edge_data)
+                    .map(|old_edge_layout| {
+                        (
+                            &old_edge_target.edge_data,
+                            old_edge_layout,
+                            old_edge_target.start_offset,
+                            old_edge_target.end_offset,
+                        )
+                    })
+            })
+        });
 
-    let mut old_iter = old.iter().peekable();
-    for new_layer in new {
-        // Progress to the right old layer
-        while let Some(&old_layer) = old_iter.peek() {
-            if old_layer.exists.new >= 1. && old_layer.start_layer >= new_layer.start_layer {
-                break;
-            }
-            old_iter.next();
-            transition_out(&old_layer, &mut out);
-        }
+    // let edge_type = edge_data.edge_type;
+    if let Some((old_edge_data, old_edge_layout, start_node_offset, end_node_offset)) =
+        maybe_old_edge
+    {
+        let start_offset = old_edge_layout.start_offset.get(time) - start_node_offset;
+        let end_offset = old_edge_layout.end_offset.get(time) - end_node_offset;
 
-        // Try to transition from old to new
-        if let Some(&old_layer) = old_iter.peek() {
-            if old_layer.start_layer == new_layer.start_layer
-                && old_layer.end_layer == new_layer.end_layer
-            {
-                old_iter.next();
-                out.push(LayerLayout {
-                    bottom: Transition {
+        // Add all points needed for the new layout, and transition from any old points
+        let mut new_points: Vec<EdgePoint> = edge_layout
+            .points
+            .iter()
+            .enumerate()
+            .map(|(index, point)| {
+                let out_point = if index >= old_edge_layout.points.len() {
+                    let to_pos = old.groups.get(&old_edge_data.to).unwrap().position;
+                    Transition {
                         old_time,
                         duration,
-                        old: get_current_float(old_layer.bottom),
-                        new: new_layer.bottom.new,
-                    },
-                    top: Transition {
+                        old: to_pos.get(time) + end_offset,
+                        new: point.point.new,
+                    }
+                } else {
+                    Transition {
                         old_time,
                         duration,
-                        old: get_current_float(old_layer.top),
-                        new: new_layer.top.new,
+                        old: old_edge_layout.points.get(index).unwrap().point.get(time),
+                        new: point.point.new,
+                    }
+                };
+
+                EdgePoint {
+                    point: out_point,
+                    exists: point.exists,
+                }
+            })
+            .collect();
+
+        // Add any extra nodes needed to finish previous animation if needed
+        new_points.extend(
+            old_edge_layout
+                .points
+                .iter()
+                .skip(edge_layout.points.len())
+                .filter(|point| point.exists.get(time) > 0.0)
+                .map(|point| EdgePoint {
+                    point: Transition {
+                        old_time,
+                        duration,
+                        old: point.point.get(time),
+                        new: new.groups.get(&edge.to).unwrap().position.new
+                            + edge_layout.end_offset.new,
                     },
                     exists: Transition {
                         old_time,
                         duration,
-                        old: get_current_float(old_layer.exists),
-                        new: new_layer.exists.new,
+                        old: point.exists.get(time),
+                        new: 0.0,
                     },
-                    index: Transition {
-                        old_time,
-                        duration,
-                        old: get_current_float(old_layer.index),
-                        new: new_layer.index.new,
-                    },
-                    ..new_layer.clone()
-                });
-                continue;
-            }
-        }
+                }),
+        );
 
-        // Otherwise insert new
-        if old.len() == 0 {
-            out.push(new_layer.clone()); // Don't transition in when there is no old
-        } else {
-            let center = (new_layer.bottom.old + new_layer.top.old) / 2.;
-            out.push(LayerLayout {
-                top: Transition {
-                    old_time,
-                    duration,
-                    old: center,
-                    new: new_layer.top.new,
-                },
-                bottom: Transition {
-                    old_time,
-                    duration,
-                    old: center,
-                    new: new_layer.bottom.new,
-                },
-                exists: Transition {
-                    old_time,
-                    duration,
-                    old: 0.,
-                    new: new_layer.exists.new,
-                },
-                ..new_layer.clone()
-            });
-        }
-    }
-
-    // Transition out any other old layers
-    for old_layer in old_iter {
-        transition_out(&old_layer, &mut out);
-    }
-
-    out
-}
-
-fn transition_layers_shift(
-    old: &Vec<LayerLayout>,
-    new: &Vec<LayerLayout>,
-    duration: u32,
-    old_time: u32,
-    get_current_float: &impl Fn(Transition<f32>) -> f32,
-) -> Vec<LayerLayout> {
-    let prev_bottom = old
-        .iter()
-        .last()
-        .map(|last_old| get_current_float(last_old.bottom));
-
-    new.iter()
-        .zip_longest(old.iter())
-        .filter_map(|p| match p {
-            EitherOrBoth::Both(new_layer, old_layer) => Some(LayerLayout {
-                bottom: Transition {
-                    old_time,
-                    duration,
-                    old: get_current_float(old_layer.bottom),
-                    new: new_layer.bottom.new,
-                },
-                top: Transition {
-                    old_time,
-                    duration,
-                    old: get_current_float(old_layer.top),
-                    new: new_layer.top.new,
-                },
-                exists: Transition {
-                    old_time,
-                    duration,
-                    old: get_current_float(old_layer.exists),
-                    new: new_layer.exists.new,
-                },
-                ..new_layer.clone()
-            }),
-            EitherOrBoth::Left(new_layer) => Some(LayerLayout {
-                top: Transition {
-                    old_time,
-                    duration,
-                    old: prev_bottom.unwrap_or(new_layer.top.new),
-                    new: new_layer.top.new,
-                },
-                bottom: Transition {
-                    old_time,
-                    duration,
-                    old: prev_bottom.unwrap_or(new_layer.bottom.new),
-                    new: new_layer.bottom.new,
-                },
-                exists: Transition {
-                    old_time,
-                    duration,
-                    old: 0.,
-                    new: new_layer.exists.new,
-                },
-                ..new_layer.clone()
-            }),
-            EitherOrBoth::Right(old_layer) => {
-                let exists = get_current_float(old_layer.exists);
-                if exists > 0.0 {
-                    Some(old_layer.clone())
-                } else {
-                    None
-                }
-            }
-        })
-        .collect()
-}
-
-fn get_per<T>(time: u32, val: Transition<T>) -> f32 {
-    let delta = time as f32 - val.old_time as f32;
-    if val.duration == 0 {
-        if delta > 0. {
-            1.
-        } else {
-            0.
+        EdgeLayout {
+            start_offset: Transition {
+                duration,
+                old_time,
+                old: start_offset,
+                new: edge_layout.start_offset.new,
+            },
+            end_offset: Transition {
+                duration,
+                old_time,
+                old: end_offset,
+                new: edge_layout.end_offset.new,
+            },
+            points: new_points,
+            exists: Transition {
+                duration,
+                old_time,
+                old: old_edge_layout.exists.get(time),
+                new: edge_layout.exists.new,
+            },
+            curve_offset: Transition {
+                duration,
+                old_time,
+                old: old_edge_layout.curve_offset.get(time),
+                new: edge_layout.curve_offset.new,
+            },
         }
     } else {
-        f32::max(0.0, f32::min(delta / val.duration as f32, 1.0))
+        let was_hidden = relations
+            .previous_groups
+            .get(&from)
+            .zip(relations.previous_groups.get(&edge.to))
+            .map(|(from_source, to_source)| from_source.id == to_source.id)
+            .unwrap_or(false);
+        let points = edge_layout
+            .points
+            .iter()
+            .map(|point| EdgePoint {
+                point: Transition {
+                    duration,
+                    old_time,
+                    // TODO: could also transition in from the new node's edge start position
+                    old: old_group.position.get(time) + edge_layout.end_offset.get(time),
+                    new: point.point.new,
+                },
+                exists: point.exists,
+            })
+            .collect();
+        EdgeLayout {
+            start_offset: edge_layout.start_offset,
+            end_offset: edge_layout.end_offset,
+            points: points,
+            exists: if was_hidden {
+                edge_layout.exists
+            } else {
+                Transition {
+                    old_time,
+                    duration: durations.insert_duration,
+                    old: 0.,
+                    new: edge_layout.exists.new,
+                }
+            },
+            curve_offset: Transition {
+                old_time,
+                duration: durations.insert_duration,
+                old: 0.,
+                new: edge_layout.curve_offset.new,
+            },
+        }
     }
 }

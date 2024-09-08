@@ -46,6 +46,12 @@ impl<T: DrawTag> EdgeData<T> {
             edge_type,
         }
     }
+    pub fn to_string(&self, from: usize) -> String {
+        format!(
+            "{}:{} -{}-> {}:{}",
+            from, self.from_level, self.edge_type.index, self.to, self.to_level
+        )
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, PartialOrd, Ord)]

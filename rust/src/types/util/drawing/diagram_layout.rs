@@ -111,9 +111,14 @@ where
     T: Add<Output = T>,
 {
     pub fn get(&self, time: u32) -> T {
-        let per = (time as f32 - self.old_time as f32) / self.duration as f32;
-        let per = f32::max(0.0, f32::min(per, 1.0));
+        let per = self.get_per(time);
         &self.old * (1.0 - per) + &self.new * per
+    }
+}
+impl<T> Transition<T> {
+    pub fn get_per(&self, time: u32) -> f32 {
+        let per = (time as f32 - self.old_time as f32) / self.duration as f32;
+        f32::max(0.0, f32::min(per, 1.0))
     }
 }
 impl<T: Copy> Transition<T> {
