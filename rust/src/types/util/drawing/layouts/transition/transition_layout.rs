@@ -18,6 +18,7 @@ use crate::{
                 Transition,
             },
             layout_rules::LayoutRules,
+            layouts::util::color_label::{mix, Color},
         },
         graph_structure::{
             graph_structure::DrawTag,
@@ -29,7 +30,7 @@ use crate::{
 };
 
 use super::{
-    relate_elements::{relate_elements, ElementRelations, TargetEdge},
+    relate_elements::{relate_elements, ElementRelations, TargetEdge, TargetGroup},
     transition_layers::transition_layers,
 };
 
@@ -92,25 +93,15 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
         time: u32,
     ) -> DiagramLayout<T> {
         let duration = self.durations.transition_duration;
-        let insert_duration = self.durations.insert_duration;
-        let delete_duration = self.durations.delete_duration;
         let old_time = time;
         let new = self.layout.layout(graph, old, sources, time);
-
-        let get_current_color = |val: Transition<(f32, f32, f32)>| {
-            let per = val.get_per(time);
-            let r = (val.old.0 * val.old.0 * (1.0 - per) + val.new.0 * val.new.0 * per).sqrt();
-            let g = (val.old.1 * val.old.1 * (1.0 - per) + val.new.1 * val.new.1 * per).sqrt();
-            let b = (val.old.2 * val.old.2 * (1.0 - per) + val.new.2 * val.new.2 * per).sqrt();
-            (r, g, b)
-        };
 
         let relations = relate_elements(graph, old, &new, sources, time);
         let ElementRelations {
             previous_groups,
             deleted_groups,
-            previous_edges,
-            deleted_edges,
+            previous_edges: _,
+            deleted_edges: _,
         } = &relations;
 
         let groups = new.groups.iter().map(|(id, group)| {
@@ -130,165 +121,20 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
             .filter_map(|(id, group, old_group_data)| {
                 old_group_data.map(|old_group_data| (id, group, old_group_data))
             })
-            .map(|(id, group, (old_group, old_target_group))| {
-                let cur_size = old_group.size.get(time);
-                let cur_position = old_group.position.get(time);
-                let start_size = if old_target_group.represents {
-                    cur_size
-                } else {
-                    // TODO: Perform better inside bounding box guarantee that uses offset
-                    // Point {
-                    //     x: f32::min(cur_size.x, group.size.new.x),
-                    //     y: f32::min(cur_size.y, group.size.new.y),
-                    // }
-                    group.size.new
-                };
-
-                let deleted_edges_layout = deleted_edges.get(id).map(|node_deleted_edges| {
-                    node_deleted_edges.iter().filter_map(|target_edge| {
-                        let new_edge = &target_edge.edge_data;
-                        let old_to = previous_groups
-                            .get(&new_edge.to)
-                            .map(|group_target| group_target.id)
-                            .unwrap_or(new_edge.to);
-                        let old_edge = EdgeData {
-                            to: old_to,
-                            ..new_edge.clone()
-                        };
-                        let old_edge_layout = old_group.edges.get(&old_edge)?;
-
-                        let exists = old_edge_layout.exists.get(time);
-                        if exists <= 0. {
-                            return None;
-                        }
-
-                        Some((
-                            new_edge.clone(),
-                            EdgeLayout {
-                                exists: if target_edge.morph.is_some() {
-                                    Transition {
-                                        old_time: old_time + duration,
-                                        duration: 1,
-                                        old: exists,
-                                        new: 0.,
-                                    }
-                                } else {
-                                    Transition {
-                                        old_time,
-                                        duration: delete_duration,
-                                        old: exists,
-                                        new: 0.,
-                                    }
-                                },
-                                points: old_edge_layout
-                                    .points
-                                    .iter()
-                                    .map(|(point)| EdgePoint {
-                                        exists: Transition {
-                                            old_time,
-                                            duration: delete_duration,
-                                            old: point.exists.get(time),
-                                            new: 0.,
-                                        },
-                                        point: Transition {
-                                            old_time,
-                                            duration,
-                                            old: point.point.get(time),
-                                            new: group.position.new
-                                                + old_edge_layout.start_offset.new,
-                                        },
-                                    })
-                                    .collect(),
-                                start_offset: if let Some(morph) = &target_edge.morph {
-                                    Transition {
-                                        old_time,
-                                        duration,
-                                        old: old_edge_layout.start_offset.get(time),
-                                        new: old_edge_layout.start_offset.new + morph.start_offset,
-                                    }
-                                } else {
-                                    old_edge_layout.start_offset
-                                },
-                                end_offset: if let Some(morph) = &target_edge.morph {
-                                    Transition {
-                                        old_time,
-                                        duration,
-                                        old: old_edge_layout.end_offset.get(time),
-                                        new: old_edge_layout.end_offset.new + morph.end_offset,
-                                    }
-                                } else {
-                                    old_edge_layout.end_offset
-                                },
-                                curve_offset: Transition {
-                                    old_time,
-                                    duration: insert_duration,
-                                    old: old_edge_layout.curve_offset.get(time),
-                                    new: 0.,
-                                },
-                            },
-                        ))
-                    })
-                });
-                // console::log!(
-                //     "Deleted edge count: {}",
-                //     deleted_edges
-                //         .clone()
-                //         .into_iter()
-                //         .flatten()
-                //         .collect_vec()
-                //         .len()
-                // );
+            .map(|(&id, group, (old_group, old_target_group))| {
                 (
-                    *id,
-                    NodeGroupLayout {
-                        position: Transition {
-                            old_time,
-                            duration,
-                            old: cur_position + old_target_group.offset,
-                            new: group.position.new,
-                        },
-                        size: Transition {
-                            old_time,
-                            duration: duration,
-                            old: start_size,
-                            new: group.size.new,
-                        },
-                        label: group.label.clone(),
-                        exists: Transition {
-                            old_time,
-                            duration,
-                            old: old_group.exists.get(time),
-                            new: group.exists.new,
-                        },
-                        level_range: group.level_range.clone(),
-                        edges: group
-                            .edges
-                            .iter()
-                            .map(|(edge_data, edge)| {
-                                (
-                                    edge_data.clone(),
-                                    map_edge(
-                                        *id,
-                                        edge_data,
-                                        edge,
-                                        old_group,
-                                        &old,
-                                        &new,
-                                        &self.durations,
-                                        &relations,
-                                        time,
-                                    ),
-                                )
-                            })
-                            .chain(deleted_edges_layout.into_iter().flatten())
-                            .collect(),
-                        color: Transition {
-                            old_time,
-                            duration,
-                            old: get_current_color(old_group.color),
-                            new: group.color.new,
-                        },
-                    },
+                    id,
+                    layout_updated_group(
+                        id,
+                        group,
+                        old_group,
+                        old_target_group,
+                        &old,
+                        &new,
+                        &self.durations,
+                        &relations,
+                        time,
+                    ),
                 )
             })
             .collect::<HashMap<_, _>>();
@@ -305,225 +151,34 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
 
         let new_groups = groups
             .filter(|(_id, _group, old_group_data)| old_group_data.is_none())
-            .map(|(id, group, _)| {
-                if let Some(parent_id) = some_updated_parents.get(id) {
-                    let parent = updated_groups.get(parent_id).unwrap();
-                    (
-                        *id,
-                        NodeGroupLayout {
-                            position: Transition {
-                                old_time,
-                                duration,
-                                old: parent.position.get(time),
-                                new: group.position.new,
-                            },
-                            color: Transition {
-                                old_time,
-                                duration,
-                                old: get_current_color(parent.color),
-                                new: group.color.new,
-                            },
-                            edges: group
-                                .edges
-                                .iter()
-                                .map(|(edge_data, edge)| {
-                                    (
-                                        edge_data.clone(),
-                                        EdgeLayout {
-                                            points: edge
-                                                .points
-                                                .iter()
-                                                .map(|point| EdgePoint {
-                                                    point: Transition {
-                                                        old_time,
-                                                        duration,
-                                                        old: parent.position.old,
-                                                        new: point.point.new.clone(),
-                                                    },
-                                                    ..point.clone()
-                                                })
-                                                .collect(),
-                                            ..edge.clone()
-                                        },
-                                    )
-                                })
-                                .collect(),
-                            ..group.clone()
-                        },
-                    )
-                } else {
-                    (
-                        *id,
-                        NodeGroupLayout {
-                            exists: Transition {
-                                old_time,
-                                duration: insert_duration,
-                                old: 0.,
-                                new: group.exists.new,
-                            },
-                            edges: group
-                                .edges
-                                .iter()
-                                .map(|(edge_data, edge)| {
-                                    (
-                                        edge_data.clone(),
-                                        EdgeLayout {
-                                            exists: Transition {
-                                                old_time,
-                                                duration: insert_duration,
-                                                old: 0.,
-                                                new: edge.exists.new,
-                                            },
-                                            ..edge.clone()
-                                        },
-                                    )
-                                })
-                                .collect(),
-                            ..group.clone()
-                        },
-                    )
-                }
+            .map(|(&id, group, _)| {
+                (
+                    id,
+                    layout_added_group(
+                        id,
+                        group,
+                        &some_updated_parents,
+                        &updated_groups,
+                        &self.durations,
+                        time,
+                    ),
+                )
             })
             .collect_vec();
 
         let old_groups = old.groups.iter().filter_map(|(&id, group)| {
-            let Some(target_group) = deleted_groups.get(&id) else {
-                return None;
-            };
-            let target = target_group.as_ref().and_then(|target_group| {
-                new.groups
-                    .get(&target_group.id)
-                    .zip(Some(target_group.offset))
-            });
-
-            let deleted_edges_layout = deleted_edges.get(&id).map(|node_deleted_edges| {
-                node_deleted_edges.iter().filter_map(|target_edge| {
-                    let new_edge = &target_edge.edge_data;
-                    let old_to = previous_groups
-                        .get(&new_edge.to)
-                        .map(|group_target| group_target.id)
-                        .unwrap_or(new_edge.to);
-                    let old_edge = EdgeData {
-                        to: old_to,
-                        ..new_edge.clone()
-                    };
-                    let old_edge_layout = group.edges.get(&old_edge)?;
-
-                    let exists = old_edge_layout.exists.get(time);
-                    if exists <= 0. {
-                        return None;
-                    }
-
-                    Some((
-                        new_edge.clone(),
-                        EdgeLayout {
-                            exists: if target_edge.morph.is_some() {
-                                Transition {
-                                    old_time: old_time + duration,
-                                    duration: 1,
-                                    old: exists,
-                                    new: 0.,
-                                }
-                            } else {
-                                Transition {
-                                    old_time,
-                                    duration: delete_duration,
-                                    old: exists,
-                                    new: 0.,
-                                }
-                            },
-                            points: old_edge_layout
-                                .points
-                                .iter()
-                                .map(|(point)| EdgePoint {
-                                    exists: Transition {
-                                        old_time,
-                                        duration: delete_duration,
-                                        old: point.exists.get(time),
-                                        new: 0.,
-                                    },
-                                    point: Transition {
-                                        old_time,
-                                        duration,
-                                        old: point.point.get(time),
-                                        new: if let Some((target, offset)) = target {
-                                            target.position.new + offset.clone()
-                                        } else {
-                                            group.position.new
-                                        } + old_edge_layout.start_offset.new,
-                                    },
-                                })
-                                .collect(),
-                            start_offset: if let Some(morph) = &target_edge.morph {
-                                Transition {
-                                    old_time,
-                                    duration,
-                                    old: old_edge_layout.start_offset.get(time),
-                                    new: old_edge_layout.start_offset.new + morph.start_offset,
-                                }
-                            } else {
-                                old_edge_layout.start_offset
-                            },
-                            end_offset: if let Some(morph) = &target_edge.morph {
-                                Transition {
-                                    old_time,
-                                    duration,
-                                    old: old_edge_layout.end_offset.get(time),
-                                    new: old_edge_layout.end_offset.new + morph.end_offset,
-                                }
-                            } else {
-                                old_edge_layout.end_offset
-                            },
-                            curve_offset: Transition {
-                                old_time,
-                                duration: insert_duration,
-                                old: old_edge_layout.curve_offset.get(time),
-                                new: 0.,
-                            },
-                        },
-                    ))
-                })
-            });
-
+            let target_group = deleted_groups.get(&id)?;
             Some((
                 id,
-                match target {
-                    Some((target, offset)) => {
-                        let cur_pos = group.position.get(time);
-                        NodeGroupLayout {
-                            position: Transition {
-                                old_time,
-                                duration,
-                                old: cur_pos,
-                                new: target.position.new + offset.clone(),
-                            },
-                            color: Transition {
-                                old_time,
-                                duration,
-                                old: get_current_color(group.color),
-                                new: target.color.new,
-                            },
-                            exists: Transition {
-                                old_time: old_time + duration,
-                                duration: 1,
-                                old: group.exists.get(time),
-                                new: 0.,
-                            },
-                            edges: deleted_edges_layout.into_iter().flatten().collect(),
-                            ..group.clone()
-                        }
-                    }
-                    _ => NodeGroupLayout {
-                        exists: Transition {
-                            old_time,
-                            duration: delete_duration,
-                            old: group.exists.get(time),
-                            new: 0.,
-                        },
-                        edges: deleted_edges_layout.into_iter().flatten().collect(),
-                        ..group.clone()
-                    },
-                },
+                layout_removed_group(
+                    id,
+                    group,
+                    target_group,
+                    &new,
+                    &self.durations,
+                    &relations,
+                    time,
+                ),
             ))
         });
 
@@ -539,7 +194,236 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
     }
 }
 
-fn map_edge<T: DrawTag>(
+fn layout_updated_group<T: DrawTag>(
+    id: NodeGroupID,
+    group: &NodeGroupLayout<T>,
+    old_group: &NodeGroupLayout<T>,
+    target_data: &TargetGroup,
+    old: &DiagramLayout<T>,
+    new: &DiagramLayout<T>,
+    durations: &TransitionDurations,
+    relations: &ElementRelations<T>,
+    time: u32,
+) -> NodeGroupLayout<T> {
+    let old_time = time;
+    let duration = durations.transition_duration;
+
+    let cur_size = old_group.size.get(time);
+    let cur_position = old_group.position.get(time);
+    let start_size = if target_data.represents {
+        cur_size
+    } else {
+        group.size.new
+    };
+
+    let deleted_edges_layout = layout_deleted_edges(
+        id,
+        old_group,
+        group.position.new,
+        durations,
+        &relations,
+        time,
+    );
+
+    NodeGroupLayout {
+        position: Transition {
+            old_time,
+            duration,
+            old: cur_position + target_data.offset,
+            new: group.position.new,
+        },
+        size: Transition {
+            old_time,
+            duration: duration,
+            old: start_size,
+            new: group.size.new,
+        },
+        label: group.label.clone(),
+        exists: Transition {
+            old_time,
+            duration,
+            old: old_group.exists.get(time),
+            new: group.exists.new,
+        },
+        level_range: group.level_range.clone(),
+        edges: group
+            .edges
+            .iter()
+            .map(|(edge_data, edge)| {
+                (
+                    edge_data.clone(),
+                    layout_current_edge(
+                        id, edge_data, edge, old_group, &old, &new, &durations, &relations, time,
+                    ),
+                )
+            })
+            .chain(deleted_edges_layout.into_iter())
+            .collect(),
+        color: Transition {
+            old_time,
+            duration,
+            old: get_current_color(old_group.color, time),
+            new: group.color.new,
+        },
+    }
+}
+
+fn layout_added_group<T: DrawTag>(
+    id: NodeGroupID,
+    group: &NodeGroupLayout<T>,
+    // Per node, potentially a parent edge that is a node in both the old and new layout
+    some_updated_parents: &HashMap<usize, usize>,
+    updated_groups: &HashMap<usize, NodeGroupLayout<T>>,
+    durations: &TransitionDurations,
+    time: u32,
+) -> NodeGroupLayout<T> {
+    let old_time = time;
+    let duration = durations.transition_duration;
+
+    if let Some(parent_id) = some_updated_parents.get(&id) {
+        let parent = updated_groups.get(parent_id).unwrap();
+        NodeGroupLayout {
+            position: Transition {
+                old_time,
+                duration,
+                old: parent.position.get(time),
+                new: group.position.new,
+            },
+            color: Transition {
+                old_time,
+                duration,
+                old: get_current_color(parent.color, time),
+                new: group.color.new,
+            },
+            edges: group
+                .edges
+                .iter()
+                .map(|(edge_data, edge)| {
+                    (
+                        edge_data.clone(),
+                        EdgeLayout {
+                            points: edge
+                                .points
+                                .iter()
+                                .map(|point| EdgePoint {
+                                    point: Transition {
+                                        old_time,
+                                        duration,
+                                        old: parent.position.old,
+                                        new: point.point.new.clone(),
+                                    },
+                                    ..point.clone()
+                                })
+                                .collect(),
+                            ..edge.clone()
+                        },
+                    )
+                })
+                .collect(),
+            ..group.clone()
+        }
+    } else {
+        NodeGroupLayout {
+            exists: Transition {
+                old_time,
+                duration: durations.insert_duration,
+                old: 0.,
+                new: group.exists.new,
+            },
+            edges: group
+                .edges
+                .iter()
+                .map(|(edge_data, edge)| {
+                    (
+                        edge_data.clone(),
+                        EdgeLayout {
+                            exists: Transition {
+                                old_time,
+                                duration: durations.insert_duration,
+                                old: 0.,
+                                new: edge.exists.new,
+                            },
+                            ..edge.clone()
+                        },
+                    )
+                })
+                .collect(),
+            ..group.clone()
+        }
+    }
+}
+
+fn layout_removed_group<T: DrawTag>(
+    id: NodeGroupID,
+    group: &NodeGroupLayout<T>,
+    target_data: &Option<TargetGroup>,
+    new: &DiagramLayout<T>,
+    durations: &TransitionDurations,
+    relations: &ElementRelations<T>,
+    time: u32,
+) -> NodeGroupLayout<T> {
+    let old_time = time;
+    let duration = durations.transition_duration;
+
+    let target = target_data.as_ref().and_then(|target_group| {
+        new.groups
+            .get(&target_group.id)
+            .zip(Some(target_group.offset))
+    });
+
+    let deleted_edges_layout = layout_deleted_edges(
+        id,
+        &group,
+        if let Some((target, offset)) = target {
+            target.position.new + offset.clone()
+        } else {
+            group.position.new
+        },
+        &durations,
+        &relations,
+        time,
+    );
+
+    match target {
+        Some((target, offset)) => {
+            let cur_pos = group.position.get(time);
+            NodeGroupLayout {
+                position: Transition {
+                    old_time,
+                    duration,
+                    old: cur_pos,
+                    new: target.position.new + offset.clone(),
+                },
+                color: Transition {
+                    old_time,
+                    duration,
+                    old: get_current_color(group.color, time),
+                    new: target.color.new,
+                },
+                exists: Transition {
+                    old_time: old_time + duration,
+                    duration: 1,
+                    old: group.exists.get(time),
+                    new: 0.,
+                },
+                edges: deleted_edges_layout,
+                ..group.clone()
+            }
+        }
+        _ => NodeGroupLayout {
+            exists: Transition {
+                old_time,
+                duration: durations.delete_duration,
+                old: group.exists.get(time),
+                new: 0.,
+            },
+            edges: deleted_edges_layout,
+            ..group.clone()
+        },
+    }
+}
+
+fn layout_current_edge<T: DrawTag>(
     from: NodeGroupID,
     edge: &EdgeData<T>,
     edge_layout: &EdgeLayout,
@@ -572,7 +456,6 @@ fn map_edge<T: DrawTag>(
             })
         });
 
-    // let edge_type = edge_data.edge_type;
     if let Some((old_edge_data, old_edge_layout, start_node_offset, end_node_offset)) =
         maybe_old_edge
     {
@@ -661,6 +544,7 @@ fn map_edge<T: DrawTag>(
             },
         }
     } else {
+        // There is no edge to morph, so create a new one
         let was_hidden = relations
             .previous_groups
             .get(&from)
@@ -686,6 +570,7 @@ fn map_edge<T: DrawTag>(
             end_offset: edge_layout.end_offset,
             points: points,
             exists: if was_hidden {
+                // If the group was hidden in another group, the edge does not have to fade in
                 edge_layout.exists
             } else {
                 Transition {
@@ -703,4 +588,112 @@ fn map_edge<T: DrawTag>(
             },
         }
     }
+}
+
+fn layout_deleted_edges<T: DrawTag>(
+    from: NodeGroupID,
+    group: &NodeGroupLayout<T>,
+    point_pos: Point,
+    durations: &TransitionDurations,
+    relations: &ElementRelations<T>,
+    time: u32,
+) -> HashMap<EdgeData<T>, EdgeLayout> {
+    let old_time = time;
+    let duration = durations.transition_duration;
+
+    relations
+        .deleted_edges
+        .get(&from)
+        .map(|node_deleted_edges| {
+            node_deleted_edges.iter().filter_map(|target_edge| {
+                let new_edge = &target_edge.edge_data;
+                let old_to = relations
+                    .previous_groups
+                    .get(&new_edge.to)
+                    .map(|group_target| group_target.id)
+                    .unwrap_or(new_edge.to);
+                let old_edge = EdgeData {
+                    to: old_to,
+                    ..new_edge.clone()
+                };
+                let old_edge_layout = group.edges.get(&old_edge)?;
+
+                let exists = old_edge_layout.exists.get(time);
+                if exists <= 0. {
+                    return None;
+                }
+
+                Some((
+                    new_edge.clone(),
+                    EdgeLayout {
+                        exists: if target_edge.morph.is_some() {
+                            Transition {
+                                old_time: old_time + duration,
+                                duration: 1,
+                                old: exists,
+                                new: 0.,
+                            }
+                        } else {
+                            Transition {
+                                old_time,
+                                duration: durations.delete_duration,
+                                old: exists,
+                                new: 0.,
+                            }
+                        },
+                        points: old_edge_layout
+                            .points
+                            .iter()
+                            .map(|point| EdgePoint {
+                                exists: Transition {
+                                    old_time,
+                                    duration: durations.delete_duration,
+                                    old: point.exists.get(time),
+                                    new: 0.,
+                                },
+                                point: Transition {
+                                    old_time,
+                                    duration,
+                                    old: point.point.get(time),
+                                    new: point_pos + old_edge_layout.start_offset.new,
+                                },
+                            })
+                            .collect(),
+                        start_offset: if let Some(morph) = &target_edge.morph {
+                            Transition {
+                                old_time,
+                                duration,
+                                old: old_edge_layout.start_offset.get(time),
+                                new: old_edge_layout.start_offset.new + morph.start_offset,
+                            }
+                        } else {
+                            old_edge_layout.start_offset
+                        },
+                        end_offset: if let Some(morph) = &target_edge.morph {
+                            Transition {
+                                old_time,
+                                duration,
+                                old: old_edge_layout.end_offset.get(time),
+                                new: old_edge_layout.end_offset.new + morph.end_offset,
+                            }
+                        } else {
+                            old_edge_layout.end_offset
+                        },
+                        curve_offset: Transition {
+                            old_time,
+                            duration: durations.insert_duration,
+                            old: old_edge_layout.curve_offset.get(time),
+                            new: 0.,
+                        },
+                    },
+                ))
+            })
+        })
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+fn get_current_color(val: Transition<Color>, time: u32) -> Color {
+    mix(&val.old, &val.new, val.get_per(time))
 }
