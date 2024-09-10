@@ -9,8 +9,11 @@ use itertools::Itertools;
 use oxidd::LevelNo;
 
 use crate::{
-    types::util::graph_structure::graph_structure::{
-        Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
+    types::util::{
+        graph_structure::graph_structure::{
+            Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
+        },
+        storage::state_storage::StateStorage,
     },
     util::{logging::console, rc_refcell::MutRcRefCell},
     wasm_interface::NodeID,
@@ -37,26 +40,31 @@ impl<T: DrawTag + 'static, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     TerminalLevelAdjuster<T, NL, LL, G>
 {
     pub fn new(mut graph: G) -> TerminalLevelAdjuster<T, NL, LL, G> {
-        TerminalLevelAdjuster {
+        let mut ta = TerminalLevelAdjuster {
             level_cache: HashMap::new(),
             graph_events: graph.create_event_reader(),
             event_writer: GraphEventsWriter::new(),
-            terminal_parents_cache: HashMap::from_iter(
-                graph
-                    .get_terminals()
-                    .iter()
-                    .map(|&t| {
-                        (
-                            t,
-                            graph.get_known_parents(t).iter().map(|&(_, p)| p).collect(),
-                        )
-                    })
-                    .collect::<HashMap<NodeID, HashSet<NodeID>>>(),
-            ),
+            terminal_parents_cache: HashMap::new(),
             node_label: PhantomData,
             level_label: PhantomData,
             tag: PhantomData,
             graph,
+        };
+        ta.init_terminals_cache();
+        ta
+    }
+
+    fn init_terminals_cache(&mut self) {
+        self.terminal_parents_cache.clear();
+        for terminal in self.graph.get_terminals() {
+            self.terminal_parents_cache.insert(
+                terminal,
+                self.graph
+                    .get_known_parents(terminal)
+                    .iter()
+                    .map(|&(_, p)| p)
+                    .collect(),
+            );
         }
     }
 
@@ -92,6 +100,21 @@ impl<T: DrawTag + 'static, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         }
 
         self.event_writer.write_vec(events);
+    }
+}
+
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
+    for TerminalLevelAdjuster<T, NL, LL, G>
+where
+    G: StateStorage,
+{
+    fn read(&mut self, stream: &mut std::io::Cursor<&Vec<u8>>) -> std::io::Result<()> {
+        self.graph.read(stream)?;
+        self.init_terminals_cache();
+        Ok(())
+    }
+    fn write(&self, stream: &mut std::io::Cursor<&mut Vec<u8>>) -> std::io::Result<()> {
+        self.graph.write(stream)
     }
 }
 

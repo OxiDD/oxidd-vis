@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::LinkedList;
 use std::hash::Hash;
+use std::io::Cursor;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -75,6 +76,8 @@ use super::util::graph_structure::grouped_graph_structure::GroupedGraphStructure
 use super::util::graph_structure::oxidd_graph_structure::NodeLabel;
 use super::util::graph_structure::oxidd_graph_structure::OxiddGraphStructure;
 use super::util::group_manager::GroupManager;
+use super::util::storage::state_storage::Serializable;
+use super::util::storage::state_storage::StateStorage;
 
 pub struct QDDDiagram<MR: ManagerRef>
 where
@@ -228,8 +231,8 @@ where
 }
 
 pub struct QDDDiagramDrawer<
-    T: DrawTag + 'static,
-    G: GraphStructure<T, NodeLabel<String>, String> + 'static,
+    T: DrawTag + Serializable<T> + 'static,
+    G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
     R: Renderer<T>,
     L: LayoutRules<T, Color, String, GMGraph<T, G>>,
 > {
@@ -251,8 +254,8 @@ type MPresenceAdjuster<T, G> =
 type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, (f32, f32, f32)>;
 
 impl<
-        T: DrawTag + 'static,
-        G: GraphStructure<T, NodeLabel<String>, String> + 'static,
+        T: DrawTag + Serializable<T> + 'static,
+        G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
         R: Renderer<T>,
         L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > QDDDiagramDrawer<T, G, R, L>
@@ -261,6 +264,7 @@ impl<
         let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(graph));
         let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
         let roots = modified_graph.get_roots();
+        t(&modified_graph.clone());
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
         let grouped_graph = GMGraph::new_shared(group_manager.clone(), |nodes| {
             match (nodes.get(0), nodes.get(1)) {
@@ -315,9 +319,11 @@ impl<
     }
 }
 
+pub fn t<K: StateStorage>(s: &K) {}
+
 impl<
-        T: DrawTag + 'static,
-        G: GraphStructure<T, NodeLabel<String>, String> + 'static,
+        T: DrawTag + Serializable<T> + 'static,
+        G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
         R: Renderer<T>,
         L: LayoutRules<T, Color, String, GMGraph<T, G>>,
     > DiagramSectionDrawer for QDDDiagramDrawer<T, G, R, L>
@@ -381,5 +387,15 @@ impl<
     fn source_nodes_to_local(&self, nodes: &[NodeID]) -> Vec<NodeID> {
         self.graph
             .source_nodes_to_local(nodes.iter().cloned().collect())
+    }
+
+    fn serialize_state(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        self.group_manager.read().write(&mut Cursor::new(&mut out));
+        out
+    }
+
+    fn deserialize_state(&mut self, state: Vec<u8>) -> () {
+        self.group_manager.get().read(&mut Cursor::new(&state));
     }
 }

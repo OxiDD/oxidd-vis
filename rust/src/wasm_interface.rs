@@ -100,6 +100,14 @@ impl DiagramSectionDrawerBox {
     pub fn source_nodes_to_local(&self, nodes: &[NodeID]) -> Vec<NodeID> {
         self.0.source_nodes_to_local(nodes)
     }
+
+    /** Storage */
+    pub fn serialize_state(&self) -> Vec<u8> {
+        self.0.serialize_state()
+    }
+    pub fn deserialize_state(&mut self, state: Vec<u8>) {
+        self.0.deserialize_state(state)
+    }
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]

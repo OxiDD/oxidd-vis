@@ -9,7 +9,7 @@ use std::{
 use oxidd::{Edge, Function, InnerNode, LevelNo, Manager, NodeID};
 use oxidd_core::{DiagramRules, HasLevel, Node};
 
-use crate::util::logging::console;
+use crate::{types::util::storage::state_storage::StateStorage, util::logging::console};
 
 use super::graph_structure::{
     Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
@@ -76,6 +76,21 @@ where
         self.event_writer
             .write(Change::ParentDiscover { child: node });
     }
+}
+
+impl<
+        ET: DrawTag + 'static,
+        T: Clone + 'static,
+        E: Edge<Tag = ET> + 'static,
+        N: InnerNode<E> + HasLevel + 'static,
+        R: DiagramRules<E, N, T> + 'static,
+        F: Function + 'static,
+        S: Fn(&T) -> String,
+    > StateStorage for OxiddGraphStructure<ET, F, T, S>
+where
+    for<'id> F::Manager<'id>:
+        Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
+{
 }
 
 impl<

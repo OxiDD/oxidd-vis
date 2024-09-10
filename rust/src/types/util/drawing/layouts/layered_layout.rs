@@ -303,11 +303,12 @@ fn add_edges_with_dummies<T: DrawTag, GL, LL>(
         {
             let edge_data = EdgeData::new(to_group, edge_start_level, edge_end_level, edge_type);
 
-            let group_connection = group_layers
-                .get(&group)
-                .unwrap()
-                .get(&edge_start_level)
-                .unwrap();
+            let Some(group_connections) = group_layers.get(&group) else {
+                continue;
+            };
+            let Some(group_connection) = group_connections.get(&edge_start_level) else {
+                continue;
+            };
 
             let mut prev = *group_connection;
             let mut bends = Vec::new();
@@ -324,11 +325,26 @@ fn add_edges_with_dummies<T: DrawTag, GL, LL>(
             }
             edge_bend_nodes.insert((group, edge_data.clone()), bends);
 
-            let to_group_connection = *group_layers
-                .get(&to_group)
-                .expect(&format!("Unknown: {} to {}", group, to_group)[..])
-                .get(&edge_end_level)
-                .unwrap();
+            let Some(to_group_connections) = group_layers.get(&to_group) else {
+                console::log!(
+                    "Non existent target group: {};{} -> {};{}",
+                    group,
+                    edge_start_level,
+                    to_group,
+                    edge_end_level
+                );
+                continue;
+            };
+            let Some(&to_group_connection) = to_group_connections.get(&edge_end_level) else {
+                console::log!(
+                    "Non existent target level: {};{} -> {};{}",
+                    group,
+                    edge_start_level,
+                    to_group,
+                    edge_end_level
+                );
+                continue;
+            };
             edge_connection_nodes
                 .insert((group, edge_data), (*group_connection, to_group_connection));
             add_to_edges(edges, prev, to_group_connection);

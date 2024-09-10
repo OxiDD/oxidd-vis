@@ -4,12 +4,14 @@ use std::{
     collections::{HashMap, HashSet, LinkedList},
     fmt::Display,
     hash::Hash,
+    io::{Cursor, Result, Write},
     iter::FromIterator,
     marker::PhantomData,
     rc::Rc,
     vec::IntoIter,
 };
 
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use itertools::Itertools;
 use oxidd::{Edge, Function, InnerNode, LevelNo, Manager};
 use oxidd_core::{DiagramRules, Node, Tag};
@@ -27,6 +29,7 @@ use super::{
         oxidd_graph_structure::NodeLabel,
     },
     node_tracker_manager::{NodeTrackerM, NodeTrackerManager},
+    storage::state_storage::StateStorage,
 };
 
 pub struct GroupManager<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> {
@@ -435,36 +438,48 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 // Main methods
 impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManager<T, NL, LL, G> {
     pub fn new(mut graph: G) -> GroupManager<T, NL, LL, G> {
-        let root_ids = graph.get_roots();
-        let mut group_ids = NodeTrackerManager::new(1);
-        group_ids.add_group_id(0);
-        GroupManager {
+        let mut gm = GroupManager {
             level_label: PhantomData,
             node_label: PhantomData,
             graph_events: graph.create_event_reader(),
             group_id_by_node: HashMap::new(),
-            group_by_id: HashMap::from([(
-                0,
-                NodeGroup {
-                    nodes: root_ids
-                        .iter()
-                        .map(|&root_id| (root_id, ConnectionData::new()))
-                        .collect(),
-                    out_edges: HashMap::new(),
-                    in_edges: HashMap::new(),
-                    layer_min: root_ids
-                        .iter()
-                        .map(|&root_id| (root_id, Reverse(graph.get_level(root_id))))
-                        .collect(),
-                    layer_max: root_ids
-                        .iter()
-                        .map(|&root_id| (root_id, graph.get_level(root_id)))
-                        .collect(),
-                },
-            )]),
+            group_by_id: HashMap::new(),
             graph,
-            group_ids,
+            group_ids: NodeTrackerManager::new(1),
+        };
+        gm.reset();
+        gm
+    }
+
+    pub fn reset(&mut self) {
+        let root_ids = self.graph.get_roots();
+        for &group_id in self.group_by_id.keys().collect_vec() {
+            self.group_ids.make_available(group_id);
         }
+        self.group_id_by_node.clear();
+        self.group_by_id.clear();
+        let layer_min = root_ids
+            .iter()
+            .map(|&root_id| (root_id, Reverse(self.graph.get_level(root_id))))
+            .collect();
+        let layer_max = root_ids
+            .iter()
+            .map(|&root_id| (root_id, self.graph.get_level(root_id)))
+            .collect();
+        self.group_by_id.insert(
+            0,
+            NodeGroup {
+                nodes: root_ids
+                    .iter()
+                    .map(|&root_id| (root_id, ConnectionData::new()))
+                    .collect(),
+                out_edges: HashMap::new(),
+                in_edges: HashMap::new(),
+                layer_min,
+                layer_max,
+            },
+        );
+        self.graph.consume_events(&self.graph_events);
     }
 
     pub fn get_groups(&self) -> &HashMap<NodeGroupID, NodeGroup<T>> {
@@ -757,5 +772,70 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
     fn refresh(&mut self) {
         self.process_graph_events();
+    }
+}
+
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
+    for GroupManager<T, NL, LL, G>
+where
+    G: StateStorage,
+{
+    fn write(&self, stream: &mut Cursor<&mut Vec<u8>>) -> Result<()> {
+        self.graph.write(stream)?;
+        let group_count = self.group_by_id.len();
+        stream.write_u32::<LittleEndian>(group_count as u32)?;
+        for (group_id, group) in &self.group_by_id {
+            let nodes = group.nodes.keys();
+            let node_count = nodes.len();
+            stream.write_u32::<LittleEndian>(*group_id as u32)?;
+            stream.write_u32::<LittleEndian>(node_count as u32)?;
+            for node in nodes {
+                stream.write_u32::<LittleEndian>(*node as u32)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn read(&mut self, stream: &mut Cursor<&Vec<u8>>) -> Result<()> {
+        self.reset();
+
+        self.graph.read(stream)?;
+        // No events should be created, but just in case, throw away events
+        let events = self.graph.consume_events(&self.graph_events);
+        if events.len() > 0 {
+            console::log!(
+                "Deserialization should not have caused any events, Event count: {}",
+                events.len()
+            );
+        }
+
+        let group_count = stream.read_u32::<LittleEndian>()?;
+        for _ in 0..group_count {
+            let group_id = stream.read_u32::<LittleEndian>()? as usize;
+            let node_count = stream.read_u32::<LittleEndian>()?;
+
+            let mut targets = Vec::<TargetID>::new();
+            for _ in 0..node_count {
+                let node = stream.read_u32::<LittleEndian>()?;
+                targets.push(TargetID::new(TargetIDType::NodeID, node as usize));
+            }
+
+            if !self.group_by_id.contains_key(&group_id) {
+                self.group_ids.add_group_id(group_id, true);
+                self.group_by_id.insert(
+                    group_id,
+                    NodeGroup {
+                        nodes: HashMap::new(),
+                        in_edges: HashMap::new(),
+                        out_edges: HashMap::new(),
+                        layer_min: PriorityQueue::new(),
+                        layer_max: PriorityQueue::new(),
+                    },
+                );
+            }
+
+            self.set_group(targets, group_id);
+        }
+        Ok(())
     }
 }

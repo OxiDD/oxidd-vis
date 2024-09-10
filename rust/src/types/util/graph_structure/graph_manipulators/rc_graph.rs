@@ -7,8 +7,11 @@ use std::{
 use oxidd::LevelNo;
 
 use crate::{
-    types::util::graph_structure::graph_structure::{
-        Change, DrawTag, EdgeType, GraphEventsReader, GraphStructure,
+    types::util::{
+        graph_structure::graph_structure::{
+            Change, DrawTag, EdgeType, GraphEventsReader, GraphStructure,
+        },
+        storage::state_storage::StateStorage,
     },
     util::rc_refcell::MutRcRefCell,
     wasm_interface::NodeID,
@@ -50,6 +53,19 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> RCGraph<T, 
 
     pub fn get<'a>(&'a self) -> RefMut<'a, G> {
         self.graph.get()
+    }
+}
+
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
+    for RCGraph<T, NL, LL, G>
+where
+    G: StateStorage,
+{
+    fn read(&mut self, stream: &mut std::io::Cursor<&Vec<u8>>) -> std::io::Result<()> {
+        self.graph.get().read(stream)
+    }
+    fn write(&self, stream: &mut std::io::Cursor<&mut Vec<u8>>) -> std::io::Result<()> {
+        self.graph.read().write(stream)
     }
 }
 

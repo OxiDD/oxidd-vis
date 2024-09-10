@@ -165,7 +165,6 @@ pub fn map_groups<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
                             represents: false,
                         }
                     } else {
-                        console::log!("Detect this no shift");
                         TargetGroup {
                             id: group_id,
                             offset: Point { x: 0., y: 0. },

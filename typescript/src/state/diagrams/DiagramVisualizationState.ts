@@ -13,6 +13,7 @@ import {IRectangle} from "../../utils/_types/IRectangle";
 import {ITool} from "../toolbar/_types/ITool";
 import {IToolEvent} from "../toolbar/_types/IToolEvent";
 import {Derived} from "../../watchables/Derived";
+import {binaryToString, stringToBinary} from "../../utils/binarySerialization";
 
 /** The state of a single visualization of a diagram */
 export class DiagramVisualizationState extends ViewState {
@@ -156,7 +157,19 @@ export class DiagramVisualizationState extends ViewState {
 
     /** @override */
     public serialize(): IDiagramVisualizationSerialization {
-        return {...super.serialize(), transform: this.transform.get()};
+        const rustState = this.drawer.serialize_state();
+        const stateText = binaryToString(rustState);
+        // const rustState2 = stringToBinary(stateText);
+        // console.log(
+        //     "Equal: ",
+        //     rustState.length == rustState2.length &&
+        //         rustState.every((b, i) => b == rustState2[i])
+        // );
+        return {
+            ...super.serialize(),
+            transform: this.transform.get(),
+            rustState: stateText,
+        };
     }
 
     /** @override */
@@ -164,6 +177,9 @@ export class DiagramVisualizationState extends ViewState {
         return chain(push => {
             push(super.deserialize(data));
             push(this.transform.set(data.transform));
+            const rustState = stringToBinary(data.rustState);
+            this.drawer.deserialize_state(rustState);
+            this.relayout();
         });
     }
 }

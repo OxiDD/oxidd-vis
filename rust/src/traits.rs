@@ -39,4 +39,8 @@ pub trait DiagramSectionDrawer {
     fn local_nodes_to_sources(&self, nodes: &[NodeID]) -> Vec<NodeID>;
     /// Retrieves the local nodes representing the collection of sources
     fn source_nodes_to_local(&self, nodes: &[NodeID]) -> Vec<NodeID>;
+
+    /** Storage */
+    fn serialize_state(&self) -> Vec<u8>;
+    fn deserialize_state(&mut self, state: Vec<u8>) -> ();
 }

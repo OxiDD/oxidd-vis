@@ -2,19 +2,24 @@ use std::{
     borrow::{Borrow, BorrowMut},
     cell::{Ref, RefCell},
     collections::{HashMap, HashSet},
+    fmt::Display,
     hash::Hash,
     marker::PhantomData,
     rc::Rc,
 };
 
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use itertools::{Either, Itertools};
 use multimap::MultiMap;
 use oxidd::{LevelNo, NodeID};
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    types::util::graph_structure::graph_structure::{
-        Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
+    types::util::{
+        graph_structure::graph_structure::{
+            Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
+        },
+        storage::state_storage::{Serializable, StateStorage},
     },
     util::{free_id_manager::FreeIdManager, logging::console},
 };
@@ -83,6 +88,14 @@ impl<T: DrawTag> PresenceGroups<T> {
 pub enum EdgeConstraint<T: DrawTag> {
     Exact(EdgeType<T>),
     Any,
+}
+impl<T: DrawTag> Display for EdgeConstraint<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            EdgeConstraint::Any => write!(f, "Any"),
+            EdgeConstraint::Exact(et) => write!(f, "Exact({})", et.index),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -162,14 +175,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
 
             // Make sure that for all possible parents, the children are determined (and hence replacements are calculated if needed)
-            let source_parents = self.graph.get_known_parents(owner);
-            let parents = source_parents
-                .iter()
-                .flat_map(|(_, parent)| self.get_all_copies(*parent))
-                .collect_vec();
-            for parent in parents {
-                self.update_children(parent);
-            }
+            self.update_children_of_parents(owner);
         }
 
         // Create an event for the replaced node
@@ -179,9 +185,19 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         }
     }
 
+    fn update_children_of_parents(&mut self, left_node_id: NodeID) {
+        let source_parents = self.graph.get_known_parents(left_node_id);
+        let parents = source_parents
+            .iter()
+            .flat_map(|(_, parent)| self.get_all_copies(*parent))
+            .collect_vec();
+        for parent in parents {
+            self.update_children(parent);
+        }
+    }
+
     fn process_graph_changes(&mut self) {
         let events = self.graph.consume_events(&self.graph_events);
-
         for event in events {
             match event {
                 Change::NodeLabelChange { node } => {
@@ -277,37 +293,43 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
         }
     }
-
     fn create_replacement(
         &mut self,
         parents: Vec<(EdgeConstraint<T>, NodeID)>,
         child_to_be_replaced: NodeID,
     ) -> NodeID {
-        let id = {
-            let id = self.free_id.get_next();
+        console::log!("Created replacement for {}", child_to_be_replaced);
+        let id = self.free_id.get_next();
+        self.create_replacement_without_events(parents, child_to_be_replaced, id);
 
-            // Store the mapping
-            self.sources.insert(id, child_to_be_replaced);
-            self.images.insert(child_to_be_replaced, id);
-            for (constraint, parent) in &parents {
-                self.replacements
-                    .insert((*parent, constraint.clone(), child_to_be_replaced), id);
-            }
+        // Create a creation event
+        let out_id = from_sourced(Either::Right(id));
+        self.add_insert_node_events(out_id, from_sourced(Either::Left(child_to_be_replaced)));
 
-            // Store the parents
-            self.parent_nodes
-                .insert(id, parents.iter().map(|(_, parent)| *parent).collect());
+        id
+    }
+    fn create_replacement_without_events(
+        &mut self,
+        parents: Vec<(EdgeConstraint<T>, NodeID)>,
+        child_to_be_replaced: NodeID,
+        id: NodeID,
+    ) -> NodeID {
+        // Store the mapping
+        self.sources.insert(id, child_to_be_replaced);
+        self.images.insert(child_to_be_replaced, id);
+        for (constraint, parent) in &parents {
+            self.replacements
+                .insert((*parent, constraint.clone(), child_to_be_replaced), id);
+        }
 
-            id
-        };
+        // Store the parents
+        self.parent_nodes
+            .insert(id, parents.iter().map(|(_, parent)| *parent).collect());
 
         // Calculate the connections
         self.update_parents(id);
         let out_id = from_sourced(Either::Right(id));
         self.update_children(out_id);
-
-        // Create a creation event
-        self.add_insert_node_events(out_id, from_sourced(Either::Left(child_to_be_replaced)));
 
         id
     }
@@ -373,12 +395,6 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 }
             }
         }
-
-        // console::log!(
-        //     "update parents for {}: {}",
-        //     right_node_id,
-        //     out_parents.iter().map(|(_, k)| k.to_string()).join(", ")
-        // );
 
         self.known_parents.insert(right_node_id, out_parents);
     }
@@ -511,52 +527,18 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 .cloned()
                 .unwrap_or_else(|| Vec::new()),
         };
-        // console::log!(
-        //     "{} parents: {}",
-        //     node,
-        //     parents.iter().map(|(_, v)| v.to_string()).join(", ")
-        // );
         parents
     }
 
     fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
         self.process_graph_changes();
         if let Some(children) = self.children.get(&node) {
-            // console::log!(
-            //     "{} children: {}",
-            //     node,
-            //     children.iter().map(|(_, v)| v.to_string()).join(", ")
-            // );
-            // if let Either::Left(_) = to_sourced(node) {
-            //     let data = (*self.node_data).borrow();
-            //     console::log!(
-            //         "{} children: {}",
-            //         node,
-            //         data.children
-            //             .get(&node)
-            //             .unwrap()
-            //             .iter()
-            //             .map(|(_, v)| v.to_string())
-            //             .join(", ")
-            //     );
-            // }
             return children.clone();
         }
 
         match to_sourced(node) {
             Either::Left(_) => {
                 self.update_children(node);
-
-                // console::log!(
-                //     "{} children: {}",
-                //     node,
-                //     data.children
-                //         .get(&node)
-                //         .unwrap()
-                //         .iter()
-                //         .map(|(_, v)| v.to_string())
-                //         .join(", ")
-                // );
                 return self.children.get(&node).cloned().unwrap();
             }
             Either::Right(_) => {
@@ -568,24 +550,6 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
 
     fn get_level(&mut self, node: NodeID) -> LevelNo {
         let id = self.get_owner_id(node);
-        // if self.graph.get_level(id) == 0 {
-        //     console::log!(
-        //         "node: {}, id: {}, level: {}",
-        //         node,
-        //         id,
-        //         self.graph.get_level(id)
-        //     );
-        // }
-        // if let Either::Right(_) = to_sourced(node) {
-        //     console::log!(
-        //         "node: {}, id: {}, level: {}",
-        //         node,
-        //         id,
-        //         self.graph.get_level(id)
-        //     );
-        // }
-
-        // TODO: store custom levels for terminals
         self.graph.get_level(id)
     }
 
@@ -624,5 +588,147 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             .into_iter()
             .flat_map(|node| self.get_all_copies(node))
             .collect()
+    }
+}
+
+impl<T: DrawTag + Serializable<T>, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
+    for NodePresenceAdjuster<T, NL, LL, G>
+where
+    G: StateStorage,
+{
+    fn write(&self, stream: &mut std::io::Cursor<&mut Vec<u8>>) -> std::io::Result<()> {
+        let write_constraint = |stream: &mut std::io::Cursor<&mut Vec<u8>>,
+                                constraint: &EdgeConstraint<T>|
+         -> std::io::Result<()> {
+            match constraint {
+                EdgeConstraint::Any => stream.write_u8(0)?,
+                EdgeConstraint::Exact(et) => {
+                    stream.write_u8(1)?;
+                    stream.write_i32::<LittleEndian>(et.index)?;
+                    et.tag.serialize(stream)?;
+                }
+            }
+            Ok(())
+        };
+
+        self.graph.write(stream)?;
+        let adjustment_count = self.adjustments.len();
+        stream.write_u32::<LittleEndian>(adjustment_count as u32)?;
+        for (&node_id, presence) in &self.adjustments {
+            stream.write_u32::<LittleEndian>(node_id as u32)?;
+
+            stream.write_u8(match presence.remainder {
+                PresenceRemainder::Hide => 0,
+                PresenceRemainder::Show => 1,
+                PresenceRemainder::Duplicate => 2,
+                PresenceRemainder::DuplicateParent => 3,
+            })?;
+
+            let group_count = presence.groups.len();
+            stream.write_u32::<LittleEndian>(group_count as u32)?;
+            for group in &presence.groups {
+                let group_size = group.len();
+                stream.write_u32::<LittleEndian>(group_size as u32)?;
+
+                for (constraint, parent) in group {
+                    stream.write_u32::<LittleEndian>(*parent as u32)?;
+                    write_constraint(stream, constraint)?;
+                }
+            }
+        }
+
+        let replacement_count = self.replacements.len();
+        stream.write_u32::<LittleEndian>(replacement_count as u32)?;
+        for ((parent, constraint, node), replacement) in &self.replacements {
+            stream.write_u32::<LittleEndian>(*parent as u32)?;
+            write_constraint(stream, constraint)?;
+            stream.write_u32::<LittleEndian>(*node as u32)?;
+            stream.write_u32::<LittleEndian>(*replacement as u32)?;
+        }
+
+        Ok(())
+    }
+
+    fn read(&mut self, stream: &mut std::io::Cursor<&Vec<u8>>) -> std::io::Result<()> {
+        let read_constraint =
+            |stream: &mut std::io::Cursor<&Vec<u8>>| -> std::io::Result<EdgeConstraint<T>> {
+                Ok(match stream.read_u8()? {
+                    0 => EdgeConstraint::Any,
+                    _ => {
+                        let index = stream.read_i32::<LittleEndian>()?;
+                        let tag = T::deserialize(stream)?;
+                        EdgeConstraint::Exact(EdgeType { tag, index })
+                    }
+                })
+            };
+
+        self.graph.read(stream)?;
+        let adjustment_count = stream.read_u32::<LittleEndian>()?;
+
+        let mut adjustments = HashMap::new();
+        for _ in 0..adjustment_count {
+            let node_id = stream.read_u32::<LittleEndian>()? as usize;
+            let remainder = match stream.read_u8()? {
+                0 => PresenceRemainder::Hide,
+                1 => PresenceRemainder::Show,
+                2 => PresenceRemainder::Duplicate,
+                _ => PresenceRemainder::DuplicateParent,
+            };
+
+            let group_count = stream.read_u32::<LittleEndian>()?;
+            let mut groups = Vec::new();
+            for _ in 0..group_count {
+                let group_size = stream.read_u32::<LittleEndian>()?;
+                let mut group = Vec::new();
+                for _ in 0..group_size {
+                    let parent = stream.read_u32::<LittleEndian>()? as usize;
+                    let constraint = read_constraint(stream)?;
+                    group.push((constraint, parent));
+                }
+                groups.push(group);
+            }
+
+            let group = PresenceGroups { groups, remainder };
+
+            adjustments.insert(node_id, group);
+        }
+
+        let replacement_count = stream.read_u32::<LittleEndian>()?;
+        let mut replacements: HashMap<NodeID, HashMap<NodeID, Vec<(EdgeConstraint<T>, NodeID)>>> =
+            HashMap::new();
+        for _ in 0..replacement_count {
+            let parent = stream.read_u32::<LittleEndian>()? as usize;
+            let constraint = read_constraint(stream)?;
+            let node = stream.read_u32::<LittleEndian>()? as usize;
+            let replacement = stream.read_u32::<LittleEndian>()? as usize;
+            replacements
+                .entry(node)
+                .or_insert_with(HashMap::new)
+                .entry(replacement)
+                .or_insert_with(Vec::new)
+                .push((constraint, parent));
+        }
+
+        self.known_parents.clear();
+        self.children.clear();
+        self.adjustments.clear();
+        self.images.clear();
+        self.sources.clear();
+        self.parent_nodes.clear();
+        self.replacements.clear();
+        for (node, adjustment) in adjustments.clone() {
+            let node_replacements = replacements
+                .remove_entry(&node)
+                .map(|(_, r)| r.into_iter().collect())
+                .unwrap_or_else(Vec::new);
+
+            self.adjustments.insert(node, adjustment);
+            for (replacement, parents) in node_replacements {
+                self.create_replacement_without_events(parents, node, replacement);
+            }
+            self.update_children_of_parents(node);
+        }
+
+        Ok(())
     }
 }

@@ -66,8 +66,11 @@ impl NodeTrackerManager {
         }
     }
 
-    pub fn add_group_id(&mut self, id: NodeGroupID) {
+    pub fn add_group_id(&mut self, id: NodeGroupID, claim: bool) {
         let mut shared = self.shared.get();
+        if claim {
+            shared.free_group_ids.claim(id);
+        }
         shared.existing.insert(id);
         for reader in shared.readers.values_mut() {
             reader.nodes.insert(id);
@@ -79,7 +82,7 @@ impl NodeTrackerManager {
         let mut shared = self.shared.get();
         let id = shared.free_group_ids.get_next();
         drop(shared);
-        self.add_group_id(id);
+        self.add_group_id(id, false);
         id
     }
 

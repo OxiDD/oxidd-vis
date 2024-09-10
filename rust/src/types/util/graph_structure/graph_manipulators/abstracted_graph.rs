@@ -7,8 +7,11 @@ use std::{
 use oxidd::LevelNo;
 
 use crate::{
-    types::util::graph_structure::graph_structure::{
-        Change, DrawTag, EdgeType, GraphEventsReader, GraphStructure,
+    types::util::{
+        graph_structure::graph_structure::{
+            Change, DrawTag, EdgeType, GraphEventsReader, GraphStructure,
+        },
+        storage::state_storage::StateStorage,
     },
     util::rc_refcell::MutRcRefCell,
     wasm_interface::NodeID,
@@ -16,20 +19,41 @@ use crate::{
 
 // A graph wrapper that abstracts over exact typeing
 pub struct AbstractedGraph<T: DrawTag, NL: Clone, LL: Clone> {
-    graph: Box<dyn GraphStructure<T, NL, LL>>,
+    graph: Box<dyn StateGraphStructure<T, NL, LL>>,
     tag: PhantomData<T>,
     node_label: PhantomData<NL>,
     level_label: PhantomData<LL>,
 }
 
+trait StateGraphStructure<T: DrawTag, NL: Clone, LL: Clone>:
+    GraphStructure<T, NL, LL> + StateStorage
+{
+}
+
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL> + StateStorage>
+    StateGraphStructure<T, NL, LL> for G
+{
+}
+
 impl<T: DrawTag, NL: Clone, LL: Clone> AbstractedGraph<T, NL, LL> {
-    pub fn new<G: GraphStructure<T, NL, LL> + 'static>(graph: G) -> AbstractedGraph<T, NL, LL> {
+    pub fn new<G: GraphStructure<T, NL, LL> + StateStorage + 'static>(
+        graph: G,
+    ) -> AbstractedGraph<T, NL, LL> {
         AbstractedGraph {
             graph: Box::new(graph),
             tag: PhantomData,
             node_label: PhantomData,
             level_label: PhantomData,
         }
+    }
+}
+
+impl<T: DrawTag, NL: Clone, LL: Clone> StateStorage for AbstractedGraph<T, NL, LL> {
+    fn read(&mut self, stream: &mut std::io::Cursor<&Vec<u8>>) -> std::io::Result<()> {
+        self.graph.read(stream)
+    }
+    fn write(&self, stream: &mut std::io::Cursor<&mut Vec<u8>>) -> std::io::Result<()> {
+        self.graph.write(stream)
     }
 }
 
