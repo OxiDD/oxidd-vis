@@ -185,6 +185,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         }
     }
 
+    pub fn get_node_presence(&self, out_node: NodeID) -> Option<PresenceGroups<T>> {
+        let owner = self.get_owner_id(out_node);
+        self.adjustments.get(&owner).cloned()
+    }
+
     fn update_children_of_parents(&mut self, left_node_id: NodeID) {
         let source_parents = self.graph.get_known_parents(left_node_id);
         let parents = source_parents

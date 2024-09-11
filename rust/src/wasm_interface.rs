@@ -101,6 +101,15 @@ impl DiagramSectionDrawerBox {
         self.0.source_nodes_to_local(nodes)
     }
 
+    /// Retrieves all available terminals, which are a terminal id, followed by a terminal name to be displayed
+    pub fn get_terminals(&self) -> Vec<TerminalData> {
+        self.0
+            .get_terminals()
+            .into_iter()
+            .map(|(id, name)| TerminalData { id, name })
+            .collect()
+    }
+
     /** Storage */
     pub fn serialize_state(&self) -> Vec<u8> {
         self.0.serialize_state()
@@ -108,6 +117,12 @@ impl DiagramSectionDrawerBox {
     pub fn deserialize_state(&mut self, state: Vec<u8>) {
         self.0.deserialize_state(state)
     }
+}
+
+#[wasm_bindgen(getter_with_clone, inspectable)]
+pub struct TerminalData {
+    pub id: String,
+    pub name: String,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]

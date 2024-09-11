@@ -1,4 +1,4 @@
-import {DiagramBox, DiagramSectionDrawerBox} from "oxidd-viz-rust";
+import {DiagramBox, DiagramSectionDrawerBox, PresenceRemainder} from "oxidd-viz-rust";
 import {ViewState} from "../views/ViewState";
 import {IPoint} from "../../utils/_types/IPoint";
 import {DerivedField} from "../../utils/DerivedField";
@@ -14,6 +14,8 @@ import {ITool} from "../toolbar/_types/ITool";
 import {IToolEvent} from "../toolbar/_types/IToolEvent";
 import {Derived} from "../../watchables/Derived";
 import {binaryToString, stringToBinary} from "../../utils/binarySerialization";
+import {ITerminalState} from "./_types/ITerminalState";
+import {Mutator} from "../../watchables/mutator/Mutator";
 
 /** The state of a single visualization of a diagram */
 export class DiagramVisualizationState extends ViewState {
@@ -35,6 +37,11 @@ export class DiagramVisualizationState extends ViewState {
     /** The size of the canvas */
     public readonly size = new Field({x: 0, y: 0});
     protected sizeObserver = new Observer(this.size).add(() => this.sendTransform());
+
+    /** The terminals and their visualization state */
+    protected readonly _terminalStates = new Field<ITerminalState[]>([]);
+    public readonly terminalStates = this._terminalStates.readonly();
+    protected terminalStatesObserver: Observer<ITerminalState[]>;
 
     /** Visualization state shared between visualizations of this diagram */
     public readonly sharedState: ISharedVisualizationState;
@@ -67,6 +74,28 @@ export class DiagramVisualizationState extends ViewState {
                 highlight: watch(sharedState.highlight),
             }))
         ).add(() => this.sendHighlight(), true);
+
+        this._terminalStates
+            .set(
+                this.drawer
+                    .get_terminals()
+                    .map(t => ({...t, state: PresenceRemainder.Show}))
+            )
+            .commit();
+        this.terminalStatesObserver = new Observer(this._terminalStates).add(
+            (states, prev) => {
+                if (!prev) return;
+                let updated = false;
+                for (const {id, state} of states) {
+                    const changed = prev.find(({id: ids}) => ids == id)?.state != state;
+                    if (changed) {
+                        this.drawer.set_terminal_mode(id, state);
+                        updated = true;
+                    }
+                }
+                if (updated) this.relayout();
+            }
+        );
     }
 
     /** Updates the transform on rust's side */
@@ -130,6 +159,23 @@ export class DiagramVisualizationState extends ViewState {
     }
 
     /**
+     * Sets the presence mode for the given terminal
+     * @param terminalID The terminal's ID
+     * @param mode The mode to switch to
+     * @returns The mutator to commit the changes through
+     */
+    public setTerminalMode(terminalID: string, mode: PresenceRemainder): IMutator {
+        return chain(push => {
+            const newStates = this._terminalStates.get().map(({id, name, state}) => ({
+                id,
+                name,
+                state: id == terminalID ? mode : state,
+            }));
+            push(this._terminalStates.set(newStates));
+        });
+    }
+
+    /**
      * Converts the ids of local visualization nodes, to the source node ids (in the overall diagram) that they represent
      * @param nodes The nodes for which to obtain the source ids
      * @return The source ids
@@ -151,6 +197,7 @@ export class DiagramVisualizationState extends ViewState {
     public dispose() {
         this.transformObserver.destroy();
         this.sizeObserver.destroy();
+        this.terminalStatesObserver.destroy();
         this.drawer.free();
         (this.drawer as any) = undefined;
     }
@@ -159,16 +206,13 @@ export class DiagramVisualizationState extends ViewState {
     public serialize(): IDiagramVisualizationSerialization {
         const rustState = this.drawer.serialize_state();
         const stateText = binaryToString(rustState);
-        // const rustState2 = stringToBinary(stateText);
-        // console.log(
-        //     "Equal: ",
-        //     rustState.length == rustState2.length &&
-        //         rustState.every((b, i) => b == rustState2[i])
-        // );
         return {
             ...super.serialize(),
             transform: this.transform.get(),
             rustState: stateText,
+            terminalModes: Object.fromEntries(
+                this._terminalStates.get().map(({id, state}) => [id, state])
+            ),
         };
     }
 
@@ -177,6 +221,14 @@ export class DiagramVisualizationState extends ViewState {
         return chain(push => {
             push(super.deserialize(data));
             push(this.transform.set(data.transform));
+            const newTerminalStates = this.terminalStates
+                .get()
+                .map(({name, id, state}) => ({
+                    name,
+                    id,
+                    state: data.terminalModes[id] ?? state,
+                }));
+            push(this._terminalStates.set(newTerminalStates));
             const rustState = stringToBinary(data.rustState);
             this.drawer.deserialize_state(rustState);
             this.relayout();

@@ -84,30 +84,7 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
                     top: theme.spacing.m,
                     background: theme.palette.neutralLight,
                 })}>
-                <Toolbar toolbar={toolbar} />
-
-                <PrimaryButton
-                    text="toggle"
-                    onClick={() => {
-                        visualization.applyTool(
-                            {
-                                apply(visualization, drawer, nodes, event) {
-                                    let m = (modeRef.current = (modeRef.current + 1) % 3);
-                                    drawer.set_terminal_mode(
-                                        "F",
-                                        m == 0
-                                            ? PresenceRemainder.Show
-                                            : m == 1
-                                            ? PresenceRemainder.Duplicate
-                                            : PresenceRemainder.Hide
-                                    );
-                                    return true;
-                                },
-                            },
-                            visualization.sharedState.selection.get()
-                        );
-                    }}
-                />
+                <Toolbar toolbar={toolbar} visualization={visualization} />
             </div>
         </ViewContainer>
     );

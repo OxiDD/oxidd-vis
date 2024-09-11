@@ -16,9 +16,17 @@ export class SelectionToolState extends ViewState implements ITool {
         nodes: Uint32Array,
         event: IToolEvent
     ): void {
-        const sourceNodes = drawer.local_nodes_to_sources(nodes);
+        let sourceNodes = drawer.local_nodes_to_sources(nodes);
         if (event.type == "release") {
-            console.log("Selected ", [...nodes]);
+            console.log("Selected ", [...nodes], event);
+            if (event.event?.ctrlKey) {
+                sourceNodes = new Uint32Array([
+                    ...visualization.sharedState.selection
+                        .get()
+                        .filter(n => !sourceNodes.includes(n)),
+                    ...sourceNodes,
+                ]);
+            }
             visualization.sharedState.selection.set(sourceNodes).commit();
         } else {
             visualization.sharedState.highlight.set(sourceNodes).commit();

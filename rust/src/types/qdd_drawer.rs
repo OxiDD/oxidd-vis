@@ -388,6 +388,12 @@ impl<
         self.graph
             .source_nodes_to_local(nodes.iter().cloned().collect())
     }
+    fn get_terminals(&self) -> Vec<(String, String)> {
+        vec![
+            ("T".to_string(), "True".to_string()),
+            ("F".to_string(), "False".to_string()),
+        ]
+    }
 
     fn serialize_state(&self) -> Vec<u8> {
         let mut out = Vec::new();
