@@ -1,49 +1,51 @@
+use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
 
+use crate::util::free_id_manager::FreeIdManager;
 use crate::util::rc_refcell::MutRcRefCell;
 
 /// An object that can be used to synchronize configuration data between Rust and TS
-pub struct ConfigurationObject<T: TypeMapping<V, D>, V, D: GetConfigurable> {
-    inner: MutRcRefCell<ConfigurationObjectData<V, D>>,
+pub struct ConfigurationObject<T: ValueMapping<V>, V> {
+    inner: MutRcRefCell<ConfigurationObjectData<V>>,
     type_data: PhantomData<T>,
 }
 
-pub struct ConfigurationObjectData<V, D: GetConfigurable> {
+pub struct ConfigurationObjectData<V> {
     value: V,
-    value_listeners: Vec<Box<dyn Fn() -> ()>>,
-    children: Vec<D>,
-    children_listeners: Vec<Box<dyn Fn() -> ()>>,
+    value_listeners: HashMap<usize, Box<dyn Fn() -> ()>>,
+    listener_ids: FreeIdManager<usize>,
 }
 
-pub trait TypeMapping<V, D: GetConfigurable>: GetConfigurable {
-    fn to_js_value(val: V) -> JsValue;
-    fn form_js_value(js_val: JsValue) -> V;
+pub trait ValueMapping<V> {
+    fn to_js_value(val: &V) -> JsValue;
+    fn get_children(val: &V) -> Option<Vec<AbstractConfigurationObject>>;
+    fn from_js_value(js_val: JsValue) -> V;
 }
 
 pub trait Configurable {
     fn get_value(&self) -> JsValue;
+    fn get_children(&self) -> Vec<AbstractConfigurationObject>;
     fn set_value(&mut self, value: JsValue) -> ();
     fn add_value_listener(&mut self, listener: Box<dyn Fn() -> ()>) -> usize;
     fn remove_value_listener(&mut self, listener: usize) -> bool;
-    fn get_children(&self) -> Vec<AbstractConfigurationObject>;
-    fn insert_child(&mut self, index: usize) -> Option<AbstractConfigurationObject>;
-    fn remove_child(&mut self, index: usize) -> bool;
-    fn add_children_listener(&mut self, listener: Box<dyn Fn() -> ()>) -> usize;
-    fn remove_children_listener(&mut self, listener: usize) -> bool;
 }
 
-pub trait GetConfigurable {
-    fn get_configurable(&self) -> AbstractConfigurationObject;
-}
-
+#[wasm_bindgen]
 pub struct AbstractConfigurationObject {
     data: Box<dyn Configurable>,
 }
+impl AbstractConfigurationObject {
+    pub fn new<C: Configurable + 'static>(configurable: C) -> AbstractConfigurationObject {
+        AbstractConfigurationObject {
+            data: Box::new(configurable),
+        }
+    }
+}
 
-impl<T: TypeMapping<V, D>, V, D: GetConfigurable> Clone for ConfigurationObject<T, V, D> {
+impl<T: ValueMapping<V>, V> Clone for ConfigurationObject<T, V> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -52,104 +54,68 @@ impl<T: TypeMapping<V, D>, V, D: GetConfigurable> Clone for ConfigurationObject<
     }
 }
 
-impl<T: TypeMapping<V, D> + 'static, V: 'static, D: GetConfigurable + 'static> GetConfigurable
-    for ConfigurationObject<T, V, D>
-{
-    fn get_configurable(&self) -> AbstractConfigurationObject {
-        AbstractConfigurationObject {
-            data: Box::new(self.clone()),
-        }
-    }
-}
-
-impl<T: TypeMapping<V, D>, V, D: GetConfigurable> Configurable for ConfigurationObject<T, V, D> {
+impl<T: ValueMapping<V>, V> Configurable for ConfigurationObject<T, V> {
     fn get_value(&self) -> JsValue {
-        todo!()
+        let value = &self.inner.read().value;
+        T::to_js_value(value)
     }
 
     fn set_value(&mut self, value: JsValue) -> () {
-        todo!()
-    }
+        let value = T::from_js_value(value);
+        self.inner.get().value = value;
 
-    fn add_value_listener(&mut self, listener: Box<dyn Fn() -> ()>) -> usize {
-        todo!()
-    }
-
-    fn remove_value_listener(&mut self, listener: usize) -> bool {
-        todo!()
-    }
-
-    fn get_children(&self) -> Vec<AbstractConfigurationObject> {
-        todo!()
-    }
-
-    fn insert_child(&mut self, index: usize) -> Option<AbstractConfigurationObject> {
-        todo!()
-    }
-
-    fn remove_child(&mut self, index: usize) -> bool {
-        todo!()
-    }
-
-    fn add_children_listener(&mut self, listener: Box<dyn Fn() -> ()>) -> usize {
-        todo!()
-    }
-
-    fn remove_children_listener(&mut self, listener: usize) -> bool {
-        todo!()
-    }
-}
-
-// pub struct Test<D> {
-//     val: D,
-// }
-// #[wasm_bindgen]
-// impl<D> Test<D> {
-//     fn do_smth(&self) {}
-// }
-
-/**
- * Some base case we can use if we want a configuration object without children
- */
-impl GetConfigurable for () {
-    fn get_configurable(&self) -> AbstractConfigurationObject {
-        AbstractConfigurationObject {
-            data: Box::new(self.clone()),
+        let inner = self.inner.read();
+        if let Some(l) = inner.value_listeners.get(&0) {
+            let p = l.clone();
+            drop(inner);
+            p();
         }
+        // let inner =self.inner.get();
+        // inner.value = value;
+        // self.inner.
     }
-}
-impl Configurable for () {
-    fn get_value(&self) -> JsValue {
-        JsValue::null()
-    }
-
-    fn set_value(&mut self, value: JsValue) -> () {}
 
     fn add_value_listener(&mut self, listener: Box<dyn Fn() -> ()>) -> usize {
-        0
+        let mut inner = self.inner.get();
+        let id = inner.listener_ids.get_next();
+        inner.value_listeners.insert(id, listener);
+        id
     }
 
     fn remove_value_listener(&mut self, listener: usize) -> bool {
-        false
+        let mut inner = self.inner.get();
+        let val = inner.value_listeners.remove(&listener);
+        val.is_some()
     }
 
     fn get_children(&self) -> Vec<AbstractConfigurationObject> {
-        Vec::new()
+        todo!()
+    }
+}
+
+#[wasm_bindgen]
+impl AbstractConfigurationObject {
+    pub fn get_value(&self) -> JsValue {
+        self.data.get_value()
     }
 
-    fn insert_child(&mut self, index: usize) -> Option<AbstractConfigurationObject> {
-        None
+    pub fn set_value(&mut self, value: JsValue) -> () {
+        self.data.set_value(value);
     }
 
-    fn remove_child(&mut self, index: usize) -> bool {
-        false
+    pub fn add_value_listener(&mut self, listener: js_sys::Function) -> usize {
+        let listener = Box::new(move || {
+            let this = JsValue::null();
+            listener.call0(&this);
+        });
+        self.data.add_value_listener(listener)
     }
 
-    fn add_children_listener(&mut self, listener: Box<dyn Fn() -> ()>) -> usize {
-        0
+    pub fn remove_value_listener(&mut self, listener: usize) -> bool {
+        self.data.remove_value_listener(listener)
     }
 
-    fn remove_children_listener(&mut self, listener: usize) -> bool {
-        false
+    pub fn get_children(&self) -> Vec<AbstractConfigurationObject> {
+        self.data.get_children()
     }
 }

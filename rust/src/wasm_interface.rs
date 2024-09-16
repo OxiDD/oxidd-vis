@@ -37,7 +37,7 @@ impl DiagramSectionBox {
     }
 }
 // Mirror Diagram trait in terms of interface, but using non-dynamic structs
-#[wasm_bindgen()]
+#[wasm_bindgen]
 impl DiagramSectionBox {
     pub fn create_drawer(&self, canvas: HtmlCanvasElement) -> DiagramSectionDrawerBox {
         DiagramSectionDrawerBox(self.0.create_drawer(canvas))
