@@ -1,3 +1,4 @@
+mod configuration;
 mod traits;
 mod types;
 mod util;
@@ -13,6 +14,7 @@ use util::logging::console;
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, HtmlElement, Window};
 
+use configuration::configuration_object::ConfigurationObject;
 use oxidd::{bdd::BDDFunction, util::AllocResult, BooleanFunction};
 use types::qdd_drawer::QDDDiagram;
 
