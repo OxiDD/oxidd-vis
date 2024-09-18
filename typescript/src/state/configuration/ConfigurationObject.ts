@@ -1,6 +1,6 @@
 import {IRunnable} from "../../watchables/_types/IRunnable";
 import {IWatchable} from "../../watchables/_types/IWatchable";
-import {AbstractConfigurationObject} from "oxidd-viz-rust";
+import {AbstractConfigurationObject, ConfigurationObjectType} from "oxidd-viz-rust";
 import {Derived} from "../../watchables/Derived";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {Mutator} from "../../watchables/mutator/Mutator";
@@ -8,21 +8,15 @@ import {Mutator} from "../../watchables/mutator/Mutator";
 /**
  * A configuration object that interacts with the AbstractConfigurationObject code in rust
  */
-export class ConfigurationObject<
-    V,
-    C extends ConfigurationObject<any> = ConfigurationObject<
-        // Can't do circular defaults, so just provide some levels
-        unknown,
-        ConfigurationObject<unknown, ConfigurationObject<unknown, any>>
-    >
-> implements IWatchable<V>
-{
+export class ConfigurationObject<V> implements IWatchable<V> {
     protected object: AbstractConfigurationObject;
     protected destroyed = false;
+    public readonly type: ConfigurationObjectType;
     public readonly value: Derived<V>;
-    public readonly children: Derived<C[]>;
+    public readonly children: Derived<AbstractConfigurationObject[]>;
     public constructor(object: AbstractConfigurationObject) {
         this.object = object;
+        this.type = object.get_type();
 
         // Sets up the value listener, using Derived to make sure that repeated dirty or change calls do not invalidate watchable conditions
         const listeners = {
@@ -41,31 +35,12 @@ export class ConfigurationObject<
                 ...listeners,
             })
         );
-
-        // Sets up the children listener, making sure to reuse objects from previous children
-        const childData = new Derived<{
-            children: C[];
-            map: Map<AbstractConfigurationObject, ConfigurationObject<unknown>>;
-        }>((watch, prev) => {
-            const map = prev?.map ?? new Map();
-            const abstractChildren = watch({
+        this.children = new Derived(watch =>
+            watch({
                 get: () => object.get_children(),
                 ...listeners,
-            });
-            const newMap = prev?.map ?? new Map();
-            const children = abstractChildren.map(child => {
-                let val: ConfigurationObject<unknown>;
-                if (map.has(child)) {
-                    val = map.get(child);
-                } else {
-                    val = new ConfigurationObject(child);
-                }
-                newMap.set(child, val);
-                return val as C;
-            });
-            return {map: newMap, children};
-        });
-        this.children = new Derived(watch => watch(childData).children);
+            })
+        );
     }
 
     /** Destroys this object, freeing it memory from rust */

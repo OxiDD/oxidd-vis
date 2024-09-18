@@ -9,6 +9,7 @@ use wasm_bindgen::JsValue;
 use crate::util::free_id_manager::FreeIdManager;
 use crate::util::rc_refcell::MutRcRefCell;
 
+use super::configuration_object_types::ConfigurationObjectType;
 use super::mutator::{Mutator, MutatorCallbacks, Return};
 
 /// An object that can be used to synchronize configuration data between Rust and TS
@@ -28,7 +29,7 @@ pub struct ConfigurationObjectData<V> {
 pub trait ValueMapping<V> {
     fn to_js_value(val: &V) -> JsValue;
     fn get_children(val: &V) -> Option<Vec<AbstractConfigurationObject>>;
-    fn from_js_value(js_val: JsValue) -> V;
+    fn from_js_value(js_val: JsValue, cur_val: &V) -> V;
 }
 
 pub trait Configurable {
@@ -45,11 +46,16 @@ pub trait Configurable {
 
 #[wasm_bindgen]
 pub struct AbstractConfigurationObject {
+    object_type: ConfigurationObjectType,
     data: Box<dyn Configurable>,
 }
 impl AbstractConfigurationObject {
-    pub fn new<C: Configurable + 'static>(configurable: C) -> AbstractConfigurationObject {
+    pub fn new<C: Configurable + 'static>(
+        object_type: ConfigurationObjectType,
+        configurable: C,
+    ) -> AbstractConfigurationObject {
         AbstractConfigurationObject {
+            object_type,
             data: Box::new(configurable),
         }
     }
@@ -78,20 +84,17 @@ impl<T: ValueMapping<V> + 'static, V: 'static> ConfigurationObject<T, V> {
         }
     }
 }
-impl<T: ValueMapping<V> + 'static, V: 'static> Configurable for ConfigurationObject<T, V> {
-    fn get_value(&self) -> JsValue {
-        let value = &self.inner.read().value;
-        T::to_js_value(value)
+impl<T: ValueMapping<V> + 'static, V: 'static> ConfigurationObject<T, V> {
+    pub fn with_value<O, F: Fn(&V) -> O>(&self, func: F) -> O {
+        func(&self.inner.read().value)
     }
-
-    fn set_value(&mut self, value: JsValue) -> Mutator<(), ()> {
+    pub fn set_value<F: FnOnce(&V) -> V + 'static>(&mut self, get_value: F) -> Mutator<(), ()> {
         let inner = self.inner.clone();
         let inner2 = self.inner.clone();
         Mutator::new(
             move || {
-                let value = T::from_js_value(value);
                 let mut inner = inner.get();
-                inner.value = value;
+                inner.value = get_value(&inner.value);
 
                 let listeners = inner.value_dirty_listeners.values().cloned().collect_vec();
                 drop(inner);
@@ -109,6 +112,15 @@ impl<T: ValueMapping<V> + 'static, V: 'static> Configurable for ConfigurationObj
                 }
             },
         )
+    }
+}
+impl<T: ValueMapping<V> + 'static, V: 'static> Configurable for ConfigurationObject<T, V> {
+    fn get_value(&self) -> JsValue {
+        self.with_value(T::to_js_value)
+    }
+
+    fn set_value(&mut self, value: JsValue) -> Mutator<(), ()> {
+        self.set_value(|cur| T::from_js_value(value, cur))
     }
 
     fn add_value_dirty_listener(&mut self, listener: Rc<dyn Fn() -> ()>) -> usize {
@@ -155,6 +167,9 @@ impl<T: ValueMapping<V> + 'static, V: 'static> Configurable for ConfigurationObj
 
 #[wasm_bindgen]
 impl AbstractConfigurationObject {
+    pub fn get_type(&self) -> ConfigurationObjectType {
+        self.object_type.clone()
+    }
     pub fn get_value(&self) -> JsValue {
         self.data.get_value()
     }

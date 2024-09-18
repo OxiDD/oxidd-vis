@@ -267,7 +267,6 @@ impl<
         let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(graph));
         let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
         let roots = modified_graph.get_roots();
-        t(&modified_graph.clone());
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
         let grouped_graph = GMGraph::new_shared(group_manager.clone(), |nodes| {
             match (nodes.get(0), nodes.get(1)) {
@@ -293,12 +292,20 @@ impl<
             presence_adjuster,
             graph: modified_graph,
             drawer: Drawer::new(renderer, layout, MutRcRefCell::new(grouped_graph)),
-            config: IntConfig::new(0),
+            config: IntConfig::new(3),
         };
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         for root in roots {
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         }
+
+        let cfg2 = out.config.clone();
+        let cfg3 = out.config.clone();
+        out.config
+            .add_value_dirty_listener(move || console::log!("Dirty {}", cfg2.get()));
+        out.config
+            .add_value_change_listener(move || console::log!("Change {}", cfg3.get()));
+
         // out.reveal_all(from, 30000);
         // out.reveal_all(from, 10);
         out.set_terminal_mode("F".to_string(), PresenceRemainder::Hide);
@@ -323,8 +330,6 @@ impl<
         }
     }
 }
-
-pub fn t<K: StateStorage>(s: &K) {}
 
 impl<
         T: DrawTag + Serializable<T> + 'static,

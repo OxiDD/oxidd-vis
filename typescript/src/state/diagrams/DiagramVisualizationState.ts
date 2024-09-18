@@ -16,11 +16,17 @@ import {Derived} from "../../watchables/Derived";
 import {binaryToString, stringToBinary} from "../../utils/binarySerialization";
 import {ITerminalState} from "./_types/ITerminalState";
 import {Mutator} from "../../watchables/mutator/Mutator";
+import {getConfigurationObjectWrapper} from "../configuration/getConfigurationObjectWrapper";
 
 /** The state of a single visualization of a diagram */
 export class DiagramVisualizationState extends ViewState {
     /** The canvas holding the visualization */
     public readonly canvas: HTMLCanvasElement;
+
+    /** The configuration object to change settings of this visualization */
+    public readonly config = new Derived(() =>
+        getConfigurationObjectWrapper(this.drawer.get_configuration())
+    );
 
     /** The diagram drawer */
     protected readonly drawer: DiagramSectionDrawerBox;

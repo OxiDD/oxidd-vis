@@ -1,0 +1,7 @@
+use wasm_bindgen::prelude::*;
+
+#[derive(Clone)]
+#[wasm_bindgen]
+pub enum ConfigurationObjectType {
+    Int,
+}

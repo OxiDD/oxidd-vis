@@ -9,6 +9,7 @@ import {useWatch} from "../../../watchables/react/useWatch";
 import {ActionButton, PrimaryButton, useTheme} from "@fluentui/react";
 import {Toolbar} from "../toolbar/Toolbar";
 import {PresenceRemainder} from "oxidd-viz-rust";
+import {ConfigTypeComp} from "../../components/configuration/ConfigTypeComp";
 
 export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}> = ({
     visualization,
@@ -85,6 +86,16 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
                     background: theme.palette.neutralLight,
                 })}>
                 <Toolbar toolbar={toolbar} visualization={visualization} />
+            </div>
+            <div
+                onMouseDown={preventDrag}
+                className={css({
+                    position: "absolute",
+                    right: theme.spacing.m,
+                    bottom: theme.spacing.m,
+                    background: theme.palette.neutralLight,
+                })}>
+                <ConfigTypeComp value={watch(visualization.config)} />
             </div>
         </ViewContainer>
     );
