@@ -15,6 +15,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 use web_sys::console::log;
 
+use crate::configuration::configuration_object::AbstractConfigurationObject;
+use crate::configuration::types::int_config::IntConfig;
 use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
@@ -240,6 +242,7 @@ pub struct QDDDiagramDrawer<
     group_manager: MutRcRefCell<GM<T, G>>,
     presence_adjuster: MPresenceAdjuster<T, G>,
     drawer: Drawer<T, Color, R, L, GMGraph<T, G>>,
+    config: IntConfig,
 }
 type GraphLabel = PresenceLabel<NodeLabel<String>>;
 type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
@@ -290,6 +293,7 @@ impl<
             presence_adjuster,
             graph: modified_graph,
             drawer: Drawer::new(renderer, layout, MutRcRefCell::new(grouped_graph)),
+            config: IntConfig::new(0),
         };
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         for root in roots {
@@ -297,6 +301,7 @@ impl<
         }
         // out.reveal_all(from, 30000);
         // out.reveal_all(from, 10);
+        out.set_terminal_mode("F".to_string(), PresenceRemainder::Hide);
         out
     }
 
@@ -403,5 +408,9 @@ impl<
 
     fn deserialize_state(&mut self, state: Vec<u8>) -> () {
         self.group_manager.get().read(&mut Cursor::new(&state));
+    }
+
+    fn get_configuration(&self) -> AbstractConfigurationObject {
+        self.config.get_abstract()
     }
 }

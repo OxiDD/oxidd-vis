@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
+    configuration::configuration_object::AbstractConfigurationObject,
     types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder,
     util::rectangle::Rectangle,
 };
@@ -116,6 +117,11 @@ impl DiagramSectionDrawerBox {
     }
     pub fn deserialize_state(&mut self, state: Vec<u8>) {
         self.0.deserialize_state(state)
+    }
+
+    /** Settings */
+    pub fn get_configuration(&self) -> AbstractConfigurationObject {
+        self.0.get_configuration()
     }
 }
 

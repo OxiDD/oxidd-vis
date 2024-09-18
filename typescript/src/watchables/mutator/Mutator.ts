@@ -108,7 +108,7 @@ export class Mutator<I = void, R = void> implements IMutator<R> {
      * @param map The map function to obtain the new output
      * @returns A new mutator
      */
-    map<O>(map: (res: R) => O): IMutator<O> {
+    public map<O>(map: (res: R) => O): IMutator<O> {
         return new Mutator(
             () => {
                 const res = this.perform();

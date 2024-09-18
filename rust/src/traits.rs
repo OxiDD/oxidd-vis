@@ -1,4 +1,5 @@
 use crate::{
+    configuration::configuration_object::AbstractConfigurationObject,
     types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder,
     util::rectangle::Rectangle, wasm_interface::NodeID,
 };
@@ -45,4 +46,7 @@ pub trait DiagramSectionDrawer {
     /** Storage */
     fn serialize_state(&self) -> Vec<u8>;
     fn deserialize_state(&mut self, state: Vec<u8>) -> ();
+
+    /** Settings */
+    fn get_configuration(&self) -> AbstractConfigurationObject;
 }
