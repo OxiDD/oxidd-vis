@@ -1,22 +1,32 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use js_sys::{Object, Reflect};
 use wasm_bindgen::JsValue;
 
-use crate::configuration::{
-    configuration_object::{
-        AbstractConfigurationObject, Configurable, ConfigurationObject, ValueMapping,
+use crate::{
+    configuration::{
+        configuration_object::{
+            AbstractConfigurationObject, Abstractable, Configurable, ConfigurationObject,
+            ValueMapping,
+        },
+        configuration_object_types::ConfigurationObjectType,
+        mutator::Mutator,
+        util::js_object::JsObject,
     },
-    configuration_object_types::ConfigurationObjectType,
-    mutator::Mutator,
+    util::{logging::console, rc_refcell::MutRcRefCell},
 };
 
-/**
- * An integer config with min and max value constraints
- */
+/// An integer config with min and max value constraints
 #[derive(Clone)]
 pub struct IntConfig {
     data: ConfigurationObject<IntConfig, IntValue>,
+}
+
+#[derive(Clone)]
+struct IntValue {
+    value: isize,
+    min: Option<isize>,
+    max: Option<isize>,
 }
 
 impl IntConfig {
@@ -34,9 +44,11 @@ impl IntConfig {
         self.data.with_value(|v| v.value)
     }
     pub fn set(&mut self, value: isize) -> Mutator<(), ()> {
-        self.data.set_value(move |cur| IntValue {
-            value: cur.bound(value),
-            ..cur.clone()
+        self.data.set_value(move |cur| {
+            Some(IntValue {
+                value: cur.bound(value),
+                ..cur.clone()
+            })
         })
     }
 
@@ -47,7 +59,7 @@ impl IntConfig {
         self.data.set_value(move |cur| {
             let mut new = IntValue { min, ..cur.clone() };
             new.value = new.bound(new.value);
-            new
+            Some(new)
         })
     }
 
@@ -58,25 +70,28 @@ impl IntConfig {
         self.data.set_value(move |cur| {
             let mut new = IntValue { max, ..cur.clone() };
             new.value = new.bound(new.value);
-            new
+            Some(new)
         })
     }
-
-    pub fn get_abstract(&self) -> AbstractConfigurationObject {
+}
+impl Abstractable for IntConfig {
+    fn get_abstract(&self) -> AbstractConfigurationObject {
         AbstractConfigurationObject::new(ConfigurationObjectType::Int, self.data.clone())
     }
 }
 impl IntConfig {
-    pub fn add_value_dirty_listener<F: Fn() -> () + 'static>(&mut self, listener: F) -> usize {
-        self.data.add_value_dirty_listener(Rc::new(listener))
+    pub fn add_value_dirty_listener<F: FnMut() -> () + 'static>(&mut self, listener: F) -> usize {
+        self.data
+            .add_value_dirty_listener(Rc::new(RefCell::new(listener)))
     }
 
     pub fn remove_value_dirty_listener(&mut self, listener: usize) -> bool {
         self.data.remove_value_dirty_listener(listener)
     }
 
-    pub fn add_value_change_listener<F: Fn() -> () + 'static>(&mut self, listener: F) -> usize {
-        self.data.add_value_change_listener(Rc::new(listener))
+    pub fn add_value_change_listener<F: FnMut() -> () + 'static>(&mut self, listener: F) -> usize {
+        self.data
+            .add_value_change_listener(Rc::new(RefCell::new(listener)))
     }
 
     pub fn remove_value_change_listener(&mut self, listener: usize) -> bool {
@@ -86,22 +101,21 @@ impl IntConfig {
 
 impl ValueMapping<IntValue> for IntConfig {
     fn to_js_value(val: &IntValue) -> JsValue {
-        let obj = Object::new();
-        let _ = Reflect::set(&obj, &"val".into(), &val.value.into());
-        let _ = Reflect::set(&obj, &"min".into(), &val.min.into());
-        let _ = Reflect::set(&obj, &"max".into(), &val.max.into());
-        obj.into()
+        JsObject::new()
+            .set("value", val.value)
+            .set("min", val.min)
+            .set("max", val.max)
+            .into()
     }
-    fn from_js_value(js_val: JsValue, _cur: &IntValue) -> IntValue {
-        let get = |text: &str| {
-            Reflect::get(&js_val, &text.into())
-                .map(|v| v.as_f64().map(|val| val as isize))
-                .unwrap_or_default()
-        };
-        let value = get("val").unwrap_or_default();
-        let min = get("min");
-        let max = get("max");
-        IntValue { value, min, max }
+    fn from_js_value(js_val: JsValue, cur: &IntValue) -> Option<IntValue> {
+        let value = JsObject::load(js_val)
+            .get("value")
+            .and_then(|v| v.as_f64().map(|val| val as isize))
+            .unwrap_or_default();
+        Some(IntValue {
+            value,
+            ..cur.clone()
+        })
     }
 
     fn get_children(_val: &IntValue) -> Option<Vec<AbstractConfigurationObject>> {
@@ -109,12 +123,6 @@ impl ValueMapping<IntValue> for IntConfig {
     }
 }
 
-#[derive(Clone)]
-struct IntValue {
-    value: isize,
-    min: Option<isize>,
-    max: Option<isize>,
-}
 impl IntValue {
     fn bound(&self, mut val: isize) -> isize {
         if let Some(max) = self.max {

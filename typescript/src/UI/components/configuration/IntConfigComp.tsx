@@ -10,6 +10,7 @@ import React, {
 import {IntConfig} from "../../../state/configuration/types/IntConfig";
 import {SpinButton} from "@fluentui/react";
 import {useWatch} from "../../../watchables/react/useWatch";
+import {StyledSpinButton} from "../StyledSpinButton";
 
 export const IntConfigComp: FC<{value: IntConfig}> = ({value}) => {
     const ref = useRef<HTMLDivElement>(null);
@@ -36,7 +37,7 @@ export const IntConfigComp: FC<{value: IntConfig}> = ({value}) => {
         [value]
     );
     return (
-        <SpinButton
+        <StyledSpinButton
             ref={ref}
             value={watch(value) + ""}
             min={watch(value.min)}

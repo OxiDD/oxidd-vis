@@ -7,13 +7,13 @@ import {chain} from "../../../watchables/mutator/chain";
 import {IRunnable} from "../../../watchables/_types/IRunnable";
 
 /**
- * A configuration object
+ * A configuration object for integers
  */
 export class IntConfig implements IWatchable<number> {
-    protected object: ConfigurationObject<{val: number; min?: number; max?: number}>;
+    protected object: ConfigurationObject<{value: number; min?: number; max?: number}>;
 
     /** The currently stored integer value */
-    public readonly value = new Derived(watch => watch(this.object).val);
+    public readonly value = new Derived(watch => watch(this.object).value);
     /** The minimum value that may be stored */
     public readonly min = new Derived(watch => watch(this.object).min);
     /** The maximum value that may be stored */
@@ -21,7 +21,7 @@ export class IntConfig implements IWatchable<number> {
 
     /**
      * Creates a new int config object
-     * @param object The rust configuration to control
+     * @param object The rust configuration that represents an integer
      */
     public constructor(object: AbstractConfigurationObject) {
         this.object = new ConfigurationObject(object);
@@ -29,50 +29,16 @@ export class IntConfig implements IWatchable<number> {
 
     /**
      * Sets the new value to store
-     * @param val The value to store
+     * @param value The value to store
      * @returns The mutator to commit the change
      */
-    public set(val: number): IMutator {
+    public set(value: number): IMutator {
         return chain(push => {
             push(
                 this.object.set({
-                    val,
+                    value,
                     min: this.min.get(),
                     max: this.max.get(),
-                })
-            );
-        });
-    }
-
-    /**
-     * Sets the new minimum value that may be stored
-     * @param min The minimum value that may be stored
-     * @returns The mutator to commit the change
-     */
-    public setMin(min: number): IMutator {
-        return chain(push => {
-            push(
-                this.object.set({
-                    val: this.value.get(),
-                    min,
-                    max: this.max.get(),
-                })
-            );
-        });
-    }
-
-    /**
-     * Sets the new maximum value that may be stored
-     * @param max The maximum value that may be stored
-     * @returns The mutator to commit the change
-     */
-    public setMax(max: number): IMutator {
-        return chain(push => {
-            push(
-                this.object.set({
-                    val: this.value.get(),
-                    min: this.min.get(),
-                    max,
                 })
             );
         });

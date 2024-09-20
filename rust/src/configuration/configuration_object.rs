@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -20,27 +21,28 @@ pub struct ConfigurationObject<T: ValueMapping<V>, V> {
 
 pub struct ConfigurationObjectData<V> {
     value: V,
-    value_dirty_listeners: HashMap<usize, Rc<dyn Fn() -> ()>>,
+    value_dirty_listeners: HashMap<usize, Rc<RefCell<dyn FnMut() -> ()>>>,
     dirty_listener_ids: FreeIdManager<usize>,
-    value_change_listeners: HashMap<usize, Rc<dyn Fn() -> ()>>,
+    value_change_listeners: HashMap<usize, Rc<RefCell<dyn FnMut() -> ()>>>,
     change_listener_ids: FreeIdManager<usize>,
 }
 
 pub trait ValueMapping<V> {
     fn to_js_value(val: &V) -> JsValue;
     fn get_children(val: &V) -> Option<Vec<AbstractConfigurationObject>>;
-    fn from_js_value(js_val: JsValue, cur_val: &V) -> V;
+    fn from_js_value(js_val: JsValue, cur_val: &V) -> Option<V>;
 }
 
 pub trait Configurable {
+    //TODO: add function to dispose all listeners and function to obtain an UUID
     fn get_value(&self) -> JsValue;
     fn get_children(&self) -> Vec<AbstractConfigurationObject>;
     fn set_value(&mut self, value: JsValue) -> Mutator<(), ()>;
     /// Adds a listener that gets called when a value becomes outdated
-    fn add_value_dirty_listener(&mut self, listener: Rc<dyn Fn() -> ()>) -> usize;
+    fn add_value_dirty_listener(&mut self, listener: Rc<RefCell<dyn FnMut() -> ()>>) -> usize;
     fn remove_value_dirty_listener(&mut self, listener: usize) -> bool;
     /// Adds a listener that gets called when a value's change happens (after potentially multiple values are already marked dirty)
-    fn add_value_change_listener(&mut self, listener: Rc<dyn Fn() -> ()>) -> usize;
+    fn add_value_change_listener(&mut self, listener: Rc<RefCell<dyn FnMut() -> ()>>) -> usize;
     fn remove_value_change_listener(&mut self, listener: usize) -> bool;
 }
 
@@ -59,6 +61,9 @@ impl AbstractConfigurationObject {
             data: Box::new(configurable),
         }
     }
+}
+pub trait Abstractable {
+    fn get_abstract(&self) -> AbstractConfigurationObject;
 }
 
 impl<T: ValueMapping<V>, V> Clone for ConfigurationObject<T, V> {
@@ -88,27 +93,48 @@ impl<T: ValueMapping<V> + 'static, V: 'static> ConfigurationObject<T, V> {
     pub fn with_value<O, F: Fn(&V) -> O>(&self, func: F) -> O {
         func(&self.inner.read().value)
     }
-    pub fn set_value<F: FnOnce(&V) -> V + 'static>(&mut self, get_value: F) -> Mutator<(), ()> {
+    pub fn set_value<F: FnOnce(&V) -> Option<V> + 'static>(
+        &mut self,
+        get_value: F,
+    ) -> Mutator<(), ()> {
         let inner = self.inner.clone();
         let inner2 = self.inner.clone();
+        let changed = MutRcRefCell::new(false);
+        let changed2 = changed.clone();
         Mutator::new(
             move || {
                 let mut inner = inner.get();
-                inner.value = get_value(&inner.value);
+                let Some(val) = get_value(&inner.value) else {
+                    return Return::new(());
+                };
+                inner.value = val;
 
-                let listeners = inner.value_dirty_listeners.values().cloned().collect_vec();
+                let listeners = inner
+                    .value_dirty_listeners
+                    .values()
+                    .map(|v| v.clone())
+                    .collect_vec();
                 drop(inner);
                 for listener in listeners {
-                    listener();
+                    (listener.borrow_mut())();
                 }
+                *changed.get() = true;
                 Return::new(())
             },
             move |_| {
+                if !*changed2.read() {
+                    return;
+                }
+
                 let inner = inner2.read();
-                let listeners = inner.value_change_listeners.values().cloned().collect_vec();
+                let listeners = inner
+                    .value_change_listeners
+                    .values()
+                    .map(|v| v.clone())
+                    .collect_vec();
                 drop(inner);
                 for listener in listeners {
-                    listener();
+                    (listener.borrow_mut())();
                 }
             },
         )
@@ -123,7 +149,7 @@ impl<T: ValueMapping<V> + 'static, V: 'static> Configurable for ConfigurationObj
         self.set_value(|cur| T::from_js_value(value, cur))
     }
 
-    fn add_value_dirty_listener(&mut self, listener: Rc<dyn Fn() -> ()>) -> usize {
+    fn add_value_dirty_listener(&mut self, listener: Rc<RefCell<dyn FnMut() -> ()>>) -> usize {
         let mut inner = self.inner.get();
         let id = inner.dirty_listener_ids.get_next();
         inner.value_dirty_listeners.insert(id, listener);
@@ -141,7 +167,7 @@ impl<T: ValueMapping<V> + 'static, V: 'static> Configurable for ConfigurationObj
         }
     }
 
-    fn add_value_change_listener(&mut self, listener: Rc<dyn Fn() -> ()>) -> usize {
+    fn add_value_change_listener(&mut self, listener: Rc<RefCell<dyn FnMut() -> ()>>) -> usize {
         let mut inner = self.inner.get();
         let id = inner.change_listener_ids.get_next();
         inner.value_change_listeners.insert(id, listener);
@@ -179,11 +205,12 @@ impl AbstractConfigurationObject {
     }
 
     pub fn add_value_dirty_listener(&mut self, listener: js_sys::Function) -> usize {
-        let listener = Rc::new(move || {
+        let listener = move || {
             let this = JsValue::null();
             listener.call0(&this);
-        });
-        self.data.add_value_dirty_listener(listener)
+        };
+        self.data
+            .add_value_dirty_listener(Rc::new(RefCell::new(listener)))
     }
 
     pub fn remove_value_dirty_listener(&mut self, listener: usize) -> bool {
@@ -191,11 +218,12 @@ impl AbstractConfigurationObject {
     }
 
     pub fn add_value_change_listener(&mut self, listener: js_sys::Function) -> usize {
-        let listener = Rc::new(move || {
+        let listener = move || {
             let this = JsValue::null();
             listener.call0(&this);
-        });
-        self.data.add_value_change_listener(listener)
+        };
+        self.data
+            .add_value_change_listener(Rc::new(RefCell::new(listener)))
     }
 
     pub fn remove_value_change_listener(&mut self, listener: usize) -> bool {

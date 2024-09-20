@@ -16,7 +16,12 @@ use std::sync::Arc;
 use web_sys::console::log;
 
 use crate::configuration::configuration_object::AbstractConfigurationObject;
+use crate::configuration::configuration_object::Abstractable;
+use crate::configuration::types::choice_config::Choice;
+use crate::configuration::types::choice_config::ChoiceConfig;
+use crate::configuration::types::composite_config::CompositeConfig;
 use crate::configuration::types::int_config::IntConfig;
+use crate::configuration::types::label_config::LabelConfig;
 use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
@@ -242,7 +247,10 @@ pub struct QDDDiagramDrawer<
     group_manager: MutRcRefCell<GM<T, G>>,
     presence_adjuster: MPresenceAdjuster<T, G>,
     drawer: Drawer<T, Color, R, L, GMGraph<T, G>>,
-    config: IntConfig,
+    config: CompositeConfig<(
+        LabelConfig<IntConfig>,
+        LabelConfig<ChoiceConfig<PresenceRemainder>>,
+    )>,
 }
 type GraphLabel = PresenceLabel<NodeLabel<String>>;
 type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
@@ -287,24 +295,45 @@ impl<
                 _ => (0.7, 0.7, 0.7),
             }
         });
+
+        let f1 = LabelConfig::new("Test", IntConfig::new(3));
+        let mut f1clone = f1.clone();
+        let f2 = LabelConfig::new(
+            "False terminal",
+            ChoiceConfig::new([
+                Choice::new(PresenceRemainder::Show, "show"),
+                Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                Choice::new(PresenceRemainder::Hide, "hide"),
+            ]),
+        );
+        let config = CompositeConfig::new((f1, f2), |(f1, f2)| {
+            vec![Box::new(f1.clone()), Box::new(f2.clone())]
+        });
+
         let mut out = QDDDiagramDrawer {
             group_manager,
             presence_adjuster,
             graph: modified_graph,
             drawer: Drawer::new(renderer, layout, MutRcRefCell::new(grouped_graph)),
-            config: IntConfig::new(3),
+            config,
         };
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         for root in roots {
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         }
 
-        let cfg2 = out.config.clone();
-        let cfg3 = out.config.clone();
-        out.config
-            .add_value_dirty_listener(move || console::log!("Dirty {}", cfg2.get()));
-        out.config
-            .add_value_change_listener(move || console::log!("Change {}", cfg3.get()));
+        // Config testing
+        {
+            let cfg2 = (*f1clone).clone();
+            let cfg3 = (*f1clone).clone();
+            let mut k = f1clone.clone();
+            f1clone.add_value_dirty_listener(move || {
+                console::log!("Dirty {}", cfg2.get());
+                k.set_label(if cfg2.get() % 2 == 0 { &"Even" } else { &"Odd" })
+                    .commit();
+            });
+            f1clone.add_value_change_listener(move || console::log!("Change {}", cfg3.get()));
+        }
 
         // out.reveal_all(from, 30000);
         // out.reveal_all(from, 10);

@@ -29,12 +29,15 @@ export class ConfigurationObject<V> implements IWatchable<V> {
                 return () => !this.destroyed && object.remove_value_change_listener(id);
             },
         };
+        // TODO: free old value
         this.value = new Derived(watch =>
             watch({
                 get: () => object.get_value(),
                 ...listeners,
             })
         );
+
+        // TODO: map to previous abstract configuration objects (based on ID?)
         this.children = new Derived(watch =>
             watch({
                 get: () => object.get_children(),

@@ -1,6 +1,9 @@
 import {AbstractConfigurationObject, ConfigurationObjectType} from "oxidd-viz-rust";
 import {IConfigObjectType} from "./_types/IConfigObjectType";
 import {IntConfig} from "./types/IntConfig";
+import {LabelConfig} from "./types/LabelConfig";
+import {CompositeConfig} from "./types/CompositeConfig";
+import {ChoiceConfig} from "./types/ChoiceConfig";
 
 /**
  * Creates the configuration object wrapper from the given abstract configuration object
@@ -13,6 +16,12 @@ export function getConfigurationObjectWrapper(
     const type = object.get_type();
     if (type == ConfigurationObjectType.Int) {
         return new IntConfig(object);
+    } else if (type == ConfigurationObjectType.Label) {
+        return new LabelConfig(object);
+    } else if (type == ConfigurationObjectType.Composite) {
+        return new CompositeConfig(object);
+    } else if (type == ConfigurationObjectType.Choice) {
+        return new ChoiceConfig(object);
     }
     return null as never;
 }

@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use wasm_bindgen::prelude::*;
 
 pub struct Mutator<R, F> {
@@ -20,6 +22,14 @@ impl<R, P> Return<R, P> {
     }
 }
 
+impl Mutator<(), ()> {
+    pub fn dummy() -> Mutator<(), ()> {
+        Mutator {
+            perform: Box::new(|| Return::new(())),
+            signal: Box::new(|_| ()),
+        }
+    }
+}
 impl<R: 'static, F: 'static> Mutator<R, F> {
     pub fn new<P: FnOnce() -> Return<R, F> + 'static, S: FnOnce(F) -> () + 'static>(
         perform: P,
@@ -28,13 +38,6 @@ impl<R: 'static, F: 'static> Mutator<R, F> {
         Mutator {
             perform: Box::new(perform),
             signal: Box::new(signal),
-        }
-    }
-
-    pub fn dummy() -> Mutator<(), ()> {
-        Mutator {
-            perform: Box::new(|| Return::new(())),
-            signal: Box::new(|_| ()),
         }
     }
 
@@ -97,6 +100,13 @@ impl<R: 'static, F: 'static> Mutator<R, F> {
     }
 }
 
+/// Performs inline modification of a given value
+pub fn modify<V, A: 'static, B: 'static, M: Fn(&V) -> Mutator<A, B>>(value: V, modify: M) -> V {
+    modify(&value).commit();
+    value
+}
+
+/// Mutator callbacks for communicating with JS
 #[wasm_bindgen]
 pub struct MutatorCallbacks {
     perform: Option<Box<dyn FnOnce() -> Return<(), ()>>>,
