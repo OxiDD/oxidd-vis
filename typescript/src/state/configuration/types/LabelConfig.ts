@@ -4,28 +4,23 @@ import {IConfigObjectType} from "../_types/IConfigObjectType";
 import {ConfigurationObject} from "../ConfigurationObject";
 import {getConfigurationObjectWrapper} from "../getConfigurationObjectWrapper";
 
-export class LabelConfig {
-    protected object: ConfigurationObject<{label: string; style: number}>;
-
-    protected readonly abstractValueObject = new Derived<AbstractConfigurationObject>(
-        watch => watch(this.object.children)[0]
-    );
-
+export class LabelConfig extends ConfigurationObject<{label: string; style: number}> {
     /** The value that is being labeled */
-    public readonly value = new Derived<IConfigObjectType>(watch =>
-        getConfigurationObjectWrapper(watch(this.abstractValueObject))
+    public readonly value = new Derived<IConfigObjectType>(
+        watch => watch(this._children)[0]
     );
+
     /** The label style */
-    public readonly style = new Derived<LabelStyle>(watch => watch(this.object).style);
+    public readonly style = new Derived<LabelStyle>(watch => watch(this._value).style);
     /** The label text */
-    public readonly label = new Derived<String>(watch => watch(this.object).label);
+    public readonly label = new Derived<String>(watch => watch(this._value).label);
 
     /**
      * Creates a new label config object
      * @param object The rust configuration object that represents a label
      */
     public constructor(object: AbstractConfigurationObject) {
-        this.object = new ConfigurationObject(object);
+        super(object);
     }
 }
 

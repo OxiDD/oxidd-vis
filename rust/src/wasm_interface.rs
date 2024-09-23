@@ -73,9 +73,6 @@ impl DiagramSectionDrawerBox {
     pub fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
         self.0.split_edges(nodes, fully);
     }
-    pub fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) {
-        self.0.set_terminal_mode(terminal, mode);
-    }
 
     /** Node interaction */
     /// Coordinates in screen space (-0.5 to 0.5), not in world space. Additionally the max_group_expansion should be provided for determining the maximum number of nodes to select for every given group
@@ -100,15 +97,6 @@ impl DiagramSectionDrawerBox {
     /// Retrieves the local nodes representing the collection of sources
     pub fn source_nodes_to_local(&self, nodes: &[NodeID]) -> Vec<NodeID> {
         self.0.source_nodes_to_local(nodes)
-    }
-
-    /// Retrieves all available terminals, which are a terminal id, followed by a terminal name to be displayed
-    pub fn get_terminals(&self) -> Vec<TerminalData> {
-        self.0
-            .get_terminals()
-            .into_iter()
-            .map(|(id, name)| TerminalData { id, name })
-            .collect()
     }
 
     /** Storage */

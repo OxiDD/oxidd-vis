@@ -4,19 +4,15 @@ import {Derived} from "../../../watchables/Derived";
 import {IConfigObjectType} from "../_types/IConfigObjectType";
 import {getConfigurationObjectWrapper} from "../getConfigurationObjectWrapper";
 
-export class CompositeConfig {
-    protected object: ConfigurationObject<null>;
-
+export class CompositeConfig extends ConfigurationObject<null> {
     /** The children of this composite configuration */
-    public readonly children = new Derived<IConfigObjectType[]>(watch =>
-        watch(this.object.children).map(getConfigurationObjectWrapper)
-    );
+    public readonly children = this._children;
 
     /**
      * Creates a new composite config object
      * @param object The rust configuration object that represents a composition
      */
     public constructor(object: AbstractConfigurationObject) {
-        this.object = new ConfigurationObject(object);
+        super(object);
     }
 }

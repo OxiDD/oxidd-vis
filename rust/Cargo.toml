@@ -39,6 +39,15 @@ byteorder = "1.4"
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
 
+[dependencies.uuid]
+version = "1.10.0"
+features = [
+    "js",
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
+
 
 [dependencies.oxidd-manager-index]
 git = "https://github.com/OxiDD/oxidd.git"

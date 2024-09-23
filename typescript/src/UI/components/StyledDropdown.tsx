@@ -7,6 +7,7 @@ export const StyledDropdown: FC<IDropdownProps> = forwardRef((props, ref) => (
         ref={ref}
         className={`${props.className} ${css({
             ".ms-Dropdown-title": {border: 0},
+            minWidth: 120,
         })}`}
         {...props}
     />

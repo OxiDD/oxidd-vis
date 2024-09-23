@@ -15,8 +15,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 use web_sys::console::log;
 
+use crate::configuration::configuration::Configuration;
 use crate::configuration::configuration_object::AbstractConfigurationObject;
 use crate::configuration::configuration_object::Abstractable;
+use crate::configuration::observe_configuration::after_configuration_change;
+use crate::configuration::observe_configuration::on_configuration_change;
 use crate::configuration::types::choice_config::Choice;
 use crate::configuration::types::choice_config::ChoiceConfig;
 use crate::configuration::types::composite_config::CompositeConfig;
@@ -76,9 +79,7 @@ use super::util::graph_structure::graph_manipulators::node_presence_adjuster::No
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
 use super::util::graph_structure::graph_manipulators::rc_graph::RCGraph;
 use super::util::graph_structure::graph_manipulators::terminal_level_adjuster::TerminalLevelAdjuster;
-use super::util::graph_structure::graph_structure::DrawTag;
-use super::util::graph_structure::graph_structure::EdgeType;
-use super::util::graph_structure::graph_structure::GraphStructure;
+use super::util::graph_structure::graph_structure::{DrawTag, EdgeType, GraphStructure};
 use super::util::graph_structure::grouped_graph_structure::GroupedGraphStructure;
 use super::util::graph_structure::oxidd_graph_structure::NodeLabel;
 use super::util::graph_structure::oxidd_graph_structure::OxiddGraphStructure;
@@ -139,8 +140,8 @@ where
         Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
-        let c0 = (0., 0., 0.);
-        let c1 = (0.4, 0.4, 0.4);
+        let c0 = (1.0, 0.2, 0.2);
+        let c1 = (0.2, 1.0, 0.2);
         let c2 = (0.6, 0.6, 0.6);
 
         let select_color = ((0.3, 0.3, 1.0), 0.8);
@@ -167,9 +168,9 @@ where
                             partial_select_color.0,
                             partial_select_color.1,
                         ),
-                        width: 0.15,
-                        dash_solid: 1.0,
-                        dash_transparent: 0.0, // No dashing, just solid
+                        width: 0.2,
+                        dash_solid: 0.3,
+                        dash_transparent: 0.15,
                     },
                 ),
                 (
@@ -188,9 +189,9 @@ where
                             partial_select_color.0,
                             partial_select_color.1,
                         ),
-                        width: 0.15,
-                        dash_solid: 0.2,
-                        dash_transparent: 0.1,
+                        width: 0.2,
+                        dash_solid: 1.0,
+                        dash_transparent: 0.0, // No dashing
                     },
                 ),
                 (
@@ -209,7 +210,7 @@ where
                             partial_select_color.0,
                             partial_select_color.1,
                         ),
-                        width: 0.1,
+                        width: 0.15,
                         dash_solid: 1.0,
                         dash_transparent: 0.0,
                     },
@@ -246,11 +247,14 @@ pub struct QDDDiagramDrawer<
     graph: MGraph<T, G>,
     group_manager: MutRcRefCell<GM<T, G>>,
     presence_adjuster: MPresenceAdjuster<T, G>,
-    drawer: Drawer<T, Color, R, L, GMGraph<T, G>>,
-    config: CompositeConfig<(
-        LabelConfig<IntConfig>,
-        LabelConfig<ChoiceConfig<PresenceRemainder>>,
-    )>,
+    time: MutRcRefCell<u32>,
+    drawer: MutRcRefCell<Drawer<T, Color, R, L, GMGraph<T, G>>>,
+    config: Configuration<
+        CompositeConfig<(
+            LabelConfig<ChoiceConfig<PresenceRemainder>>,
+            LabelConfig<ChoiceConfig<PresenceRemainder>>,
+        )>,
+    >,
 }
 type GraphLabel = PresenceLabel<NodeLabel<String>>;
 type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
@@ -267,8 +271,8 @@ type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, (f
 impl<
         T: DrawTag + Serializable<T> + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
-        R: Renderer<T>,
-        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
+        R: Renderer<T> + 'static,
+        L: LayoutRules<T, Color, String, GMGraph<T, G>> + 'static,
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
@@ -291,30 +295,45 @@ impl<
                         (1., 0.2, 0.2)
                     }
                 }
-                (Some(_), None) => (0., 0., 0.),
+                (Some(_), None) => (0.3, 0.3, 0.3),
                 _ => (0.7, 0.7, 0.7),
             }
         });
 
-        let f1 = LabelConfig::new("Test", IntConfig::new(3));
-        let mut f1clone = f1.clone();
-        let f2 = LabelConfig::new(
-            "False terminal",
-            ChoiceConfig::new([
-                Choice::new(PresenceRemainder::Show, "show"),
-                Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                Choice::new(PresenceRemainder::Hide, "hide"),
-            ]),
+        let terminal_config = CompositeConfig::new(
+            (
+                LabelConfig::new("False terminal", {
+                    let mut c = ChoiceConfig::new([
+                        Choice::new(PresenceRemainder::Show, "show"),
+                        Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                        Choice::new(PresenceRemainder::Hide, "hide"),
+                    ]);
+                    c.set_index(2).commit();
+                    c
+                }),
+                LabelConfig::new(
+                    "True terminal",
+                    ChoiceConfig::new([
+                        Choice::new(PresenceRemainder::Show, "show"),
+                        Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                        Choice::new(PresenceRemainder::Hide, "hide"),
+                    ]),
+                ),
+            ),
+            |(f1, f2)| vec![Box::new(f1.clone()), Box::new(f2.clone())],
         );
-        let config = CompositeConfig::new((f1, f2), |(f1, f2)| {
-            vec![Box::new(f1.clone()), Box::new(f2.clone())]
-        });
+        let config = Configuration::new(terminal_config.clone());
 
         let mut out = QDDDiagramDrawer {
             group_manager,
             presence_adjuster,
             graph: modified_graph,
-            drawer: Drawer::new(renderer, layout, MutRcRefCell::new(grouped_graph)),
+            time: MutRcRefCell::new(0),
+            drawer: MutRcRefCell::new(Drawer::new(
+                renderer,
+                layout,
+                MutRcRefCell::new(grouped_graph),
+            )),
             config,
         };
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
@@ -322,22 +341,47 @@ impl<
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         }
 
-        // Config testing
-        {
-            let cfg2 = (*f1clone).clone();
-            let cfg3 = (*f1clone).clone();
-            let mut k = f1clone.clone();
-            f1clone.add_value_dirty_listener(move || {
-                console::log!("Dirty {}", cfg2.get());
-                k.set_label(if cfg2.get() % 2 == 0 { &"Even" } else { &"Odd" })
-                    .commit();
+        // Connect the config
+        let drawer = out.drawer.clone();
+        let time = out.time.clone();
+        fn set_terminal_presence<
+            T: DrawTag + Serializable<T> + 'static,
+            G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
+        >(
+            presence_adjuster: &MPresenceAdjuster<T, G>,
+            terminal: String,
+            presence: PresenceRemainder,
+        ) -> () {
+            let mut adjuster = presence_adjuster.get();
+            let terminals = adjuster.get_terminals();
+            let mut terminals = terminals.iter().filter_map(|&node| {
+                match adjuster.get_node_label(node).original_label {
+                    NodeLabel::Terminal(t) if t == terminal => Some(node),
+                    _ => None,
+                }
             });
-            f1clone.add_value_change_listener(move || console::log!("Change {}", cfg3.get()));
-        }
+            let Some(target_terminal) = terminals.next() else {
+                return;
+            };
 
-        // out.reveal_all(from, 30000);
-        // out.reveal_all(from, 10);
-        out.set_terminal_mode("F".to_string(), PresenceRemainder::Hide);
+            console::log!("Set presence");
+            adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(presence));
+        }
+        let false_config = terminal_config.0.clone();
+        let false_presence_adjuster = out.presence_adjuster.clone();
+        let _ = on_configuration_change(&terminal_config.0, move || {
+            set_terminal_presence(&false_presence_adjuster, "F".into(), false_config.get());
+        });
+        let true_config = terminal_config.1.clone();
+        let true_presence_adjuster = out.presence_adjuster.clone();
+        let _ = on_configuration_change(&terminal_config.1, move || {
+            set_terminal_presence(&true_presence_adjuster, "T".into(), true_config.get());
+        });
+        let _ = after_configuration_change(&terminal_config, move || {
+            console::log!("Relayout {}", *time.get());
+            drawer.get().layout(*time.get());
+        });
+
         out
     }
 
@@ -368,15 +412,16 @@ impl<
     > DiagramSectionDrawer for QDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32) -> () {
-        self.drawer.render(time);
+        *self.time.get() = time;
+        self.drawer.get().render(time);
     }
 
     fn layout(&mut self, time: u32) -> () {
-        self.drawer.layout(time);
+        self.drawer.get().layout(time);
     }
 
     fn set_transform(&mut self, width: u32, height: u32, x: f32, y: f32, scale: f32) -> () {
-        self.drawer.set_transform(width, height, x, y, scale);
+        self.drawer.get().set_transform(width, height, x, y, scale);
     }
 
     fn set_step(&mut self, step: i32) -> Option<StepData> {
@@ -394,28 +439,13 @@ impl<
     fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
         self.group_manager.get().split_edges(nodes, fully);
     }
-    fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) -> () {
-        let mut adjuster = self.presence_adjuster.get();
-        let terminals = adjuster.get_terminals();
-        let terminals = terminals.iter().filter_map(|&node| {
-            match adjuster.get_node_label(node).original_label {
-                NodeLabel::Terminal(t) if t == terminal => Some(node),
-                _ => None,
-            }
-        });
-        let Some(target_terminal) = terminals.last() else {
-            return;
-        };
-
-        adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(mode));
-    }
 
     fn get_nodes(&self, area: Rectangle, max_group_expansion: usize) -> Vec<NodeID> {
-        self.drawer.get_nodes(area, max_group_expansion)
+        self.drawer.read().get_nodes(area, max_group_expansion)
     }
 
     fn set_selected_nodes(&mut self, selected_ids: &[NodeID], hovered_ids: &[NodeID]) {
-        self.drawer.select_nodes(selected_ids, hovered_ids);
+        self.drawer.get().select_nodes(selected_ids, hovered_ids);
     }
 
     fn local_nodes_to_sources(&self, nodes: &[NodeID]) -> Vec<NodeID> {
@@ -427,13 +457,6 @@ impl<
         self.graph
             .source_nodes_to_local(nodes.iter().cloned().collect())
     }
-    fn get_terminals(&self) -> Vec<(String, String)> {
-        vec![
-            ("T".to_string(), "True".to_string()),
-            ("F".to_string(), "False".to_string()),
-        ]
-    }
-
     fn serialize_state(&self) -> Vec<u8> {
         let mut out = Vec::new();
         self.group_manager.read().write(&mut Cursor::new(&mut out));

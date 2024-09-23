@@ -29,7 +29,6 @@ pub trait DiagramSectionDrawer {
     /** Tools */
     /// Splits the edges of a given group such that each edge type goes to a unique group, if fully is specified it also ensures that each group that an edge goes to only contains a single node
     fn split_edges(&mut self, nodes: &[NodeID], fully: bool) -> ();
-    fn set_terminal_mode(&mut self, terminal: String, mode: PresenceRemainder) -> ();
 
     /** Node interaction */
     /// Retrieves the nodes in the given rectangle, expanding each node group up to at most max_group_expansion nodes of the nodes it contains
@@ -40,8 +39,6 @@ pub trait DiagramSectionDrawer {
     fn local_nodes_to_sources(&self, nodes: &[NodeID]) -> Vec<NodeID>;
     /// Retrieves the local nodes representing the collection of sources
     fn source_nodes_to_local(&self, nodes: &[NodeID]) -> Vec<NodeID>;
-    /// Retrieves all the terminals in the graph, consisting of a terminal ID paired with a display name
-    fn get_terminals(&self) -> Vec<(String, String)>;
 
     /** Storage */
     fn serialize_state(&self) -> Vec<u8>;

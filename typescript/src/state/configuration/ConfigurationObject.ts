@@ -4,16 +4,20 @@ import {AbstractConfigurationObject, ConfigurationObjectType} from "oxidd-viz-ru
 import {Derived} from "../../watchables/Derived";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {Mutator} from "../../watchables/mutator/Mutator";
+import {IConfigObjectSerialization} from "./_types/IConfigObjectSerialization";
+import {IConfigObjectType} from "./_types/IConfigObjectType";
+import {getConfigurationObjectWrapper} from "./getConfigurationObjectWrapper";
+import {chain} from "../../watchables/mutator/chain";
 
 /**
  * A configuration object that interacts with the AbstractConfigurationObject code in rust
  */
-export class ConfigurationObject<V> implements IWatchable<V> {
+export class ConfigurationObject<V> {
     protected object: AbstractConfigurationObject;
     protected destroyed = false;
-    public readonly type: ConfigurationObjectType;
-    public readonly value: Derived<V>;
-    public readonly children: Derived<AbstractConfigurationObject[]>;
+    protected readonly type: ConfigurationObjectType;
+    protected readonly _value: Derived<V>;
+    protected readonly _children: Derived<IConfigObjectType[]>;
     public constructor(object: AbstractConfigurationObject) {
         this.object = object;
         this.type = object.get_type();
@@ -21,35 +25,63 @@ export class ConfigurationObject<V> implements IWatchable<V> {
         // Sets up the value listener, using Derived to make sure that repeated dirty or change calls do not invalidate watchable conditions
         const listeners = {
             onDirty: (listener: () => void) => {
-                const id = object.add_value_dirty_listener(listener);
-                return () => !this.destroyed && object.remove_value_dirty_listener(id);
+                const id = object.add_js_dirty_listener(listener);
+                return () => !this.destroyed && object.remove_dirty_listener(id);
             },
             onChange: (listener: () => void) => {
-                const id = object.add_value_change_listener(listener);
-                return () => !this.destroyed && object.remove_value_change_listener(id);
+                const id = object.add_js_change_listener(listener);
+                return () => !this.destroyed && object.remove_change_listener(id);
             },
         };
-        // TODO: free old value
-        this.value = new Derived(watch =>
+        this._value = new Derived((watch, prev) =>
             watch({
                 get: () => object.get_value(),
                 ...listeners,
             })
         );
 
-        // TODO: map to previous abstract configuration objects (based on ID?)
-        this.children = new Derived(watch =>
-            watch({
+        // For the children, make sure to use uuids to keep correct js references to already existing configs
+        type M = Map<string, IConfigObjectType>;
+        let childData = new Derived<{
+            map: M;
+            list: IConfigObjectType[];
+        }>((watch, prev) => {
+            const newChildren = watch({
                 get: () => object.get_children(),
                 ...listeners,
-            })
-        );
+            });
+
+            const map: M = prev?.map ?? new Map();
+            const removed = new Set<string>(map.keys());
+            let mappedChildren = newChildren.map(child => {
+                const id = child.get_id();
+                removed.delete(id);
+                if (map.has(id)) {
+                    child.free();
+                    return map.get(id)!;
+                } else {
+                    const wrapper = getConfigurationObjectWrapper(child);
+                    map.set(id, wrapper);
+                    return wrapper;
+                }
+            });
+
+            for (const r of removed) {
+                map.get(r)?.destroy();
+                map.delete(r);
+            }
+            return {map, list: mappedChildren};
+        });
+        this._children = new Derived(watch => watch(childData).list);
     }
 
     /** Destroys this object, freeing it memory from rust */
     public destroy() {
         if (this.destroyed) return;
         this.destroyed = true;
+        for (const child of this._children.get()) {
+            child.destroy();
+        }
         this.object.free();
     }
 
@@ -58,7 +90,7 @@ export class ConfigurationObject<V> implements IWatchable<V> {
      * @param v The new value to store
      * @returns The mutator to commit the change
      */
-    public set(v: V): IMutator {
+    protected setValue(v: V): IMutator {
         let mutatorCallbacks = this.object.set_value(v);
         return new Mutator(
             () => mutatorCallbacks.perform(),
@@ -66,16 +98,31 @@ export class ConfigurationObject<V> implements IWatchable<V> {
         );
     }
 
-    /** @override */
-    public get(): V {
-        return this.value.get();
+    /**
+     * Serializes this configuration
+     */
+    public serialize(): IConfigObjectSerialization<V> {
+        return {
+            value: this._value.get(),
+            children: this._children.get().map(child => child.serialize()),
+        };
     }
-    /** @override */
-    public onDirty(listener: IRunnable): IRunnable {
-        return this.value.onDirty(listener);
-    }
-    /** @override */
-    public onChange(listener: IRunnable): IRunnable {
-        return this.value.onChange(listener);
+
+    /**
+     * Deserializes the given configuration data into this config object
+     * @param config The configuration data to deserialize
+     * @returns The mutator to commit the changes
+     */
+    public deserialize(config: IConfigObjectSerialization<V>): IMutator {
+        return chain(push => {
+            push(this.setValue(config.value));
+            const children = this._children.get();
+            config.children.forEach((childData, i) => {
+                const child = children[i];
+                if (!child) return;
+
+                push(child.deserialize(childData as never));
+            });
+        });
     }
 }

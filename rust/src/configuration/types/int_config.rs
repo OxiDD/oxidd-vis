@@ -82,20 +82,20 @@ impl Abstractable for IntConfig {
 impl IntConfig {
     pub fn add_value_dirty_listener<F: FnMut() -> () + 'static>(&mut self, listener: F) -> usize {
         self.data
-            .add_value_dirty_listener(Rc::new(RefCell::new(listener)))
+            .add_dirty_listener(Rc::new(RefCell::new(listener)))
     }
 
     pub fn remove_value_dirty_listener(&mut self, listener: usize) -> bool {
-        self.data.remove_value_dirty_listener(listener)
+        self.data.remove_dirty_listener(listener)
     }
 
     pub fn add_value_change_listener<F: FnMut() -> () + 'static>(&mut self, listener: F) -> usize {
         self.data
-            .add_value_change_listener(Rc::new(RefCell::new(listener)))
+            .add_change_listener(Rc::new(RefCell::new(listener)))
     }
 
     pub fn remove_value_change_listener(&mut self, listener: usize) -> bool {
-        self.data.remove_value_change_listener(listener)
+        self.data.remove_change_listener(listener)
     }
 }
 

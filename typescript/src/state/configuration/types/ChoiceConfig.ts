@@ -9,21 +9,22 @@ import {IRunnable} from "../../../watchables/_types/IRunnable";
 /**
  * A configuration object for choices
  */
-export class ChoiceConfig implements IWatchable<string> {
-    protected object: ConfigurationObject<{options: string[]; selected: number}>;
-
+export class ChoiceConfig
+    extends ConfigurationObject<{options: string[]; selected: number}>
+    implements IWatchable<string>
+{
     /** The options of the choice  */
-    public readonly options = new Derived<string[]>(watch => watch(this.object).options);
+    public readonly options = new Derived<string[]>(watch => watch(this._value).options);
 
     /** The currently selected option (text) */
     public readonly selected = new Derived<string>(watch => {
-        const {options, selected} = watch(this.object);
+        const {options, selected} = watch(this._value);
         return options[selected];
     });
 
     /** The currently selected option (index) */
     public readonly selectedIndex = new Derived<number>(
-        watch => watch(this.object).selected
+        watch => watch(this._value).selected
     );
 
     /**
@@ -31,7 +32,7 @@ export class ChoiceConfig implements IWatchable<string> {
      * @param object The rust configuration that represents a choice
      */
     public constructor(object: AbstractConfigurationObject) {
-        this.object = new ConfigurationObject(object);
+        super(object);
     }
 
     /**
@@ -40,7 +41,7 @@ export class ChoiceConfig implements IWatchable<string> {
      * @returns The mutator to commit the change
      */
     public set(index: number): IMutator {
-        return this.object.set({
+        return this.setValue({
             options: [], // Irrelevant
             selected: index,
         });

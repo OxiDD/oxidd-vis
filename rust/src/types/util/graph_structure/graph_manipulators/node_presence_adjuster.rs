@@ -467,12 +467,13 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         let source_out = from_sourced(Either::Left(left_source_node));
         let maybe_images = self.images.get_vec(&left_source_node).cloned();
         if let Some(images) = maybe_images {
-            let mut images = images
-                .into_iter()
-                .map(|image| from_sourced(Either::Right(image)))
-                .collect_vec();
-            images.push(source_out);
-            images
+            let mut out_images = vec![source_out];
+            out_images.extend(
+                images
+                    .into_iter()
+                    .map(|image| from_sourced(Either::Right(image))),
+            );
+            out_images
         } else {
             vec![source_out]
         }

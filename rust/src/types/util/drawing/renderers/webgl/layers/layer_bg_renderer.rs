@@ -4,7 +4,10 @@ use web_sys::WebGl2RenderingContext;
 use crate::{
     types::util::drawing::{
         diagram_layout::{Point, Transition},
-        renderers::webgl::{text::text_renderer::Text, util::vertex_renderer::VertexRenderer},
+        renderers::webgl::{
+            text::text_renderer::Text,
+            util::{set_animated_data::set_animated_data, vertex_renderer::VertexRenderer},
+        },
     },
     util::{logging::console, matrix4::Matrix4},
 };
@@ -51,49 +54,40 @@ impl LayerDivisionRenderer for LayerBgRenderer {
         let mut layers = layers.clone();
         layers.sort_by_key(|layer| layer.exists.new > 0.5);
 
-        // TODO: write more helpers to clean this up
+        let layer_vertices = layers.iter().flat_map(|layer| {
+            [
+                layer.top,
+                layer.bottom,
+                layer.bottom,
+                layer.top,
+                layer.bottom,
+                layer.top,
+            ]
+        });
+        set_animated_data(
+            "yPosition",
+            layer_vertices.clone(),
+            |v| [v],
+            context,
+            &mut self.bg_renderer,
+        );
 
-        let y_positions = map(&layers, |t| t.new);
-        self.bg_renderer
-            .set_data(context, "yPosition", &y_positions, 1);
+        let layers6 = layers.iter().flat_map(|layer| [layer; 6]);
+        set_animated_data(
+            "type",
+            layers6.clone().map(|l| l.index),
+            |v| [v % 2.],
+            context,
+            &mut self.bg_renderer,
+        );
 
-        let y_positions_old = map(&layers, |t| t.old);
-        self.bg_renderer
-            .set_data(context, "yPositionOld", &y_positions_old, 1);
-
-        let position_old_times = map(&layers, |t| t.old_time as f32);
-        self.bg_renderer
-            .set_data(context, "positionStartTime", &position_old_times, 1);
-
-        let position_durations = map(&layers, |t| t.duration as f32);
-        self.bg_renderer
-            .set_data(context, "positionDuration", &position_durations, 1);
-
-        let types = layers
-            .iter()
-            .flat_map(|layer| [(layer.index.new % 2.); 6])
-            .collect::<Box<[f32]>>();
-        self.bg_renderer.set_data(context, "type", &types, 1);
-
-        let types_old = layers
-            .iter()
-            .flat_map(|layer| [(layer.index.old % 2.); 6])
-            .collect::<Box<[f32]>>();
-        self.bg_renderer.set_data(context, "typeOld", &types_old, 1);
-
-        let types_old_times = layers
-            .iter()
-            .flat_map(|layer| [layer.index.old_time as f32; 6])
-            .collect::<Box<[f32]>>();
-        self.bg_renderer
-            .set_data(context, "typeStartTime", &types_old_times, 1);
-
-        let types_durations = layers
-            .iter()
-            .flat_map(|layer| [layer.index.duration as f32; 6])
-            .collect::<Box<[f32]>>();
-        self.bg_renderer
-            .set_data(context, "typeDuration", &types_durations, 1);
+        set_animated_data(
+            "exists",
+            layers6.clone().map(|l| l.exists),
+            |v| [v],
+            context,
+            &mut self.bg_renderer,
+        );
 
         self.bg_renderer.send_data(context);
     }

@@ -9,22 +9,23 @@ import {IRunnable} from "../../../watchables/_types/IRunnable";
 /**
  * A configuration object for integers
  */
-export class IntConfig implements IWatchable<number> {
-    protected object: ConfigurationObject<{value: number; min?: number; max?: number}>;
-
+export class IntConfig
+    extends ConfigurationObject<{value: number; min?: number; max?: number}>
+    implements IWatchable<number>
+{
     /** The currently stored integer value */
-    public readonly value = new Derived(watch => watch(this.object).value);
+    public readonly value = new Derived(watch => watch(this._value).value);
     /** The minimum value that may be stored */
-    public readonly min = new Derived(watch => watch(this.object).min);
+    public readonly min = new Derived(watch => watch(this._value).min);
     /** The maximum value that may be stored */
-    public readonly max = new Derived(watch => watch(this.object).max);
+    public readonly max = new Derived(watch => watch(this._value).max);
 
     /**
      * Creates a new int config object
      * @param object The rust configuration that represents an integer
      */
     public constructor(object: AbstractConfigurationObject) {
-        this.object = new ConfigurationObject(object);
+        super(object);
     }
 
     /**
@@ -35,7 +36,7 @@ export class IntConfig implements IWatchable<number> {
     public set(value: number): IMutator {
         return chain(push => {
             push(
-                this.object.set({
+                this.setValue({
                     value,
                     min: this.min.get(),
                     max: this.max.get(),
