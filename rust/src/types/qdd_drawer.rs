@@ -102,11 +102,8 @@ impl QDDDiagram<DummyManagerRef> {
 
 impl Diagram for QDDDiagram<DummyManagerRef> {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
-        let (root, levels) = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp[..]);
-        Some(Box::new(QDDDiagramSection {
-            roots: Vec::from([root]),
-            levels,
-        }))
+        let (roots, levels) = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp[..]);
+        Some(Box::new(QDDDiagramSection { roots, levels }))
     }
 
     fn create_section_from_ids(

@@ -99,11 +99,22 @@ impl DummyFunction {
     pub fn from_dddmp(
         manager_ref: &mut DummyManagerRef,
         data: &str,
-    ) -> (DummyFunction, Vec<String>) {
+    ) -> (Vec<DummyFunction>, Vec<String>) {
         manager_ref.with_manager_exclusive(|manager| {
             console::log!("Started loading graph");
             let mut terminals = HashMap::new();
-            let node_text = &data[data.find(".nodes").unwrap()..data.find(".end").unwrap()];
+
+            let get_text = |from: &str, to: &str| {
+                Box::new(&data[data.find(from).unwrap() + from.len() + 1..data.find(to).unwrap()])
+            };
+
+            let roots_text = get_text(".rootids", ".rootnames");
+            let roots = roots_text
+                .trim()
+                .split(" ")
+                .flat_map(|n| n.parse::<usize>())
+                .collect_vec();
+            let node_text = get_text(".nodes", ".end");
             let nodes_data = node_text.split("\n").filter_map(|node| {
                 let parts = node.trim().split(" ").collect::<Vec<&str>>();
                 if parts.len() >= 4 {
@@ -115,7 +126,6 @@ impl DummyFunction {
                     None
                 }
             });
-            let mut root = Option::None;
             let mut max_level = 0;
             for (_, level, _) in nodes_data.clone() {
                 let Ok(level) = level.parse() else { continue };
@@ -147,10 +157,6 @@ impl DummyFunction {
                         DummyEdge::new(Arc::new(id), manager_ref.clone()),
                     );
                 }
-
-                if level_num == Ok(0) {
-                    root = Some(id);
-                }
             }
 
             for (id, level, children) in nodes_data {
@@ -174,17 +180,19 @@ impl DummyFunction {
 
             manager.init_terminals(terminals);
 
-            let func = DummyFunction(DummyEdge::new(Arc::new(root.unwrap()), manager_ref.clone()));
+            let funcs = roots
+                .into_iter()
+                .map(|root| DummyFunction(DummyEdge::new(Arc::new(root), manager_ref.clone())))
+                .collect_vec();
 
-            let var_names_start = ".orderedvarnames ";
-            let var_names_text = &data[data.find(var_names_start).unwrap() + var_names_start.len()
-                ..data.find("\n.ids").unwrap()];
+            let var_names_text = get_text(".orderedvarnames", ".ids");
             let var_names = var_names_text
+                .trim()
                 .split(" ")
                 .map(|t| t.to_string())
                 .collect_vec();
             console::log!("Loaded graph!");
-            (func, var_names)
+            (funcs, var_names)
         })
     }
 }

@@ -152,7 +152,7 @@ const sample = `.ver DDDMP-2.0
 .ids 0 1 2
 .permids 0 1 2
 .nroots 1
-.rootids 5
+.rootids 6
 .rootnames f
 .nodes
 1 F 0 0
