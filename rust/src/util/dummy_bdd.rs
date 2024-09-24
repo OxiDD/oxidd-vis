@@ -96,7 +96,10 @@ impl DummyFunction {
             DummyFunction(DummyEdge::new(Arc::new(root.unwrap()), manager_ref.clone()))
         })
     }
-    pub fn from_dddmp(manager_ref: &mut DummyManagerRef, data: &str) -> DummyFunction {
+    pub fn from_dddmp(
+        manager_ref: &mut DummyManagerRef,
+        data: &str,
+    ) -> (DummyFunction, Vec<String>) {
         manager_ref.with_manager_exclusive(|manager| {
             console::log!("Started loading graph");
             let mut terminals = HashMap::new();
@@ -171,8 +174,17 @@ impl DummyFunction {
 
             manager.init_terminals(terminals);
 
+            let func = DummyFunction(DummyEdge::new(Arc::new(root.unwrap()), manager_ref.clone()));
+
+            let var_names_start = ".orderedvarnames ";
+            let var_names_text = &data[data.find(var_names_start).unwrap() + var_names_start.len()
+                ..data.find("\n.ids").unwrap()];
+            let var_names = var_names_text
+                .split(" ")
+                .map(|t| t.to_string())
+                .collect_vec();
             console::log!("Loaded graph!");
-            DummyFunction(DummyEdge::new(Arc::new(root.unwrap()), manager_ref.clone()))
+            (func, var_names)
         })
     }
 }

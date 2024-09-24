@@ -7,6 +7,7 @@ use crate::{
 };
 
 use super::traits::{Diagram, DiagramSection, DiagramSectionDrawer};
+use itertools::Itertools;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
@@ -24,8 +25,14 @@ impl DiagramBox {
     pub fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<DiagramSectionBox> {
         Some(DiagramSectionBox(self.0.create_section_from_dddmp(dddmp)?))
     }
-    pub fn create_section_from_ids(&self, ids: &[NodeID]) -> Option<DiagramSectionBox> {
-        Some(DiagramSectionBox(self.0.create_section_from_ids(ids)?))
+    pub fn create_section_from_ids(
+        &self,
+        ids: &[NodeID],
+        section: &DiagramSectionBox,
+    ) -> Option<DiagramSectionBox> {
+        Some(DiagramSectionBox(self.0.create_section_from_ids(
+            &ids.iter().map(|&id| (id, &section.0)).collect_vec(),
+        )?))
     }
 }
 

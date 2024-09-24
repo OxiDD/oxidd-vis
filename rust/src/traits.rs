@@ -9,11 +9,15 @@ use web_sys::HtmlCanvasElement;
 
 pub trait Diagram {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>>; // TODO: error type
-    fn create_section_from_ids(&self, id: &[NodeID]) -> Option<Box<dyn DiagramSection>>;
+    fn create_section_from_ids(
+        &self,
+        id: &[(oxidd::NodeID, &Box<dyn DiagramSection>)],
+    ) -> Option<Box<dyn DiagramSection>>;
 }
 
 pub trait DiagramSection {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer>;
+    fn get_level_labels(&self) -> Vec<String>;
 }
 
 pub trait DiagramSectionDrawer {

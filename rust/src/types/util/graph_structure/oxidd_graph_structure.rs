@@ -23,6 +23,7 @@ where
     node_by_id: HashMap<NodeID, F>,
     node_parents: HashMap<NodeID, HashSet<(EdgeType<DT>, NodeID)>>,
     terminal_to_string: S,
+    level_labels: Vec<String>,
     terminal: PhantomData<T>,
     event_writer: GraphEventsWriter,
 }
@@ -37,7 +38,11 @@ impl<DT: DrawTag, F: Function, T, S: Fn(&T) -> String> OxiddGraphStructure<DT, F
 where
     for<'id> F::Manager<'id>: Manager<EdgeTag = DT, Terminal = T>,
 {
-    pub fn new(roots: Vec<F>, terminal_to_string: S) -> OxiddGraphStructure<DT, F, T, S> {
+    pub fn new(
+        roots: Vec<F>,
+        level_labels: Vec<String>,
+        terminal_to_string: S,
+    ) -> OxiddGraphStructure<DT, F, T, S> {
         OxiddGraphStructure {
             node_by_id: roots
                 .iter()
@@ -49,6 +54,7 @@ where
                 })
                 .collect(),
             roots,
+            level_labels,
             node_parents: HashMap::new(),
             terminal_to_string,
             event_writer: GraphEventsWriter::new(),
@@ -169,8 +175,10 @@ where
     }
 
     fn get_level_label(&self, level: LevelNo) -> String {
-        // TODO: get actual level vars
-        format!("x{}", level.to_string())
+        self.level_labels
+            .get(level as usize)
+            .cloned()
+            .unwrap_or("".to_string())
     }
 
     fn get_node_label(&self, node: NodeID) -> NodeLabel<String> {

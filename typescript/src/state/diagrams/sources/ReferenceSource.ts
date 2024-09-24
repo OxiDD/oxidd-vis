@@ -1,4 +1,4 @@
-import {DiagramBox} from "oxidd-viz-rust";
+import {DiagramBox, DiagramSectionBox} from "oxidd-viz-rust";
 import {Field} from "../../../watchables/Field";
 import {IDiagramSection} from "../_types/IDiagramSection";
 import {AbstractDiagramSectionState} from "../AbstractDiagramSectionState";
@@ -44,12 +44,16 @@ export class ReferenceSource extends AbstractDiagramSectionState<IReferenceSourc
             diagram,
             new Derived(watch => {
                 const parents = watch(this.parents);
+                let source_section: DiagramSectionBox | undefined;
                 for (const parent of parents) {
                     // Make sure the parent is loaded first, to ensure the IDs exist
-                    const source_section = watch(parent.source);
+                    source_section = watch(parent.source) ?? source_section;
                 }
                 const roots = watch(this.roots);
-                const diagram = diagramBox.create_section_from_ids(roots);
+                const diagram = diagramBox.create_section_from_ids(
+                    roots,
+                    source_section!
+                );
                 if (!diagram)
                     console.error("Diagram could not be created from reference");
                 return diagram;

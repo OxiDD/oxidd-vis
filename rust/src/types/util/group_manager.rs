@@ -797,6 +797,7 @@ where
     }
 
     fn read(&mut self, stream: &mut Cursor<&Vec<u8>>) -> Result<()> {
+        self.graph.consume_events(&self.graph_events);
         self.reset();
 
         self.graph.read(stream)?;
@@ -807,6 +808,7 @@ where
                 "Deserialization should not have caused any events, Event count: {}",
                 events.len()
             );
+            console::log!("Created events: {}", events.iter().join(",\n"));
         }
 
         let group_count = stream.read_u32::<LittleEndian>()?;

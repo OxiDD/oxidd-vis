@@ -321,10 +321,11 @@ impl TextRenderer {
     }
 
     pub fn set_texts(&mut self, context: &WebGl2RenderingContext, texts: &Vec<Text>) {
+        self.cur_text = texts.clone();
+
         if self.screen_height == 0. {
             return;
         }
-        self.cur_text = texts.clone();
 
         // Obtain the character glyphs and position data, and ensure that these glyphs are on the atlas
         let char_data = texts

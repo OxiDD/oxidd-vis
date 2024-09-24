@@ -71,13 +71,6 @@ impl LayerDivisionRenderer for LayerLinesRenderer {
                 )
             })
             .collect_vec();
-        console::log!(
-            "Lines: {}",
-            lines
-                .iter()
-                .map(|line| format!("[{}: {}]", line.0, line.1))
-                .join(", \n")
-        );
 
         const COUNT: usize = 2;
         let y_positions = lines

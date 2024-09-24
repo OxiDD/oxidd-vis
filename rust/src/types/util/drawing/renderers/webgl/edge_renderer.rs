@@ -61,7 +61,6 @@ impl EdgeRenderer {
         edge_types: Vec<EdgeRenderingType>,
     ) -> EdgeRenderer {
         let type_count = edge_types.len();
-        console::log!("uniform EdgeType types[{type_count}];");
         let vertex_renderer = VertexRenderer::new_advanced(
             context,
             &include_str!("edge_renderer.vert"),

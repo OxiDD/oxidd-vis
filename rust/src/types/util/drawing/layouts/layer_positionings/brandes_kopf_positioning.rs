@@ -61,7 +61,7 @@ impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
                 .iter()
                 .enumerate()
                 .flat_map(|(index, layer)| {
-                    let y_coord = -(index as f32 * spacing);
+                    let y_coord = (layers.len() - index) as f32 * spacing;
                     let x_coords = &x_coords; // create a new ref that can be moved
                     layer.keys().map(move |node| {
                         (
@@ -77,7 +77,7 @@ impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
             layers
                 .iter()
                 .enumerate()
-                .map(|(level, _)| (level as u32, -(level as f32 * spacing)))
+                .map(|(level, _)| (level as u32, (layers.len() - level) as f32 * spacing))
                 .collect(),
         )
     }

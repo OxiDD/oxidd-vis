@@ -303,7 +303,6 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         parents: Vec<(EdgeConstraint<T>, NodeID)>,
         child_to_be_replaced: NodeID,
     ) -> NodeID {
-        console::log!("Created replacement for {}", child_to_be_replaced);
         let id = self.free_id.get_next();
         self.create_replacement_without_events(parents, child_to_be_replaced, id);
 
@@ -734,6 +733,9 @@ where
             }
             self.update_children_of_parents(node);
         }
+
+        // Consume the events of the parent (mainly parent discovery events) to suppress them
+        let _ = self.graph.consume_events(&self.graph_events);
 
         Ok(())
     }

@@ -2,6 +2,7 @@ use std::{
     borrow::Borrow,
     cell::RefCell,
     collections::{HashMap, HashSet},
+    fmt::Display,
     hash::Hash,
     iter::{self, FromIterator},
     rc::Rc,
@@ -82,6 +83,30 @@ pub enum Change {
         // When a new edge to a parent is discovered
         child: NodeID,
     },
+}
+impl Display for Change {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Change::NodeLabelChange { node } => write!(f, "NodeLabelChange {{node: {}}}", node),
+            Change::LevelChange { node } => write!(f, "LevelChange {{node: {}}}", node),
+            Change::LevelLabelChange { level } => {
+                write!(f, "LevelLabelChange {{level: {}}}", level)
+            }
+            Change::NodeConnectionsChange { node } => {
+                write!(f, "NodeConnectionsChange {{node: {}}}", node)
+            }
+            Change::NodeRemoval { node } => write!(f, "NodeRemoval {{node: {}}}", node),
+            Change::NodeInsertion { node, source } => {
+                write!(
+                    f,
+                    "NodeInsertion {{node: {}, source: {}}}",
+                    node,
+                    source.map(|v| v.to_string()).unwrap_or("null".to_string())
+                )
+            }
+            Change::ParentDiscover { child } => write!(f, "ParentDiscover {{child: {}}}", child),
+        }
+    }
 }
 
 pub struct GraphEventsWriter {

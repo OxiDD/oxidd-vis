@@ -102,22 +102,28 @@ impl QDDDiagram<DummyManagerRef> {
 
 impl Diagram for QDDDiagram<DummyManagerRef> {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
-        let root = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp[..]);
+        let (root, levels) = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp[..]);
         Some(Box::new(QDDDiagramSection {
             roots: Vec::from([root]),
+            levels,
         }))
     }
 
-    fn create_section_from_ids(&self, ids: &[oxidd::NodeID]) -> Option<Box<dyn DiagramSection>> {
-        let roots = ids
+    fn create_section_from_ids(
+        &self,
+        sources: &[(oxidd::NodeID, &Box<dyn DiagramSection>)],
+    ) -> Option<Box<dyn DiagramSection>> {
+        let mut levels = Vec::new();
+        let roots = sources
             .iter()
-            .map(|&id| {
+            .map(|&(id, section)| {
                 console::log!("for: {}", id);
                 let root_edge = DummyEdge::new(Arc::new(id), self.manager_ref.clone());
+                levels = section.get_level_labels();
                 DummyFunction(root_edge)
             })
             .collect_vec();
-        Some(Box::new(QDDDiagramSection { roots }))
+        Some(Box::new(QDDDiagramSection { roots, levels }))
     }
 }
 
@@ -126,6 +132,7 @@ where
     for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
 {
     roots: Vec<F>,
+    levels: Vec<String>,
 }
 
 impl<
@@ -139,6 +146,9 @@ where
     for<'id> F::Manager<'id>:
         Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
+    fn get_level_labels(&self) -> Vec<String> {
+        self.levels.clone()
+    }
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
         let c0 = (1.0, 0.2, 0.2);
         let c1 = (0.2, 1.0, 0.2);
@@ -231,8 +241,11 @@ where
             0.3,
         );
         let layout = TransitionLayout::new(layout);
-        let graph =
-            OxiddGraphStructure::new(self.roots.iter().cloned().collect(), |t| t.to_string());
+        let graph = OxiddGraphStructure::new(
+            self.roots.iter().cloned().collect(),
+            self.levels.clone(),
+            |t| t.to_string(),
+        );
         let diagram = QDDDiagramDrawer::new(graph, renderer, layout);
         Box::new(diagram)
     }
@@ -364,7 +377,6 @@ impl<
                 return;
             };
 
-            console::log!("Set presence");
             adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(presence));
         }
         let false_config = terminal_config.0.clone();
@@ -378,7 +390,6 @@ impl<
             set_terminal_presence(&true_presence_adjuster, "T".into(), true_config.get());
         });
         let _ = after_configuration_change(&terminal_config, move || {
-            console::log!("Relayout {}", *time.get());
             drawer.get().layout(*time.get());
         });
 
