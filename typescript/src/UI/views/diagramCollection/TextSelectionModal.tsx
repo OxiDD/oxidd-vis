@@ -147,8 +147,8 @@ const sample = `.ver DDDMP-2.0
 .nnodes 5
 .nvars 3
 .nsuppvars 3
-.suppvarnames x1 x2 x3
-.orderedvarnames x1 x2 x3
+.suppvarnames x1 x2 x3 x4 x5
+.orderedvarnames x1 x2 x3 x4 x5
 .ids 0 1 2
 .permids 0 1 2
 .nroots 1

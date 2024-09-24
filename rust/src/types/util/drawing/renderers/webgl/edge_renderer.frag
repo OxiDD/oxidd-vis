@@ -30,7 +30,8 @@ in vec2 center;
 uniform EdgeType edgeTypes[/*$type_count {*/1/*}*/];
 uniform mat4 transform;
 
-float fuzziness = 0.003; // A form of anti-aliasing by making the circle border a slight gradient
+// float fuzziness = 0.003; // A form of anti-aliasing by making the circle border a slight gradient
+float fuzziness = 0.0;
 
 // Ensures that the output angle is specified such that it's greater than the reference angle
 float getAngle(vec2 point, float refAngle) {{

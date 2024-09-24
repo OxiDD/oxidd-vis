@@ -12,6 +12,9 @@ import {DiagramSectionSummary} from "./DiagramSectionSummary";
 import {css} from "@emotion/css";
 import {StyledTooltipHost} from "../../components/StyledToolTipHost";
 import {TextSelectionModal} from "./TextSelectionModal";
+import {usePersistentMemo} from "../../../utils/usePersistentMemo";
+import {Derived} from "../../../watchables/Derived";
+import {FileSource} from "../../../state/diagrams/sources/FileSource";
 
 export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> = ({
     diagram,
@@ -34,6 +37,18 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
         },
         [diagram]
     );
+
+    const watchableCanCreateFromDDDMP = usePersistentMemo(
+        () =>
+            new Derived(
+                watch =>
+                    !watch(diagram.sections).some(
+                        section => section instanceof FileSource
+                    )
+            ),
+        [diagram]
+    );
+    const canCreateFromDDDMP = watch(watchableCanCreateFromDDDMP);
 
     const canCreateFromSelection = watch(diagram.selectedNodes).length > 0;
     const createSelectionSection = useCallback(() => {
@@ -78,11 +93,37 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                     horizontal
                     tokens={{childrenGap: theme.spacing.s1}}
                     style={{marginTop: theme.spacing.s1}}>
-                    <AddSectionButton onClick={startCreatingDDDMPSection}>
-                        Load from dddump
-                    </AddSectionButton>
                     <StyledTooltipHost
-                        content="Create a diagram visualization for the selected nodes"
+                        content={
+                            <>
+                                Create a diagram from a dddmp file
+                                {!canCreateFromDDDMP && (
+                                    <>
+                                        <br /> Only one dddmp file per diagram is
+                                        supported right now
+                                    </>
+                                )}
+                            </>
+                        }
+                        directionalHint={DirectionalHint.bottomCenter}>
+                        <AddSectionButton
+                            onClick={startCreatingDDDMPSection}
+                            disabled={!canCreateFromDDDMP}>
+                            Load from dddump
+                        </AddSectionButton>
+                    </StyledTooltipHost>
+                    <StyledTooltipHost
+                        content={
+                            <>
+                                Create a diagram visualization for the selected nodes
+                                {!canCreateFromSelection && (
+                                    <>
+                                        <br /> Select some node(s) in this diagram to
+                                        enable
+                                    </>
+                                )}
+                            </>
+                        }
                         directionalHint={DirectionalHint.bottomCenter}>
                         <AddSectionButton
                             onClick={createSelectionSection}

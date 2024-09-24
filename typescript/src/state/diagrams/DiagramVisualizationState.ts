@@ -35,7 +35,7 @@ export class DiagramVisualizationState extends ViewState {
     protected start = Date.now();
 
     /** The local transformation */
-    public readonly transform = new Field({offset: {x: 0, y: 0}, scale: 1});
+    public readonly transform = new Field({offset: {x: 0, y: 0}, scale: 15});
     protected transformObserver = new Observer(this.transform).add(() =>
         this.sendTransform()
     );
@@ -159,6 +159,7 @@ export class DiagramVisualizationState extends ViewState {
     public dispose() {
         this.transformObserver.destroy();
         this.sizeObserver.destroy();
+        this.selectionObserver.destroy();
         this.config.get().destroy();
         this.drawer.free();
         (this.drawer as any) = undefined;
