@@ -185,7 +185,7 @@ impl DummyFunction {
                 .map(|root| DummyFunction(DummyEdge::new(Arc::new(root), manager_ref.clone())))
                 .collect_vec();
 
-            let var_names_text = get_text(".orderedvarnames", ".ids");
+            let var_names_text = get_text(".suppvarnames", ".orderedvarnames");
             let var_names = var_names_text
                 .trim()
                 .split(" ")
