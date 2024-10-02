@@ -58,6 +58,17 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> LayoutRules<T, GL,
                                 old_time: time,
                                 duration: 1000,
                             },
+                            outline_color: Transition {
+                                old: (0., 0., 0., 0.),
+                                new: (
+                                    random() as f32,
+                                    random() as f32,
+                                    random() as f32,
+                                    random() as f32,
+                                ),
+                                old_time: time,
+                                duration: 1000,
+                            },
                             size: Transition {
                                 old: Point { x: 0.0, y: 0.0 },
                                 new: Point {

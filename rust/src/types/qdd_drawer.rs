@@ -70,6 +70,7 @@ use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition::transition_layout::TransitionLayout;
 use super::util::drawing::layouts::util::color_label::Color;
+use super::util::drawing::layouts::util::color_label::TransparentColor;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl::util::mix_color::mix_color;
@@ -252,13 +253,13 @@ pub struct QDDDiagramDrawer<
     T: DrawTag + Serializable<T> + 'static,
     G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
     R: Renderer<T>,
-    L: LayoutRules<T, Color, String, GMGraph<T, G>>,
+    L: LayoutRules<T, OutlineColor, String, GMGraph<T, G>>,
 > {
     graph: MGraph<T, G>,
     group_manager: MutRcRefCell<GM<T, G>>,
     presence_adjuster: MPresenceAdjuster<T, G>,
     time: MutRcRefCell<u32>,
-    drawer: MutRcRefCell<Drawer<T, Color, R, L, GMGraph<T, G>>>,
+    drawer: MutRcRefCell<Drawer<T, OutlineColor, R, L, GMGraph<T, G>>>,
     config: Configuration<
         CompositeConfig<(
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
@@ -266,6 +267,7 @@ pub struct QDDDiagramDrawer<
         )>,
     >,
 }
+type OutlineColor = (Color, TransparentColor);
 type GraphLabel = PresenceLabel<NodeLabel<String>>;
 type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
 type MGraph<T, G> = RCGraph<
@@ -276,22 +278,35 @@ type MGraph<T, G> = RCGraph<
 >;
 type MPresenceAdjuster<T, G> =
     RCGraph<T, GraphLabel, String, NodePresenceAdjuster<T, NodeLabel<String>, String, G>>;
-type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, (f32, f32, f32)>;
+type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, OutlineColor>;
 
 impl<
         T: DrawTag + Serializable<T> + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
         R: Renderer<T> + 'static,
-        L: LayoutRules<T, Color, String, GMGraph<T, G>> + 'static,
+        L: LayoutRules<T, OutlineColor, String, GMGraph<T, G>> + 'static,
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
+        let original_roots = graph.get_roots().clone();
         let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(graph));
         let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
         let roots = modified_graph.get_roots();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
-        let grouped_graph = GMGraph::new_shared(group_manager.clone(), |nodes| {
-            match (nodes.get(0), nodes.get(1)) {
+
+        let root_colors = vec![
+            (0.0, 0.9, 0.3),
+            (0.9, 0.0, 0.6),
+            (0.0, 0.5, 0.2),
+            (0.5, 0.0, 0.0),
+        ];
+        let roots_lookup = original_roots
+            .iter()
+            .enumerate()
+            .map(|(i, &root)| (root, i))
+            .collect::<HashMap<_, _>>();
+        let grouped_graph = GMGraph::new_shared(group_manager.clone(), move |nodes| {
+            let color = match (nodes.get(0), nodes.get(1)) {
                 (
                     Some(&PresenceLabel {
                         original_label: NodeLabel::Terminal(ref terminal),
@@ -307,7 +322,29 @@ impl<
                 }
                 (Some(_), None) => (0.3, 0.3, 0.3),
                 _ => (0.7, 0.7, 0.7),
-            }
+            };
+            let outline_color = match (nodes.get(0), nodes.get(1)) {
+                (
+                    Some(&PresenceLabel {
+                        original_label: _,
+                        original_id: id,
+                    }),
+                    None,
+                ) => {
+                    if let Some(root_index) = roots_lookup.get(&id) {
+                        if let Some(&(r, g, b)) = root_colors.get(*root_index) {
+                            (r, g, b, 1.0)
+                        } else {
+                            (0.0, 0.0, 0.0, 0.0)
+                        }
+                    } else {
+                        (0.0, 0.0, 0.0, 0.0)
+                    }
+                }
+                _ => (0.0, 0.0, 0.0, 0.0),
+            };
+
+            (color, outline_color)
         });
 
         let terminal_config = CompositeConfig::new(
@@ -416,7 +453,7 @@ impl<
         T: DrawTag + Serializable<T> + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, Color, String, GMGraph<T, G>>,
+        L: LayoutRules<T, OutlineColor, String, GMGraph<T, G>>,
     > DiagramSectionDrawer for QDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32) -> () {

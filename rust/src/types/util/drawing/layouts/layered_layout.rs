@@ -512,6 +512,9 @@ fn format_layout<T: DrawTag, GL: ColorLabel>(
                         }),
                         level_range: (s, e),
                         color: Transition::plain(graph.get_group_label(group_id).get_color()),
+                        outline_color: Transition::plain(
+                            graph.get_group_label(group_id).get_outline_color(),
+                        ),
                         exists: Transition::plain(1.),
                         edges: graph
                             .get_children(group_id)

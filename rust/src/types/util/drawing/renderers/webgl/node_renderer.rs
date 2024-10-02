@@ -8,7 +8,7 @@ use web_sys::WebGl2RenderingContext;
 use crate::{
     types::util::drawing::{
         diagram_layout::{Point, Transition},
-        layouts::util::color_label::Color,
+        layouts::util::color_label::{Color, TransparentColor},
         renderer::GroupSelection,
         renderers::webgl::util::set_animated_data::set_animated_data,
     },
@@ -20,6 +20,7 @@ use super::util::{mix_color::mix_color, vertex_renderer::VertexRenderer};
 
 pub struct NodeRenderer {
     vertex_renderer: VertexRenderer,
+    outline_vertex_renderer: VertexRenderer,
     node_indices: HashMap<NodeGroupID, NodeData>,
     hover_color: (Color, f32),
     select_color: (Color, f32),
@@ -29,7 +30,6 @@ pub struct NodeRenderer {
 pub struct NodeData {
     index: usize,
     color: Color,
-    old_color: Color,
 }
 
 #[derive(Clone)]
@@ -38,6 +38,7 @@ pub struct Node {
     pub center_position: Transition<Point>,
     pub size: Transition<Point>,
     pub color: Transition<Color>,
+    pub outline_color: Transition<TransparentColor>,
     pub label: String,
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
 }
@@ -56,8 +57,15 @@ impl NodeRenderer {
             include_str!("node_renderer.frag"),
         )
         .unwrap();
+        let outline_vertex_renderer = VertexRenderer::new(
+            context,
+            include_str!("node_outline.vert"),
+            include_str!("node_outline.frag"),
+        )
+        .unwrap();
         NodeRenderer {
             vertex_renderer,
+            outline_vertex_renderer,
             node_indices: HashMap::new(),
             hover_color,
             select_color,
@@ -76,7 +84,6 @@ impl NodeRenderer {
                     NodeData {
                         index: index,
                         color: node.color.new.clone(),
-                        old_color: node.color.old.clone(),
                     },
                 )
             })
@@ -90,7 +97,6 @@ impl NodeRenderer {
             context,
             &mut self.vertex_renderer,
         );
-
         set_animated_data(
             "size",
             nodes6.clone().map(|n| n.size),
@@ -98,7 +104,6 @@ impl NodeRenderer {
             context,
             &mut self.vertex_renderer,
         );
-
         set_animated_data(
             "exists",
             nodes6.clone().map(|n| n.exists),
@@ -106,7 +111,6 @@ impl NodeRenderer {
             context,
             &mut self.vertex_renderer,
         );
-
         set_animated_data(
             "color",
             nodes6.map(|n| n.color),
@@ -114,8 +118,41 @@ impl NodeRenderer {
             context,
             &mut self.vertex_renderer,
         );
-
         self.vertex_renderer.send_data(context);
+
+        let outline_nodes = nodes
+            .iter()
+            .filter(|node| node.outline_color.new.3 != 0. || node.outline_color.old.3 != 0.);
+        let outline_nodes6 = outline_nodes.flat_map(|node| repeat(node).take(6));
+        set_animated_data(
+            "position",
+            outline_nodes6.clone().map(|n| n.center_position),
+            |v| [v.x, v.y],
+            context,
+            &mut self.outline_vertex_renderer,
+        );
+        set_animated_data(
+            "size",
+            outline_nodes6.clone().map(|n| n.size),
+            |v| [v.x, v.y],
+            context,
+            &mut self.outline_vertex_renderer,
+        );
+        set_animated_data(
+            "exists",
+            outline_nodes6.clone().map(|n| n.exists),
+            |v| [v],
+            context,
+            &mut self.outline_vertex_renderer,
+        );
+        set_animated_data(
+            "color",
+            outline_nodes6.map(|n| n.outline_color),
+            |v| [v.0, v.1, v.2, v.3],
+            context,
+            &mut self.outline_vertex_renderer,
+        );
+        self.outline_vertex_renderer.send_data(context);
     }
 
     pub fn update_selection(
@@ -213,14 +250,42 @@ impl NodeRenderer {
         self.vertex_renderer.set_uniform(context, "transform", |u| {
             context.uniform_matrix4fv_with_f32_array(u, true, &transform.0)
         });
+        self.outline_vertex_renderer
+            .set_uniform(context, "transform", |u| {
+                context.uniform_matrix4fv_with_f32_array(u, true, &transform.0)
+            });
     }
 
     pub fn render(&mut self, context: &WebGl2RenderingContext, time: u32) {
+        // TODO: add configuration
+        let corner_radius = 0.3;
+        let border_offset = 0.3;
+        let border_width = 0.2;
+
         self.vertex_renderer
             .set_uniform(context, "time", |u| context.uniform1f(u, time as f32));
         self.vertex_renderer
             .set_uniform(context, "selection", |u| context.uniform1f(u, time as f32));
         self.vertex_renderer
+            .set_uniform(context, "cornerSize", |u| {
+                context.uniform1f(u, corner_radius)
+            });
+        self.vertex_renderer
+            .render(context, WebGl2RenderingContext::TRIANGLES);
+
+        self.outline_vertex_renderer
+            .set_uniform(context, "time", |u| context.uniform1f(u, time as f32));
+        self.outline_vertex_renderer
+            .set_uniform(context, "selection", |u| context.uniform1f(u, time as f32));
+        self.outline_vertex_renderer
+            .set_uniform(context, "cornerSize", |u| {
+                context.uniform1f(u, corner_radius)
+            });
+        self.outline_vertex_renderer
+            .set_uniform(context, "width", |u| context.uniform1f(u, border_width));
+        self.outline_vertex_renderer
+            .set_uniform(context, "offset", |u| context.uniform1f(u, border_offset));
+        self.outline_vertex_renderer
             .render(context, WebGl2RenderingContext::TRIANGLES);
     }
 

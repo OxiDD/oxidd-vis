@@ -157,6 +157,7 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
                         label: group.label.clone(),
                         exists: group.exists,
                         color: group.color,
+                        outline_color: group.outline_color,
                     }
                 })
                 .collect(),

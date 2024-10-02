@@ -15,6 +15,8 @@ use crate::{
     wasm_interface::{NodeGroupID, NodeID},
 };
 
+use super::layouts::util::color_label::{Color, TransparentColor};
+
 #[derive(Copy, Clone, Default)]
 pub struct Point {
     pub x: f32,
@@ -196,7 +198,8 @@ pub struct NodeGroupLayout<T: DrawTag> {
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
     pub edges: HashMap<EdgeData<T>, EdgeLayout>,
     pub level_range: (LevelNo, LevelNo),
-    pub color: Transition<(f32, f32, f32)>,
+    pub color: Transition<Color>,
+    pub outline_color: Transition<TransparentColor>,
 }
 impl<T: DrawTag> NodeGroupLayout<T> {
     // TODO: possibly consider the selection time? (animations should be quick and not have a huge effect however)

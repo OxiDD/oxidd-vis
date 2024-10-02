@@ -18,7 +18,7 @@ use crate::{
                 Transition,
             },
             layout_rules::LayoutRules,
-            layouts::util::color_label::{mix, Color},
+            layouts::util::color_label::{mix, mix_transparent, Color, TransparentColor},
         },
         graph_structure::{
             graph_structure::DrawTag,
@@ -264,6 +264,12 @@ fn layout_updated_group<T: DrawTag>(
             duration,
             old: get_current_color(old_group.color, time),
             new: group.color.new,
+        },
+        outline_color: Transition {
+            old_time,
+            duration,
+            old: get_current_transparent_color(old_group.outline_color, time),
+            new: group.outline_color.new,
         },
     }
 }
@@ -696,4 +702,8 @@ fn layout_deleted_edges<T: DrawTag>(
 
 fn get_current_color(val: Transition<Color>, time: u32) -> Color {
     mix(&val.old, &val.new, val.get_per(time))
+}
+
+fn get_current_transparent_color(val: Transition<TransparentColor>, time: u32) -> TransparentColor {
+    mix_transparent(&val.old, &val.new, val.get_per(time))
 }
