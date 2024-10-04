@@ -1,47 +1,19 @@
 import React, {FC} from "react";
-import {DiagramCollectionState} from "../../../state/diagrams/DiagramCollectionState";
-import {ViewContainer} from "../../components/layout/ViewContainer";
-import {useWatch} from "../../../watchables/react/useWatch";
-import {CenteredContainer} from "../../components/layout/CenteredContainer";
-import {DefaultButton, Stack, useTheme} from "@fluentui/react";
-import {DiagramSummary} from "./DiagramSummary";
+import {ManualDiagramCollection} from "./types/ManualDiagramCollection";
+import {IDiagramCollection} from "../../../state/diagrams/_types/IDiagramCollection";
+import {ManualDiagramCollectionState} from "../../../state/diagrams/collections/ManualDiagramCollectionState";
+import {HttpDiagramCollectionState} from "../../../state/diagrams/collections/HttpDiagramCollectionState";
+import {HttpDiagramCollection} from "./types/HttpDiagramCollection";
 
-export const DiagramCollection: FC<{collection: DiagramCollectionState}> = ({
-    collection,
-}) => {
-    const watch = useWatch();
-    const theme = useTheme();
-    return (
-        <CenteredContainer>
-            <Stack tokens={{childrenGap: theme.spacing.m}}>
-                {watch(collection.diagrams).map(diagram => (
-                    <Stack.Item align="stretch" key={diagram.ID}>
-                        <DiagramSummary
-                            diagram={diagram}
-                            onDelete={() => collection.removeDiagram(diagram).commit()}
-                        />
-                    </Stack.Item>
-                ))}
-            </Stack>
-            <Stack
-                horizontal
-                tokens={{childrenGap: theme.spacing.m}}
-                style={{marginTop: theme.spacing.m}}>
-                <AddDiagramButton onClick={() => collection.addDiagram("QDD").commit()}>
-                    Add local DD
-                </AddDiagramButton>
-            </Stack>
-        </CenteredContainer>
-    );
+export const DiagramCollection: FC<{
+    collection: IDiagramCollection<unknown>;
+    onDelete?: () => void;
+}> = ({collection, onDelete}) => {
+    if (collection instanceof ManualDiagramCollectionState) {
+        return <ManualDiagramCollection collection={collection} onDelete={onDelete} />;
+    } else if (collection instanceof HttpDiagramCollectionState) {
+        return <HttpDiagramCollection collection={collection} onDelete={onDelete} />;
+    } else {
+        return <></>;
+    }
 };
-
-const AddDiagramButton: FC<{onClick: () => void}> = ({onClick, children}) => (
-    <DefaultButton
-        onClick={onClick}
-        children={children}
-        style={{
-            flexGrow: 1,
-            width: 200,
-        }}
-    />
-);

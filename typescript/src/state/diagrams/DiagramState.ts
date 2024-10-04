@@ -11,9 +11,9 @@ import {Mutator} from "../../watchables/mutator/Mutator";
 import {NodeSelectionState} from "./NodeSelectionState";
 import {IDiagramSection, IDiagramSectionType} from "./_types/IDiagramSection";
 import {FileSource} from "./sources/FileSource";
-import {IDiagramType} from "./_types/IDiagramCollectionSerialization";
 import {IDiagramVisualizationSerialization} from "./_types/IDiagramVisualizationSerialization";
 import {ReferenceSource} from "./sources/ReferenceSource";
+import {IDiagramType} from "./_types/IDiagramTypeSerialization";
 
 const sourceTypes: Record<string, IDiagramSectionType<unknown>> = {
     file: FileSource,
@@ -40,6 +40,9 @@ export class DiagramState extends ViewState {
     /** The nodes currently highlighted in this diagram */
     public readonly highlightNodes = new NodeSelectionState();
 
+    /** The name of this diagram, nto for display but for synchronization purposes */
+    public readonly sourceName = new Field<string>("");
+
     /** @override */
     public readonly children = new Derived(watch => [
         ...watch(this.sections)
@@ -56,6 +59,7 @@ export class DiagramState extends ViewState {
      */
     public constructor(diagram: DiagramBox, type: IDiagramType) {
         super();
+        this.name.set("DIagram").commit();
         this.diagram = diagram;
         this.type = type;
     }

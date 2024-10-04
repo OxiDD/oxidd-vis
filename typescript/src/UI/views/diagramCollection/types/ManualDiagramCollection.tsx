@@ -1,0 +1,85 @@
+import React, {FC} from "react";
+import {ManualDiagramCollectionState} from "../../../../state/diagrams/collections/ManualDiagramCollectionState";
+import {useWatch} from "../../../../watchables/react/useWatch";
+import {DefaultButton, Stack, useTheme} from "@fluentui/react";
+import {CenteredContainer} from "../../../components/layout/CenteredContainer";
+import {DiagramSummary} from "../DiagramSummary";
+import {DiagramCollection} from "../DiagramCollection";
+import {DiagramCollectionContainer} from "./util/DiagramCollectionContainer";
+
+export const ManualDiagramCollection: FC<{
+    collection: ManualDiagramCollectionState;
+    onDelete?: () => void;
+}> = ({collection, onDelete}) => {
+    const watch = useWatch();
+    const theme = useTheme();
+    return (
+        <DiagramCollectionContainer
+            title="Manual"
+            onDelete={onDelete}
+            hideFrame={!onDelete}>
+            <Stack tokens={{childrenGap: theme.spacing.m}}>
+                {watch(collection.diagrams).map(diagram => (
+                    <Stack.Item align="stretch" key={diagram.ID}>
+                        <DiagramSummary
+                            diagram={diagram}
+                            onDelete={() => collection.removeDiagram(diagram).commit()}
+                        />
+                    </Stack.Item>
+                ))}
+            </Stack>
+            <Stack
+                horizontal
+                tokens={{childrenGap: theme.spacing.m}}
+                style={{marginTop: theme.spacing.m}}>
+                <AddDiagramButton onClick={() => collection.addDiagram("QDD").commit()}>
+                    Add local DD
+                </AddDiagramButton>
+            </Stack>
+
+            <Stack style={{paddingLeft: theme.spacing.m, paddingRight: theme.spacing.m}}>
+                {watch(collection.collections).map(subCollection => (
+                    <Stack.Item
+                        align="stretch"
+                        key={subCollection.ID}
+                        style={{marginTop: theme.spacing.m}}>
+                        <DiagramCollection
+                            collection={subCollection}
+                            onDelete={() =>
+                                collection.removeCollection(subCollection).commit()
+                            }
+                        />
+                    </Stack.Item>
+                ))}
+            </Stack>
+            <Stack
+                horizontal
+                tokens={{childrenGap: theme.spacing.m}}
+                style={{marginTop: theme.spacing.m}}>
+                {/* TODO: add modal for selecting the host to use + store this in settings as the default host */}
+                <AddDiagramButton
+                    onClick={() =>
+                        collection
+                            .addCollection({
+                                type: "remote-http",
+                                url: "http://localhost:8080",
+                            })
+                            .commit()
+                    }>
+                    Add diagram source
+                </AddDiagramButton>
+            </Stack>
+        </DiagramCollectionContainer>
+    );
+};
+
+const AddDiagramButton: FC<{onClick: () => void}> = ({onClick, children}) => (
+    <DefaultButton
+        onClick={onClick}
+        children={children}
+        style={{
+            flexGrow: 1,
+            width: 200,
+        }}
+    />
+);

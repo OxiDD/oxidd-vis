@@ -28,6 +28,7 @@ import {ViewManagerProvider} from "./UI/providers/ViewManagerContext";
 import {ToolbarProvider} from "./UI/providers/ToolbarContext";
 import {ToolbarState} from "./state/toolbar/ToolbarState";
 import {Toolbar} from "./UI/views/toolbar/Toolbar";
+import {CenteredContainer} from "./UI/components/layout/CenteredContainer";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -64,7 +65,11 @@ const Component: IViewComponent = ({view}) => {
     if (view instanceof SettingsState) return <Settings settings={view} />;
     if (view instanceof AppState) return <Info app={view} />;
     if (view instanceof DiagramCollectionState)
-        return <DiagramCollection collection={view} />;
+        return (
+            <CenteredContainer>
+                <DiagramCollection collection={view.collection} />
+            </CenteredContainer>
+        );
     if (view instanceof DiagramVisualizationState)
         return <DiagramVisualization visualization={view} />;
     if (view instanceof ToolbarState) return <Toolbar toolbar={view} />;

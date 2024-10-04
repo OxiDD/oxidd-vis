@@ -1,11 +1,8 @@
 import {IBaseViewSerialization} from "../../_types/IBaseViewSerialization";
+import {IManualDiagramCollectionSerialization} from "../collections/_types/IManualDiagramCollectionSerialization";
 import {IDiagramSerialization} from "./IDiagramSerialization";
+import {IDiagramTypeSerialization} from "./IDiagramTypeSerialization";
 
 export type IDiagramCollectionSerialization = IBaseViewSerialization & {
-    diagrams: IDiagramTypeSerialization[];
+    collection: IManualDiagramCollectionSerialization;
 };
-export type IDiagramTypeSerialization = {
-    type: IDiagramType;
-    state: IDiagramSerialization;
-};
-export type IDiagramType = "BDD" | "QDD";

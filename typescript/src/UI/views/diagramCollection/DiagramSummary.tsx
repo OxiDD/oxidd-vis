@@ -67,7 +67,7 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                     backgroundColor: theme.palette.neutralLighter,
                 })}>
                 <Stack.Item grow className={css({padding: theme.spacing.s1})}>
-                    Diagram
+                    {watch(diagram.name)}
                 </Stack.Item>
                 <Stack.Item>
                     <IconButton
