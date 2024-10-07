@@ -1,6 +1,12 @@
 import React, {FC, useCallback} from "react";
 import {useWatch} from "../../../../watchables/react/useWatch";
-import {DefaultButton, Stack, useTheme} from "@fluentui/react";
+import {
+    DefaultButton,
+    MessageBar,
+    MessageBarType,
+    Stack,
+    useTheme,
+} from "@fluentui/react";
 import {CenteredContainer} from "../../../components/layout/CenteredContainer";
 import {DiagramSummary} from "../DiagramSummary";
 import {HttpDiagramCollectionState} from "../../../../state/diagrams/collections/HttpDiagramCollectionState";
@@ -36,13 +42,14 @@ export const HttpDiagramCollection: FC<{
         viewManager.open(autoOpenTarget).commit();
     }, [autoOpenTarget]);
 
+    const diagrams = watch(collection.diagrams);
     return (
         <DiagramCollectionContainer
             title={collection.host}
             onDelete={onDelete}
             status={collection.status}>
             <Stack>
-                {watch(collection.diagrams).map(diagram => (
+                {diagrams.map(diagram => (
                     <Stack.Item
                         align="stretch"
                         key={diagram.ID}
@@ -54,6 +61,11 @@ export const HttpDiagramCollection: FC<{
                     </Stack.Item>
                 ))}
             </Stack>
+            {diagrams.length == 0 && watch(collection.status) == undefined && (
+                <div style={{marginBottom: theme.spacing.m}}>
+                    Host does not have any diagrams
+                </div>
+            )}
             <div ref={autoOpenRef}>
                 <AutoOpenButton onClick={openAutoOpenTarget} />
             </div>

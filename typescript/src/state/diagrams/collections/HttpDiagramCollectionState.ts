@@ -22,7 +22,10 @@ export class HttpDiagramCollectionState
     /** @override */
     public readonly ID = uuid();
 
-    protected readonly _status = new Field<ICollectionStatus>(undefined);
+    protected readonly _status = new Field<ICollectionStatus>({
+        type: MessageBarType.info,
+        text: "Loading diagrams",
+    });
 
     /** The current status of the collection */
     public readonly status: IWatchable<{text: string; type: MessageBarType} | undefined> =

@@ -11,7 +11,7 @@ import {useWatch} from "../../../watchables/react/useWatch";
 import {DiagramSectionSummary} from "./DiagramSectionSummary";
 import {css} from "@emotion/css";
 import {StyledTooltipHost} from "../../components/StyledToolTipHost";
-import {TextSelectionModal} from "./TextSelectionModal";
+import {TextSelectionModal} from "./modals/TextSelectionModal";
 import {usePersistentMemo} from "../../../utils/usePersistentMemo";
 import {Derived} from "../../../watchables/Derived";
 import {FileSource} from "../../../state/diagrams/sources/FileSource";

@@ -1,5 +1,5 @@
 import React, {ChangeEvent, FC, useCallback, useEffect, useRef, useState} from "react";
-import {StyledModal} from "../../components/StyledModal";
+import {StyledModal} from "../../../components/StyledModal";
 import {
     Checkbox,
     FontIcon,

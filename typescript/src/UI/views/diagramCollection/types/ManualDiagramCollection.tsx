@@ -1,4 +1,4 @@
-import React, {FC} from "react";
+import React, {FC, useCallback, useState} from "react";
 import {ManualDiagramCollectionState} from "../../../../state/diagrams/collections/ManualDiagramCollectionState";
 import {useWatch} from "../../../../watchables/react/useWatch";
 import {DefaultButton, Stack, useTheme} from "@fluentui/react";
@@ -6,6 +6,7 @@ import {CenteredContainer} from "../../../components/layout/CenteredContainer";
 import {DiagramSummary} from "../DiagramSummary";
 import {DiagramCollection} from "../DiagramCollection";
 import {DiagramCollectionContainer} from "./util/DiagramCollectionContainer";
+import {DiagramCollectionHostModal} from "../modals/DiagramCollectionHostModal";
 
 export const ManualDiagramCollection: FC<{
     collection: ManualDiagramCollectionState;
@@ -13,6 +14,24 @@ export const ManualDiagramCollection: FC<{
 }> = ({collection, onDelete}) => {
     const watch = useWatch();
     const theme = useTheme();
+
+    const [showHostModal, setShowHostModal] = useState(false);
+    const onShowHostModal = useCallback(() => {
+        setShowHostModal(true);
+    }, []);
+    const onHideHostModal = useCallback(() => {
+        setShowHostModal(false);
+    }, []);
+    const onSelectHost = useCallback((host: string) => {
+        collection
+            .addCollection({
+                type: "remote-http",
+                url: host,
+            })
+            .commit();
+        setShowHostModal(false);
+    }, []);
+
     return (
         <DiagramCollectionContainer
             title="Manual"
@@ -58,18 +77,15 @@ export const ManualDiagramCollection: FC<{
                 tokens={{childrenGap: theme.spacing.m}}
                 style={{marginTop: theme.spacing.m}}>
                 {/* TODO: add modal for selecting the host to use + store this in settings as the default host */}
-                <AddDiagramButton
-                    onClick={() =>
-                        collection
-                            .addCollection({
-                                type: "remote-http",
-                                url: "http://localhost:8080",
-                            })
-                            .commit()
-                    }>
+                <AddDiagramButton onClick={onShowHostModal}>
                     Add diagram source
                 </AddDiagramButton>
             </Stack>
+            <DiagramCollectionHostModal
+                visible={showHostModal}
+                onCancel={onHideHostModal}
+                onSelect={onSelectHost}
+            />
         </DiagramCollectionContainer>
     );
 };
