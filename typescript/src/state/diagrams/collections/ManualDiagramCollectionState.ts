@@ -32,9 +32,9 @@ export class ManualDiagramCollectionState
     public readonly collections = this._collections.readonly();
 
     /** All the diagrams that can be reached from this collection */
-    public readonly descendantDiagrams = new Derived(watch => [
+    public readonly descendentViews = new Derived(watch => [
         ...watch(this.diagrams),
-        ...watch(this.collections).flatMap(col => watch(col.descendantDiagrams)),
+        ...watch(this.collections).flatMap(col => watch(col.descendentViews)),
     ]);
 
     /** The current collection status */

@@ -29,6 +29,8 @@ import {ToolbarProvider} from "./UI/providers/ToolbarContext";
 import {ToolbarState} from "./state/toolbar/ToolbarState";
 import {Toolbar} from "./UI/views/toolbar/Toolbar";
 import {CenteredContainer} from "./UI/components/layout/CenteredContainer";
+import {HttpDiagramCollectionTargetState} from "./state/diagrams/collections/HttpDiagramCollectionState";
+import {DiagramCollectionTarget} from "./UI/views/diagramCollection/types/util/DiagramCollectionTarget";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -70,6 +72,8 @@ const Component: IViewComponent = ({view}) => {
                 <DiagramCollection collection={view.collection} />
             </CenteredContainer>
         );
+    if (view instanceof HttpDiagramCollectionTargetState)
+        return <DiagramCollectionTarget target={view} />;
     if (view instanceof DiagramVisualizationState)
         return <DiagramVisualization visualization={view} />;
     if (view instanceof ToolbarState) return <Toolbar toolbar={view} />;

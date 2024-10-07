@@ -36,7 +36,7 @@ export class DiagramCollectionState extends ViewState {
 
     /** @override */
     public readonly children = new Derived(watch =>
-        watch(this.collection.descendantDiagrams)
+        watch(this.collection.descendentViews)
     );
 
     /** @override */

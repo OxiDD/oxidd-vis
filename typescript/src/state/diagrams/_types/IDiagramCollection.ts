@@ -2,13 +2,14 @@ import {MessageBarType} from "@fluentui/react";
 import {IWatchable} from "../../../watchables/_types/IWatchable";
 import {IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {DiagramState} from "../DiagramState";
+import {ViewState} from "../../views/ViewState";
 
 export type IDiagramCollection<T> = {
     /** The UUID of this collection source */
     readonly ID: string;
 
     /** The current status of the collection to indicate to the user */
-    readonly status: IWatchable<{text: string; type: MessageBarType} | undefined>;
+    readonly status: IWatchable<ICollectionStatus>;
 
     /** The current diagrams of the collection */
     readonly diagrams: IWatchable<DiagramState[]>;
@@ -16,8 +17,8 @@ export type IDiagramCollection<T> = {
     /** The sub-collections of this collection */
     readonly collections: IWatchable<IDiagramCollection<unknown>[]>;
 
-    /** All the diagrams that can be reached from this collection (direct child diagrams and descendants of collections) */
-    readonly descendantDiagrams: IWatchable<DiagramState[]>;
+    /** All the views reachable from this collection */
+    readonly descendentViews: IWatchable<ViewState[]>;
 
     /**
      * Removes the given diagram
@@ -49,3 +50,5 @@ export type IDiagramCollection<T> = {
      */
     deserialize(data: T): IMutator<unknown>;
 };
+
+export type ICollectionStatus = {text: string; type: MessageBarType} | undefined;

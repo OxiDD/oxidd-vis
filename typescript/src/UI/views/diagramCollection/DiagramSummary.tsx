@@ -1,4 +1,4 @@
-import React, {FC, useCallback, useState} from "react";
+import React, {FC, ReactNode, useCallback, useState} from "react";
 import {DiagramState} from "../../../state/diagrams/DiagramState";
 import {
     DefaultButton,
@@ -93,8 +93,9 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                     horizontal
                     tokens={{childrenGap: theme.spacing.s1}}
                     style={{marginTop: theme.spacing.s1}}>
-                    <StyledTooltipHost
-                        content={
+                    <AddSectionButton
+                        onClick={startCreatingDDDMPSection}
+                        hover={
                             <>
                                 Create a diagram from a dddmp file
                                 {!canCreateFromDDDMP && (
@@ -105,15 +106,12 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                                 )}
                             </>
                         }
-                        directionalHint={DirectionalHint.bottomCenter}>
-                        <AddSectionButton
-                            onClick={startCreatingDDDMPSection}
-                            disabled={!canCreateFromDDDMP}>
-                            Load from dddump
-                        </AddSectionButton>
-                    </StyledTooltipHost>
-                    <StyledTooltipHost
-                        content={
+                        disabled={!canCreateFromDDDMP}>
+                        Load from dddump
+                    </AddSectionButton>
+                    <AddSectionButton
+                        onClick={createSelectionSection}
+                        hover={
                             <>
                                 Create a diagram visualization for the selected nodes
                                 {!canCreateFromSelection && (
@@ -124,13 +122,9 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                                 )}
                             </>
                         }
-                        directionalHint={DirectionalHint.bottomCenter}>
-                        <AddSectionButton
-                            onClick={createSelectionSection}
-                            disabled={!canCreateFromSelection}>
-                            Create from selection
-                        </AddSectionButton>
-                    </StyledTooltipHost>
+                        disabled={!canCreateFromSelection}>
+                        Create from selection
+                    </AddSectionButton>
                 </Stack>
             </Stack>
             <TextSelectionModal
@@ -142,18 +136,22 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
     );
 };
 
-const AddSectionButton: FC<{onClick: () => void; disabled?: boolean}> = ({
-    onClick,
-    disabled,
-    children,
-}) => (
-    <DefaultButton
-        onClick={onClick}
-        children={children}
-        disabled={disabled}
-        style={{
-            flexGrow: 1,
-            width: 200,
-        }}
-    />
+const AddSectionButton: FC<{
+    onClick: () => void;
+    disabled?: boolean;
+    hover: JSX.Element;
+}> = ({onClick, disabled, hover, children}) => (
+    <StyledTooltipHost
+        styles={{root: {width: 180, flexGrow: 1}}}
+        content={hover}
+        directionalHint={DirectionalHint.bottomCenter}>
+        <DefaultButton
+            onClick={onClick}
+            children={children}
+            disabled={disabled}
+            style={{
+                width: "100%",
+            }}
+        />
+    </StyledTooltipHost>
 );

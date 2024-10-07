@@ -1,4 +1,4 @@
-import React, {FC, useCallback, useEffect, useRef} from "react";
+import React, {FC, useCallback, useEffect, useLayoutEffect, useRef} from "react";
 import {DiagramVisualizationState} from "../../../state/diagrams/DiagramVisualizationState";
 import {useTransformCallbacks} from "./useTransformCallbacks";
 import {css} from "@emotion/css";
@@ -18,7 +18,7 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
     const watch = useWatch();
     const toolbar = useToolbar();
     const ref = useRef<HTMLDivElement>(null);
-    useEffect(() => {
+    useLayoutEffect(() => {
         const el = ref.current;
         if (el) {
             const setSize = () => {

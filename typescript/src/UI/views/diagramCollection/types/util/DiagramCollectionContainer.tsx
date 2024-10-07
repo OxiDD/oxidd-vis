@@ -1,13 +1,20 @@
 import {css} from "@emotion/css";
-import {IconButton, Stack, useTheme} from "@fluentui/react";
+import {IconButton, MessageBar, Stack, useTheme} from "@fluentui/react";
 import React, {FC} from "react";
+import {IWatchable} from "../../../../../watchables/_types/IWatchable";
+import {ICollectionStatus} from "../../../../../state/diagrams/_types/IDiagramCollection";
+import {useWatch} from "../../../../../watchables/react/useWatch";
 
 export const DiagramCollectionContainer: FC<{
     title: string;
     onDelete?: () => void;
     hideFrame?: boolean;
-}> = ({title, onDelete, hideFrame, children}) => {
+    status: IWatchable<ICollectionStatus>;
+}> = ({title, onDelete, hideFrame, children, status}) => {
     const theme = useTheme();
+    const watch = useWatch();
+    const curStatus = watch(status);
+
     if (hideFrame) return <>{children}</>;
 
     return (
@@ -34,7 +41,16 @@ export const DiagramCollectionContainer: FC<{
                     )}
                 </Stack.Item>
             </Stack>
-            <div className={css({padding: theme.spacing.m})}>{children}</div>
+            <div className={css({padding: theme.spacing.m})}>
+                {curStatus && (
+                    <MessageBar
+                        messageBarType={curStatus.type}
+                        styles={{root: {marginBottom: theme.spacing.m}}}>
+                        {curStatus.text}
+                    </MessageBar>
+                )}
+                {children}
+            </div>
         </div>
     );
 };

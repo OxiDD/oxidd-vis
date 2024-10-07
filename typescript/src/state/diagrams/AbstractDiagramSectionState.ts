@@ -23,6 +23,8 @@ export abstract class AbstractDiagramSectionState<T> implements IDiagramSection<
             const source = watch(this.source);
             if (!source) return null;
             const canvas = document.createElement("canvas");
+            canvas.width = 0;
+            canvas.height = 0;
             const drawer = source.create_drawer(canvas);
             return new DiagramVisualizationState(drawer, canvas, {
                 highlight: this.diagram.highlightNodes,

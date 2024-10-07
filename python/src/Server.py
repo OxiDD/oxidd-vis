@@ -60,7 +60,6 @@ class Server(BaseHTTPRequestHandler):
                     name = query["name"][0]
                     diagrams.setDiagramState(name, bodyText)
                     diagrams.saveToFile()
-                    print("added state")
             else: 
                 self.send_header("Content-type", "text/html")
         except Exception as error: 
@@ -68,8 +67,7 @@ class Server(BaseHTTPRequestHandler):
             self.send_response(500)
         finally:
             self.send_header( "Access-Control-Allow-Origin", "*")
-            self.end_headers()    
-        print("handled request")
+            self.end_headers()
 
     def do_DELETE(self):
         (apiPath, query) = self.isAPI()

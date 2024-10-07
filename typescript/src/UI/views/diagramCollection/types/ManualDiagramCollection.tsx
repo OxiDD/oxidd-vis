@@ -17,7 +17,8 @@ export const ManualDiagramCollection: FC<{
         <DiagramCollectionContainer
             title="Manual"
             onDelete={onDelete}
-            hideFrame={!onDelete}>
+            hideFrame={!onDelete}
+            status={collection.status}>
             <Stack tokens={{childrenGap: theme.spacing.m}}>
                 {watch(collection.diagrams).map(diagram => (
                     <Stack.Item align="stretch" key={diagram.ID}>
