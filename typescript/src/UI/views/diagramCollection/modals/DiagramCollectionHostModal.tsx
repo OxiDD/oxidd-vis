@@ -53,7 +53,7 @@ export const DiagramCollectionHostModal: FC<{
                 prefix={sitePrefix}
             />
             <PrimaryButton onClick={onSubmit} disabled={!host}>
-                Load
+                Add
             </PrimaryButton>
         </StyledModal>
     );

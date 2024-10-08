@@ -14,7 +14,7 @@
     "author": "Tar van Krieken",
     "license": "MIT",
     "dependencies": {
-        "@emotion/css": "^11.11.2",
+        "@emotion/css": "11.11.2",
         "@fluentui/react": "^8.110.5",
         "@fluentui/react-hooks": "^8.6.14",
         "@fluentui/react-theme-provider": "^0.19.16",

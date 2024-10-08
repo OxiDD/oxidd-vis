@@ -1,4 +1,4 @@
-use itertools::Itertools;
+use itertools::{EitherOrBoth, Itertools};
 use oxidd::util::OutOfMemory;
 use oxidd::{util::Borrowed, Edge, InnerNode, Manager, ManagerRef};
 use oxidd::{BooleanFunction, Function};
@@ -101,7 +101,6 @@ impl DummyFunction {
         data: &str,
     ) -> (Vec<DummyFunction>, Vec<String>) {
         manager_ref.with_manager_exclusive(|manager| {
-            console::log!("Started loading graph");
             let mut terminals = HashMap::new();
 
             let get_text = |from: &str, to: &str| {
@@ -191,8 +190,92 @@ impl DummyFunction {
                 .split(" ")
                 .map(|t| t.to_string())
                 .collect_vec();
-            console::log!("Loaded graph!");
             (funcs, var_names)
+        })
+    }
+    pub fn from_buddy(
+        manager_ref: &mut DummyManagerRef,
+        data: &str,
+        var_data: Option<&str>,
+    ) -> (Vec<DummyFunction>, Vec<String>) {
+        manager_ref.with_manager_exclusive(|manager| {
+            let mut variables = Vec::new();
+            let mut referenced = HashSet::<usize>::new();
+            let mut defined = HashSet::<usize>::new();
+            let mut root = None;
+            let mut max_level = 0;
+            for (line, text) in data.split("\n").enumerate() {
+                match line {
+                    0 => {}
+                    1 => {
+                        let order = text.split(" ").filter_map(|v| v.parse::<usize>().ok());
+                        variables = match var_data {
+                            Some(vars) => vars.split("\n").map(|v| v.trim().to_string()).collect(),
+                            _ => order.map(|v| format!("{}", v)).collect(),
+                        };
+                    }
+                    _ => {
+                        let parts = text.split(" ").collect_vec();
+                        if parts.len() != 4 {
+                            continue;
+                        }
+
+                        let Ok(id) = parts[0].parse::<usize>() else {
+                            continue;
+                        };
+                        let Ok(level) = parts[1].parse::<u32>() else {
+                            continue;
+                        };
+                        let Ok(false_branch) = parts[2].parse::<usize>() else {
+                            continue;
+                        };
+                        let Ok(true_branch) = parts[3].parse::<usize>() else {
+                            continue;
+                        };
+
+                        manager.add_node_level(id, level, None);
+                        manager.add_edge(id, false_branch, manager_ref.clone());
+                        manager.add_edge(id, true_branch, manager_ref.clone());
+
+                        if level > max_level {
+                            max_level = level;
+                        }
+                        defined.insert(id);
+                        referenced.insert(false_branch);
+                        referenced.insert(true_branch);
+                        root = Some(id);
+                    }
+                }
+            }
+
+            let terminals = referenced
+                .difference(&defined)
+                .sorted()
+                .zip_longest(vec!["F", "T"])
+                .filter_map(|id_and_name| match id_and_name {
+                    EitherOrBoth::Both(&id, name) => {
+                        manager.add_node_level(id, max_level + 1, Some(name.to_string()));
+                        Some((
+                            name.to_string(),
+                            DummyEdge::new(Arc::new(id), manager_ref.clone()),
+                        ))
+                    }
+                    EitherOrBoth::Left(&id) => {
+                        let name = format!("{}", id);
+                        manager.add_node_level(id, max_level + 1, Some(name.clone()));
+                        Some((name, DummyEdge::new(Arc::new(id), manager_ref.clone())))
+                    }
+                    EitherOrBoth::Right(_) => None,
+                })
+                .collect();
+            manager.init_terminals(terminals);
+
+            (
+                root.map(|root| DummyFunction(DummyEdge::new(Arc::new(root), manager_ref.clone())))
+                    .into_iter()
+                    .collect(),
+                variables,
+            )
         })
     }
 }

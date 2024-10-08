@@ -74,6 +74,7 @@ export class AppState extends ViewState {
             icon: "Settings",
             name: "Settings",
             view: this.settings,
+            hidden: true,
         },
     ];
 

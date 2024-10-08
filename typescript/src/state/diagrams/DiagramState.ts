@@ -59,7 +59,7 @@ export class DiagramState extends ViewState {
      */
     public constructor(diagram: DiagramBox, type: IDiagramType) {
         super();
-        this.name.set("DIagram").commit();
+        this.name.set("Diagram").commit();
         this.diagram = diagram;
         this.type = type;
     }
@@ -73,13 +73,41 @@ export class DiagramState extends ViewState {
      */
     public createSectionFromDDDMP(dddmp: string, name?: string): IMutator<FileSource> {
         return chain(push => {
-            const section = new FileSource(this, this.diagram, dddmp);
+            const section = new FileSource(this, this.diagram, {dddmp});
             push(this._sections.set([...this._sections.get(), section]));
             if (name)
                 try {
                     const viz = section.visualization.get();
                     if (viz) push(viz.name.set(name));
-                } catch (e) {}
+                } catch (e) {
+                    console.error(e);
+                }
+            return section;
+        });
+    }
+
+    /**
+     * Creates a new section for this diagram, based on the given decision diagram file expressed by buddy
+     * @param data The data of the diagram
+     * @param vars The optional variable names of the diagram
+     * @param name The name of the section
+     * @returns The mutator to commit the change, resulting in the created section
+     */
+    public createSectionFromBuddy(
+        data: string,
+        vars?: string,
+        name?: string
+    ): IMutator<FileSource> {
+        return chain(push => {
+            const section = new FileSource(this, this.diagram, {buddy: {data, vars}});
+            push(this._sections.set([...this._sections.get(), section]));
+            if (name)
+                try {
+                    const viz = section.visualization.get();
+                    if (viz) push(viz.name.set(name));
+                } catch (e) {
+                    console.error(e);
+                }
             return section;
         });
     }
@@ -105,7 +133,9 @@ export class DiagramState extends ViewState {
                                 [...nodes].toSorted().join(", ")
                         )
                     );
-            } catch (e) {}
+            } catch (e) {
+                console.error(e);
+            }
             return section;
         });
     }

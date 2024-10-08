@@ -11,7 +11,8 @@ use crate::{
         drawing::{
             diagram_layout::Point,
             layouts::{
-                layered_layout::{is_edge_dummy, is_group_dummy, NodePositioning},
+                layered_layout::{is_edge_dummy, is_group_dummy},
+                layered_layout_traits::{NodePositioning, WidthLabel},
                 util::layered::layer_orderer::{
                     get_edge_index_sequence, get_ordered_edge_map, get_sequence, swap_edges,
                     EdgeMap, Order, OrderedEdgeMap,
@@ -28,7 +29,7 @@ use crate::{
 
 pub struct BrandesKopfPositioning;
 
-impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
+impl<T: DrawTag, GL: WidthLabel, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
     fn position_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T, GL, LL>,

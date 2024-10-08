@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use oxidd::LevelNo;
 use oxidd_core::Tag;
 
@@ -8,7 +9,7 @@ use crate::{
         drawing::{
             diagram_layout::Point,
             layouts::{
-                layered_layout::NodePositioning,
+                layered_layout_traits::{NodePositioning, WidthLabel},
                 util::layered::layer_orderer::{EdgeMap, Order},
             },
         },
@@ -21,7 +22,7 @@ use crate::{
 
 pub struct DummyLayerPositioning;
 
-impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for DummyLayerPositioning {
+impl<T: DrawTag, GL: WidthLabel, LL> NodePositioning<T, GL, LL> for DummyLayerPositioning {
     fn position_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T, GL, LL>,
@@ -32,20 +33,31 @@ impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for DummyLayerPositioning {
         owners: &HashMap<NodeGroupID, NodeGroupID>,
     ) -> (HashMap<NodeGroupID, Point>, HashMap<LevelNo, f32>) {
         let spacing = 2.;
+
         (
             layers
                 .iter()
                 .enumerate()
                 .flat_map(|(layer_index, layer)| {
-                    layer.iter().map(move |(&node, &node_index)| {
-                        (
+                    let mut points = Vec::<(NodeGroupID, Point)>::new();
+                    let mut x = 0.0;
+                    for (&node, _) in layer.iter().sorted_by_key(|&(_, i)| i) {
+                        let owner = owners.get(&node).cloned().unwrap_or(node);
+                        let width = if owner < dummy_group_start_id {
+                            graph.get_group_label(owner).get_width()
+                        } else {
+                            1.
+                        };
+                        points.push((
                             node,
                             Point {
-                                x: (node_index as f32) * spacing,
+                                x: x,
                                 y: -(layer_index as f32) * spacing,
                             },
-                        )
-                    })
+                        ));
+                        x += (spacing - 1.) + width;
+                    }
+                    points
                 })
                 .collect(),
             layers

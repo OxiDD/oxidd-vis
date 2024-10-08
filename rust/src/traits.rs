@@ -9,6 +9,11 @@ use web_sys::HtmlCanvasElement;
 
 pub trait Diagram {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>>; // TODO: error type
+    fn create_section_from_buddy(
+        &mut self,
+        data: String,
+        vars: Option<String>,
+    ) -> Option<Box<dyn DiagramSection>>; // TODO: error type
     fn create_section_from_ids(
         &self,
         id: &[(oxidd::NodeID, &Box<dyn DiagramSection>)],

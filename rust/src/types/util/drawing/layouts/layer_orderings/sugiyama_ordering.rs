@@ -5,7 +5,7 @@ use oxidd_core::Tag;
 use crate::{
     types::util::{
         drawing::layouts::{
-            layered_layout::LayerOrdering,
+            layered_layout_traits::LayerOrdering,
             util::layered::{
                 barycenter_ordering::BarycenterOrdering,
                 layer_orderer::{count_crossings, swap_edges, EdgeMap, LayerOrderer, Order},

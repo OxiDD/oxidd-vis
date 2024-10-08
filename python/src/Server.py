@@ -3,6 +3,8 @@ from urllib.parse import urlparse, parse_qs
 import logging
 import json
 import time
+import os
+from BuddyToDDDMP import BuddyToDDDMP
 from Diagrams import Diagrams
 
 diagrams = Diagrams("data/diagrams.json")
@@ -36,11 +38,16 @@ class Server(BaseHTTPRequestHandler):
             self.send_header("Content-type", "text/html")
             self.send_header( "Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(bytes("<html><head><title>https://pythonbasics.org</title></head>", "utf-8"))
-            self.wfile.write(bytes("<p>Request: %s</p>" % self.path, "utf-8"))
-            self.wfile.write(bytes("<body>", "utf-8"))
-            self.wfile.write(bytes("<p>This is an example web servers.</p>", "utf-8"))
-            self.wfile.write(bytes("</body></html>", "utf-8"))
+            if self.path == "/": 
+                path = os.path.join(os.getcwd(), "webfiles/index.html")
+                self.wfile.write(open(path, "rb").read())
+            else:
+                path = os.path.join(os.getcwd(), "webfiles/"+self.path[1::])
+                print(path, os.path.isfile(path))
+                if os.path.isfile(path):
+                    self.wfile.write(open(path, "rb").read())
+
+            
 
     def do_POST(self): 
         (apiPath, query) = self.isAPI()
@@ -55,6 +62,14 @@ class Server(BaseHTTPRequestHandler):
                     type = query["type"][0]
                     diagrams.removeDiagram(name)
                     diagrams.addDiagram(name, type, bodyText)
+                    diagrams.saveToFile()
+                if apiPath == ["buddy-diagram"]:
+                    name = query["name"][0]
+                    type = query["type"][0]
+                    diagrams.removeDiagram(name)
+                    result = json.loads(bodyText)
+                    dddmp = BuddyToDDDMP(result["data"], result["vars"])
+                    diagrams.addDiagram(name, type, dddmp)
                     diagrams.saveToFile()
                 if apiPath == ["diagramState"]:
                     name = query["name"][0]

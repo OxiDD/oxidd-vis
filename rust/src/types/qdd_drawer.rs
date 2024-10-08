@@ -65,11 +65,13 @@ use super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaO
 use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
 use super::util::drawing::layouts::layer_positionings::dummy_layer_positioning::DummyLayerPositioning;
 use super::util::drawing::layouts::layered_layout::LayeredLayout;
+use super::util::drawing::layouts::layered_layout_traits::WidthLabel;
 use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
 use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition::transition_layout::TransitionLayout;
 use super::util::drawing::layouts::util::color_label::Color;
+use super::util::drawing::layouts::util::color_label::ColorLabel;
 use super::util::drawing::layouts::util::color_label::TransparentColor;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
@@ -103,10 +105,18 @@ impl QDDDiagram<DummyManagerRef> {
 
 impl Diagram for QDDDiagram<DummyManagerRef> {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
-        let (roots, levels) = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp[..]);
+        let (roots, levels) = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp);
         Some(Box::new(QDDDiagramSection { roots, levels }))
     }
-
+    fn create_section_from_buddy(
+        &mut self,
+        data: String,
+        vars: Option<String>,
+    ) -> Option<Box<dyn DiagramSection>> {
+        let (roots, levels) =
+            DummyFunction::from_buddy(&mut self.manager_ref, &data, vars.as_deref());
+        Some(Box::new(QDDDiagramSection { roots, levels }))
+    }
     fn create_section_from_ids(
         &self,
         sources: &[(oxidd::NodeID, &Box<dyn DiagramSection>)],
@@ -115,7 +125,6 @@ impl Diagram for QDDDiagram<DummyManagerRef> {
         let roots = sources
             .iter()
             .map(|&(id, section)| {
-                console::log!("for: {}", id);
                 let root_edge = DummyEdge::new(Arc::new(id), self.manager_ref.clone());
                 levels = section.get_level_labels();
                 DummyFunction(root_edge)
@@ -249,17 +258,39 @@ where
     }
 }
 
+pub struct NodeData {
+    color: Color,
+    border_color: TransparentColor,
+    width: f32,
+}
+
+impl ColorLabel for NodeData {
+    fn get_color(&self) -> Color {
+        self.color
+    }
+
+    fn get_outline_color(&self) -> TransparentColor {
+        self.border_color
+    }
+}
+
+impl WidthLabel for NodeData {
+    fn get_width(&self) -> f32 {
+        self.width
+    }
+}
+
 pub struct QDDDiagramDrawer<
     T: DrawTag + Serializable<T> + 'static,
     G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
     R: Renderer<T>,
-    L: LayoutRules<T, OutlineColor, String, GMGraph<T, G>>,
+    L: LayoutRules<T, NodeData, String, GMGraph<T, G>>,
 > {
     graph: MGraph<T, G>,
     group_manager: MutRcRefCell<GM<T, G>>,
     presence_adjuster: MPresenceAdjuster<T, G>,
     time: MutRcRefCell<u32>,
-    drawer: MutRcRefCell<Drawer<T, OutlineColor, R, L, GMGraph<T, G>>>,
+    drawer: MutRcRefCell<Drawer<T, NodeData, R, L, GMGraph<T, G>>>,
     config: Configuration<
         CompositeConfig<(
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
@@ -267,7 +298,7 @@ pub struct QDDDiagramDrawer<
         )>,
     >,
 }
-type OutlineColor = (Color, TransparentColor);
+
 type GraphLabel = PresenceLabel<NodeLabel<String>>;
 type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
 type MGraph<T, G> = RCGraph<
@@ -278,13 +309,13 @@ type MGraph<T, G> = RCGraph<
 >;
 type MPresenceAdjuster<T, G> =
     RCGraph<T, GraphLabel, String, NodePresenceAdjuster<T, NodeLabel<String>, String, G>>;
-type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, OutlineColor>;
+type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData>;
 
 impl<
         T: DrawTag + Serializable<T> + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
         R: Renderer<T> + 'static,
-        L: LayoutRules<T, OutlineColor, String, GMGraph<T, G>> + 'static,
+        L: LayoutRules<T, NodeData, String, GMGraph<T, G>> + 'static,
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
@@ -323,7 +354,7 @@ impl<
                 (Some(_), None) => (0.3, 0.3, 0.3),
                 _ => (0.7, 0.7, 0.7),
             };
-            let outline_color = match (nodes.get(0), nodes.get(1)) {
+            let border_color = match (nodes.get(0), nodes.get(1)) {
                 (
                     Some(&PresenceLabel {
                         original_label: _,
@@ -344,7 +375,11 @@ impl<
                 _ => (0.0, 0.0, 0.0, 0.0),
             };
 
-            (color, outline_color)
+            NodeData {
+                color,
+                border_color,
+                width: 1. + (nodes.len() as f32 - 1.) / 10.,
+            }
         });
 
         let terminal_config = CompositeConfig::new(
@@ -386,6 +421,11 @@ impl<
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         for root in roots {
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
+        }
+
+        let max = 500;
+        if out.group_manager.read().get_nodes_of_group(from).len() < max {
+            out.reveal_all(from, max);
         }
 
         // Connect the config
@@ -430,14 +470,14 @@ impl<
         out
     }
 
-    pub fn reveal_all(&mut self, from_id: NodeGroupID, limit: u32) {
+    pub fn reveal_all(&mut self, from_id: NodeGroupID, limit: usize) {
         let nodes = {
             let explored_group =
                 self.create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
             self.group_manager.read().get_nodes_of_group(explored_group)
         };
         let mut count = 0;
-        for node_id in nodes {
+        for node_id in nodes.rev() {
             // console::log!("{node_id}");
             self.create_group(vec![TargetID(TargetIDType::NodeID, node_id)]);
 
@@ -453,7 +493,7 @@ impl<
         T: DrawTag + Serializable<T> + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
         R: Renderer<T>,
-        L: LayoutRules<T, OutlineColor, String, GMGraph<T, G>>,
+        L: LayoutRules<T, NodeData, String, GMGraph<T, G>>,
     > DiagramSectionDrawer for QDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32) -> () {

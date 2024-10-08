@@ -27,61 +27,15 @@ use crate::{
     wasm_interface::NodeGroupID,
 };
 
-use super::util::{
-    color_label::ColorLabel,
-    compute_layers_layout::compute_layers_layout,
-    layered::layer_orderer::{get_sequence, EdgeMap, Order},
-    remove_redundant_bendpoints::remove_redundant_bendpoints,
+use super::{
+    layered_layout_traits::{LayerGroupSorting, LayerOrdering, NodePositioning},
+    util::{
+        color_label::ColorLabel,
+        compute_layers_layout::compute_layers_layout,
+        layered::layer_orderer::{get_sequence, EdgeMap, Order},
+        remove_redundant_bendpoints::remove_redundant_bendpoints,
+    },
 };
-
-/// The trait used to decide what ordering of nodes to use in the layout, including dummy nodes
-pub trait LayerOrdering<T: DrawTag, GL, LL> {
-    fn order_nodes(
-        &self,
-        graph: &impl GroupedGraphStructure<T, GL, LL>,
-        layers: &Vec<Order>,
-        edges: &EdgeMap,
-        // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
-        dummy_group_start_id: NodeGroupID,
-        // The ID such that any ID greater or equal represents a dummy node of an edge
-        dummy_edge_start_id: NodeGroupID,
-        // The owner of a given dummy node, such that multiple nodes derived from the same data can be considered as a group
-        owners: &HashMap<NodeGroupID, NodeGroupID>,
-    ) -> Vec<Order>;
-}
-
-/// The trait used to decide what positioning of nodes to use in the layout for the given node orders, including dummy nodes
-pub trait NodePositioning<T: DrawTag, GL, LL> {
-    fn position_nodes(
-        &self,
-        graph: &impl GroupedGraphStructure<T, GL, LL>,
-        layers: &Vec<Order>,
-        edges: &EdgeMap,
-        // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
-        dummy_group_start_id: NodeGroupID,
-        // The ID such that any ID greater or equal represents a dummy node of an edge
-        dummy_edge_start_id: NodeGroupID,
-        // The owner of a given dummy node, such that multiple nodes derived from the same data can be considered as a group
-        owners: &HashMap<NodeGroupID, NodeGroupID>,
-    ) -> (HashMap<NodeGroupID, Point>, HashMap<LevelNo, f32>);
-}
-
-/// The trait used to decide what positioning of nodes to use in the layout for the given node orders, including dummy nodes
-pub trait LayerGroupSorting<T: DrawTag, GL, LL> {
-    fn align_cross_layer_nodes(
-        &self,
-        graph: &impl GroupedGraphStructure<T, GL, LL>,
-        layers: &Vec<Order>,
-        edges: &EdgeMap,
-        // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
-        dummy_group_start_id: NodeGroupID,
-        // The ID such that any ID greater or equal represents a dummy node of an edge
-        dummy_edge_start_id: NodeGroupID,
-        // The owner of a given dummy node, such that multiple nodes derived from the same data can be considered as a group
-        owners: &HashMap<NodeGroupID, NodeGroupID>,
-    ) -> Vec<Order>;
-}
-
 pub struct LayeredLayout<
     T: DrawTag,
     GL,
@@ -245,7 +199,7 @@ fn add_groups_with_dummies<T: DrawTag, GL, LL>(
 ) -> (NodeGroupID, HashMap<NodeGroupID, HashMap<u32, usize>>) {
     let mut group_layers: HashMap<NodeGroupID, HashMap<u32, usize>> = HashMap::new();
     for group in graph.get_all_groups() {
-        let (start, end) = graph.get_level_range(group);
+        let (start, _end) = graph.get_level_range(group);
         add_to_layer(layers, start as usize, group);
         group_layers.insert(group, HashMap::from([(start, group)]));
         if group >= *next_free_id {

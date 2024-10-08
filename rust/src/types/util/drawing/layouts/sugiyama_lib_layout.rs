@@ -20,7 +20,8 @@ use std::{collections::HashMap, convert::TryInto};
 use super::{
     layer_group_sorting::average_group_alignment::AverageGroupAlignment,
     layer_orderings::dummy_layer_ordering::DummyLayerOrdering,
-    layered_layout::{LayerOrdering, LayeredLayout, NodePositioning},
+    layered_layout::LayeredLayout,
+    layered_layout_traits::NodePositioning,
     util::{
         color_label::ColorLabel,
         layered::layer_orderer::{EdgeMap, Order},

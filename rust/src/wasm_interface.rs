@@ -25,6 +25,15 @@ impl DiagramBox {
     pub fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<DiagramSectionBox> {
         Some(DiagramSectionBox(self.0.create_section_from_dddmp(dddmp)?))
     }
+    pub fn create_section_from_buddy(
+        &mut self,
+        data: String,
+        vars: Option<String>,
+    ) -> Option<DiagramSectionBox> {
+        Some(DiagramSectionBox(
+            self.0.create_section_from_buddy(data, vars)?,
+        ))
+    }
     pub fn create_section_from_ids(
         &self,
         ids: &[NodeID],

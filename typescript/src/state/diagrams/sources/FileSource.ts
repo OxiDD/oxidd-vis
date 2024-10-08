@@ -4,36 +4,48 @@ import {Field} from "../../../watchables/Field";
 import {IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {AbstractDiagramSectionState} from "../AbstractDiagramSectionState";
 import {DiagramState} from "../DiagramState";
+import {IFileSourceSerialization} from "./_types/IFileSourceSerialization";
 
 /** The diagram source, coming from textual input  */
-export class FileSource extends AbstractDiagramSectionState<string> {
-    protected data = new Field("");
+export class FileSource extends AbstractDiagramSectionState<IFileSourceSerialization> {
+    protected data = new Field<IFileSourceSerialization>({dddmp: ""});
 
     /**
      * Creates a new diagram source
      * @param diagram The diagram this source is for
      * @param diagramBox The diagram box that lives in rust
-     * @param dddmp The dddmp contents of the file
+     * @param data The dddmp contents of the file
      */
-    public constructor(diagram: DiagramState, diagramBox: DiagramBox, dddmp?: string) {
+    public constructor(
+        diagram: DiagramState,
+        diagramBox: DiagramBox,
+        data?: IFileSourceSerialization
+    ) {
         super(
             diagram,
             new Derived(() => {
-                const diagram = diagramBox.create_section_from_dddmp(this.data.get());
-                if (!diagram) console.error("Diagram could not be created from dddmp");
+                const data = this.data.get();
+                const diagram =
+                    "dddmp" in data
+                        ? diagramBox.create_section_from_dddmp(data.dddmp)
+                        : diagramBox.create_section_from_buddy(
+                              data.buddy.data,
+                              data.buddy.vars
+                          );
+                if (!diagram) console.error("Diagram could not be created from data");
                 return diagram;
             })
         );
-        if (dddmp) this.data.set(dddmp).commit();
+        if (data) this.data.set(data).commit();
     }
 
     /** @override */
-    serialize(): string {
+    serialize(): IFileSourceSerialization {
         return this.data.get();
     }
 
     /** @override */
-    deserialize(data: string): IMutator {
+    deserialize(data: IFileSourceSerialization): IMutator {
         return this.data.set(data);
     }
 }

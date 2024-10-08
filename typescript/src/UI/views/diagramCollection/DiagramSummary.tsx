@@ -11,34 +11,50 @@ import {useWatch} from "../../../watchables/react/useWatch";
 import {DiagramSectionSummary} from "./DiagramSectionSummary";
 import {css} from "@emotion/css";
 import {StyledTooltipHost} from "../../components/StyledToolTipHost";
-import {TextSelectionModal} from "./modals/TextSelectionModal";
+import {DDDMPSelectionModal} from "./modals/DDDMPSelectionModal";
 import {usePersistentMemo} from "../../../utils/usePersistentMemo";
 import {Derived} from "../../../watchables/Derived";
 import {FileSource} from "../../../state/diagrams/sources/FileSource";
+import {BuddySelectionModal} from "./modals/BuddySelectionModal";
 
 export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> = ({
     diagram,
     onDelete,
 }) => {
     const theme = useTheme();
-    const [showInputModal, setShowInputModal] = useState(false);
     const watch = useWatch();
 
+    const [showDDDMPInputModal, setShowDDDMPInputModal] = useState(false);
     const startCreatingDDDMPSection = useCallback(() => {
-        setShowInputModal(true);
+        setShowDDDMPInputModal(true);
     }, []);
     const stopCreatingDDDMPSection = useCallback(() => {
-        setShowInputModal(false);
+        setShowDDDMPInputModal(false);
     }, []);
     const createDDDMPSection = useCallback(
         (input: string, name?: string) => {
-            setShowInputModal(false);
+            setShowDDDMPInputModal(false);
             diagram.createSectionFromDDDMP(input, name).commit();
         },
         [diagram]
     );
 
-    const watchableCanCreateFromDDDMP = usePersistentMemo(
+    const [showBuddyInputModal, setShowBuddyInputModal] = useState(false);
+    const startCreatingBuddySection = useCallback(() => {
+        setShowBuddyInputModal(true);
+    }, []);
+    const stopCreatingBuddySection = useCallback(() => {
+        setShowBuddyInputModal(false);
+    }, []);
+    const createBuddySection = useCallback(
+        (input: string, vars?: string, name?: string) => {
+            setShowBuddyInputModal(false);
+            diagram.createSectionFromBuddy(input, vars, name).commit();
+        },
+        [diagram]
+    );
+
+    const watchableCanCreateFromFile = usePersistentMemo(
         () =>
             new Derived(
                 watch =>
@@ -48,7 +64,7 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
             ),
         [diagram]
     );
-    const canCreateFromDDDMP = watch(watchableCanCreateFromDDDMP);
+    const canCreateFromFile = watch(watchableCanCreateFromFile);
 
     const canCreateFromSelection = watch(diagram.selectedNodes).length > 0;
     const createSelectionSection = useCallback(() => {
@@ -98,16 +114,32 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                         hover={
                             <>
                                 Create a diagram from a dddmp file
-                                {!canCreateFromDDDMP && (
+                                {!canCreateFromFile && (
                                     <>
-                                        <br /> Only one dddmp file per diagram is
-                                        supported right now
+                                        <br /> Only one file per diagram is supported
+                                        right now
                                     </>
                                 )}
                             </>
                         }
-                        disabled={!canCreateFromDDDMP}>
+                        disabled={!canCreateFromFile}>
                         Load from dddump
+                    </AddSectionButton>
+                    <AddSectionButton
+                        onClick={startCreatingBuddySection}
+                        hover={
+                            <>
+                                Create a diagram from a buddy file
+                                {!canCreateFromFile && (
+                                    <>
+                                        <br /> Only one file per diagram is supported
+                                        right now
+                                    </>
+                                )}
+                            </>
+                        }
+                        disabled={!canCreateFromFile}>
+                        Load from Buddy
                     </AddSectionButton>
                     <AddSectionButton
                         onClick={createSelectionSection}
@@ -127,10 +159,15 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                     </AddSectionButton>
                 </Stack>
             </Stack>
-            <TextSelectionModal
-                visible={showInputModal}
+            <DDDMPSelectionModal
+                visible={showDDDMPInputModal}
                 onCancel={stopCreatingDDDMPSection}
                 onSelect={createDDDMPSection}
+            />
+            <BuddySelectionModal
+                visible={showBuddyInputModal}
+                onCancel={stopCreatingBuddySection}
+                onSelect={createBuddySection}
             />
         </div>
     );

@@ -7,7 +7,7 @@ use oxidd_core::Tag;
 use crate::{
     types::util::{
         drawing::layouts::{
-            layered_layout::LayerGroupSorting,
+            layered_layout_traits::LayerGroupSorting,
             util::layered::layer_orderer::{EdgeMap, Order},
         },
         graph_structure::{

@@ -21,8 +21,8 @@ class Diagrams:
                 try:
                     diagramPath = os.path.join(self.dir, diagramData["diagram"])
                     diagramStatePath = os.path.join(self.dir, diagramData["state"])
-                    diagram = open(diagramPath, "r").read()
-                    state = open(diagramStatePath, "r").read()
+                    diagram = open(diagramPath, "r", encoding='utf-8').read()
+                    state = open(diagramStatePath, "r", encoding='utf-8').read()
                     outDiagrams.append({
                         "name": diagramData["name"],
                         "type": diagramData["type"],
@@ -63,14 +63,16 @@ class Diagrams:
                 except Exception as error: logging.exception(error)
         except Exception as error: logging.exception(error)
 
+        print("Saving")
+
         outDiagrams = []
         for diagramData in self.diagrams:
             diagramFilePath = diagramData["name"]+".txt"
-            with open(os.path.join(self.dir, diagramFilePath), "w+") as diagramFile:
+            with open(os.path.join(self.dir, diagramFilePath), "w+", encoding='utf-8') as diagramFile:
                 diagramFile.write(diagramData["diagram"])
 
             stateFilePath = diagramData["name"]+"_state.json"
-            with open(os.path.join(self.dir, stateFilePath), "w+") as stateFile:
+            with open(os.path.join(self.dir, stateFilePath), "w+", encoding='utf-8') as stateFile:
                 stateFile.write(diagramData["state"])
 
             outDiagrams.append({
@@ -83,5 +85,7 @@ class Diagrams:
 
         with open(self.filePath, "w+") as diagramsFile:
             diagramsFile.write(json.dumps(outDiagrams))
+
+        print("Saved")
 
         
