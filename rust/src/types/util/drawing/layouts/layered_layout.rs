@@ -28,7 +28,7 @@ use crate::{
 };
 
 use super::{
-    layered_layout_traits::{LayerGroupSorting, LayerOrdering, NodePositioning},
+    layered_layout_traits::{LayerGroupSorting, LayerOrdering, NodePositioning, WidthLabel},
     util::{
         color_label::ColorLabel,
         compute_layers_layout::compute_layers_layout,
@@ -93,7 +93,7 @@ pub fn is_edge_dummy(node: NodeGroupID, dummy_edge_start_id: NodeGroupID) -> boo
 
 impl<
         T: DrawTag,
-        GL: ColorLabel,
+        GL: ColorLabel + Into<Option<String>> + WidthLabel,
         O: LayerOrdering<T, GL, String>,
         S: LayerGroupSorting<T, GL, String>,
         P: NodePositioning<T, GL, String>,
@@ -132,6 +132,17 @@ impl<
             &mut next_free_id,
         );
 
+        let node_widths = &layers
+            .iter()
+            .flatten()
+            .map(|(&node, _)| {
+                (
+                    node,
+                    get_node_width(node, graph, &dummy_owners, dummy_group_start_id),
+                )
+            })
+            .collect();
+
         // Perform node positioning
         let layers = self.ordering.order_nodes(
             graph,
@@ -158,6 +169,7 @@ impl<
             graph,
             &layers,
             &edges,
+            &node_widths,
             dummy_group_start_id,
             dummy_edge_start_id,
             &dummy_owners,
@@ -167,11 +179,26 @@ impl<
             graph,
             self.max_curve_offset,
             node_positions,
+            &node_widths,
             layer_positions,
             edge_bend_nodes,
             edge_connection_nodes,
             dummy_group_start_id,
         )
+    }
+}
+
+fn get_node_width<T: DrawTag, GL: WidthLabel, LL>(
+    node: NodeGroupID,
+    graph: &impl GroupedGraphStructure<T, GL, LL>,
+    owners: &HashMap<NodeGroupID, NodeGroupID>,
+    dummy_group_start_id: NodeGroupID,
+) -> f32 {
+    let owner = owners.get(&node).cloned().unwrap_or(node);
+    if owner < dummy_group_start_id {
+        graph.get_group_label(owner).get_width()
+    } else {
+        0.
     }
 }
 
@@ -380,10 +407,11 @@ fn remove_group_crossings(
     }
 }
 
-fn format_layout<T: DrawTag, GL: ColorLabel>(
+fn format_layout<T: DrawTag, GL: ColorLabel + Into<Option<String>> + WidthLabel>(
     graph: &impl GroupedGraphStructure<T, GL, String>,
     max_curve_offset: f32,
     node_positions: HashMap<usize, Point>,
+    node_widths: &HashMap<NodeGroupID, f32>,
     layer_positions: HashMap<LevelNo, f32>,
     edge_bend_nodes: HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>>,
     edge_connection_nodes: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)>,
@@ -452,13 +480,14 @@ fn format_layout<T: DrawTag, GL: ColorLabel>(
             .iter()
             .map(|&group_id| {
                 let (s, e) = graph.get_level_range(group_id);
+                let node_width = graph.get_group_label(group_id).get_width();
                 (
                     group_id,
                     NodeGroupLayout {
-                        label: group_id.to_string(),
+                        label: graph.get_group_label(group_id).into(),
                         position: Transition::plain(*bottom_node_positions.get(&group_id).unwrap()),
                         size: Transition::plain(Point {
-                            x: node_size,
+                            x: node_width,
                             y: node_size
                                 + (layer_positions.get(&s).unwrap_or(&0.)
                                     - layer_positions.get(&e).unwrap_or(&0.))
@@ -579,7 +608,7 @@ fn format_edge<T: DrawTag>(
         .unwrap_or_default();
 
     let edge_center_offset = Point {
-        x: node_size,
+        x: 0.,
         y: node_size,
     } * 0.5;
 

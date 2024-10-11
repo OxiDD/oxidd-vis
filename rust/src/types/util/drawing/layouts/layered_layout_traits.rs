@@ -32,11 +32,13 @@ pub trait LayerOrdering<T: DrawTag, GL, LL> {
 
 /// The trait used to decide what positioning of nodes to use in the layout for the given node orders, including dummy nodes
 pub trait NodePositioning<T: DrawTag, GL, LL> {
+    // TODO: change interface to provide node widths instead of having to get them from the graph
     fn position_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
+        node_widths: &HashMap<NodeGroupID, f32>,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
         dummy_group_start_id: NodeGroupID,
         // The ID such that any ID greater or equal represents a dummy node of an edge

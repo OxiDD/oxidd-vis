@@ -28,6 +28,7 @@ impl<T: DrawTag, GL: WidthLabel, LL> NodePositioning<T, GL, LL> for DummyLayerPo
         graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
+        node_widths: &HashMap<NodeGroupID, f32>,
         dummy_group_start_id: NodeGroupID,
         dummy_edge_start_id: NodeGroupID,
         owners: &HashMap<NodeGroupID, NodeGroupID>,
@@ -42,12 +43,7 @@ impl<T: DrawTag, GL: WidthLabel, LL> NodePositioning<T, GL, LL> for DummyLayerPo
                     let mut points = Vec::<(NodeGroupID, Point)>::new();
                     let mut x = 0.0;
                     for (&node, _) in layer.iter().sorted_by_key(|&(_, i)| i) {
-                        let owner = owners.get(&node).cloned().unwrap_or(node);
-                        let width = if owner < dummy_group_start_id {
-                            graph.get_group_label(owner).get_width()
-                        } else {
-                            1.
-                        };
+                        let width = node_widths[&node];
                         points.push((
                             node,
                             Point {

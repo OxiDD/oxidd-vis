@@ -74,7 +74,9 @@ use super::util::drawing::layouts::util::color_label::Color;
 use super::util::drawing::layouts::util::color_label::ColorLabel;
 use super::util::drawing::layouts::util::color_label::TransparentColor;
 use super::util::drawing::renderer::Renderer;
+use super::util::drawing::renderers::util::Font::Font;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
+use super::util::drawing::renderers::webgl::node_renderer::NodeRenderingColorConfig;
 use super::util::drawing::renderers::webgl::util::mix_color::mix_color;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
@@ -166,6 +168,10 @@ where
         let hover_color = ((0.0, 0.0, 1.0), 0.3);
         let partial_hover_color = ((1.0, 0.0, 0.8), 0.2);
 
+        let font = Rc::new(Font::new(
+            include_bytes!("../../resources/Roboto-Bold.ttf").to_vec(),
+            1.0,
+        ));
         let renderer = WebglRenderer::from_canvas(
             canvas,
             HashMap::from([
@@ -233,10 +239,13 @@ where
                     },
                 ),
             ]),
-            select_color,
-            partial_select_color,
-            hover_color,
-            partial_hover_color,
+            NodeRenderingColorConfig {
+                select: select_color,
+                partial_select: partial_select_color,
+                hover: hover_color,
+                partial_hover: partial_hover_color,
+            },
+            font.clone(),
         )
         .unwrap();
         let layout = LayeredLayout::new(
@@ -253,7 +262,7 @@ where
             self.levels.clone(),
             |t| t.to_string(),
         );
-        let diagram = QDDDiagramDrawer::new(graph, renderer, layout);
+        let diagram = QDDDiagramDrawer::new(graph, renderer, layout, font);
         Box::new(diagram)
     }
 }
@@ -262,6 +271,7 @@ pub struct NodeData {
     color: Color,
     border_color: TransparentColor,
     width: f32,
+    name: Option<String>,
 }
 
 impl ColorLabel for NodeData {
@@ -277,6 +287,12 @@ impl ColorLabel for NodeData {
 impl WidthLabel for NodeData {
     fn get_width(&self) -> f32 {
         self.width
+    }
+}
+
+impl Into<Option<String>> for NodeData {
+    fn into(self) -> Option<String> {
+        self.name
     }
 }
 
@@ -318,7 +334,7 @@ impl<
         L: LayoutRules<T, NodeData, String, GMGraph<T, G>> + 'static,
     > QDDDiagramDrawer<T, G, R, L>
 {
-    pub fn new(graph: G, renderer: R, layout: L) -> QDDDiagramDrawer<T, G, R, L> {
+    pub fn new(graph: G, renderer: R, layout: L, font: Rc<Font>) -> QDDDiagramDrawer<T, G, R, L> {
         let original_roots = graph.get_roots().clone();
         let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(graph));
         let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
@@ -337,6 +353,8 @@ impl<
             .map(|(i, &root)| (root, i))
             .collect::<HashMap<_, _>>();
         let grouped_graph = GMGraph::new_shared(group_manager.clone(), move |nodes| {
+            // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
+
             let color = match (nodes.get(0), nodes.get(1)) {
                 (
                     Some(&PresenceLabel {
@@ -375,10 +393,20 @@ impl<
                 _ => (0.0, 0.0, 0.0, 0.0),
             };
 
+            let name = if nodes.len() > 1 {
+                Some(format!("Count {}", nodes.len()))
+            } else {
+                None
+            };
             NodeData {
                 color,
                 border_color,
-                width: 1. + (nodes.len() as f32 - 1.) / 10.,
+                width: 1.
+                    + match name {
+                        Some(ref text) => font.measure_width(&text),
+                        None => 0.,
+                    },
+                name,
             }
         });
 

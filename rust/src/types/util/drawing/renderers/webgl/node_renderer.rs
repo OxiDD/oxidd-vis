@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     iter::{repeat, FromIterator, Repeat},
+    rc::Rc,
 };
 
 use web_sys::WebGl2RenderingContext;
@@ -10,22 +11,24 @@ use crate::{
         diagram_layout::{Point, Transition},
         layouts::util::color_label::{Color, TransparentColor},
         renderer::GroupSelection,
-        renderers::webgl::util::set_animated_data::set_animated_data,
+        renderers::{util::Font::Font, webgl::util::set_animated_data::set_animated_data},
     },
     util::{logging::console, matrix4::Matrix4},
     wasm_interface::NodeGroupID,
 };
 
-use super::util::{mix_color::mix_color, vertex_renderer::VertexRenderer};
+use super::{
+    text::text_renderer::{Text, TextRenderer, TextRendererSettings},
+    util::{mix_color::mix_color, vertex_renderer::VertexRenderer},
+};
 
 pub struct NodeRenderer {
     vertex_renderer: VertexRenderer,
     outline_vertex_renderer: VertexRenderer,
+    text_renderer: TextRenderer,
+    font: Rc<Font>,
     node_indices: HashMap<NodeGroupID, NodeData>,
-    hover_color: (Color, f32),
-    select_color: (Color, f32),
-    partial_hover_color: (Color, f32),
-    partial_select_color: (Color, f32),
+    colors: NodeRenderingColorConfig,
 }
 pub struct NodeData {
     index: usize,
@@ -39,17 +42,28 @@ pub struct Node {
     pub size: Transition<Point>,
     pub color: Transition<Color>,
     pub outline_color: Transition<TransparentColor>,
-    pub label: String,
+    pub label: Option<String>,
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
+}
+
+pub struct NodeRenderingColorConfig {
+    pub select: (Color, f32),
+    pub partial_select: (Color, f32),
+    pub hover: (Color, f32),
+    pub partial_hover: (Color, f32),
+}
+
+pub struct TextRenderingConfig {
+    pub screen_height: usize,
+    pub font: Rc<Font>,
+    pub font_settings: TextRendererSettings,
 }
 
 impl NodeRenderer {
     pub fn new(
         context: &WebGl2RenderingContext,
-        select_color: (Color, f32),
-        partial_select_color: (Color, f32),
-        hover_color: (Color, f32),
-        partial_hover_color: (Color, f32),
+        colors: NodeRenderingColorConfig,
+        text: TextRenderingConfig,
     ) -> NodeRenderer {
         let vertex_renderer = VertexRenderer::new(
             context,
@@ -67,10 +81,14 @@ impl NodeRenderer {
             vertex_renderer,
             outline_vertex_renderer,
             node_indices: HashMap::new(),
-            hover_color,
-            select_color,
-            partial_hover_color,
-            partial_select_color,
+            colors,
+            font: text.font.clone(),
+            text_renderer: TextRenderer::new(
+                context,
+                text.font,
+                text.font_settings,
+                text.screen_height,
+            ),
         }
     }
 
@@ -89,6 +107,7 @@ impl NodeRenderer {
             })
             .collect();
 
+        // Node shape
         let nodes6 = nodes.iter().flat_map(|node| repeat(node).take(6));
         set_animated_data(
             "position",
@@ -120,6 +139,7 @@ impl NodeRenderer {
         );
         self.vertex_renderer.send_data(context);
 
+        // Outline shape
         let outline_nodes = nodes
             .iter()
             .filter(|node| node.outline_color.new.3 != 0. || node.outline_color.old.3 != 0.);
@@ -153,6 +173,37 @@ impl NodeRenderer {
             &mut self.outline_vertex_renderer,
         );
         self.outline_vertex_renderer.send_data(context);
+
+        // Text
+        let text_height = self.text_renderer.get_text_size();
+        self.text_renderer.set_texts(
+            context,
+            &nodes
+                .iter()
+                .filter_map(|node| {
+                    node.label.clone().map(|text| {
+                        let text_width = self.font.measure_width(&text);
+                        Text {
+                            text,
+                            position: &node.center_position
+                                + &Transition {
+                                    old_time: node.size.old_time,
+                                    duration: node.size.duration,
+                                    old: Point {
+                                        x: -0.5 * text_width,
+                                        y: -0.5 * text_height,
+                                    },
+                                    new: Point {
+                                        x: -0.5 * text_width,
+                                        y: -0.5 * text_height,
+                                    },
+                                },
+                            exists: node.exists,
+                        }
+                    })
+                })
+                .collect(),
+        );
     }
 
     pub fn update_selection(
@@ -161,10 +212,10 @@ impl NodeRenderer {
         selection: &GroupSelection,
         old_selection: &GroupSelection,
     ) {
-        let select_color = self.select_color.clone();
-        let partial_select_color = self.partial_select_color.clone();
-        let hover_color = self.hover_color.clone();
-        let partial_hover_color = self.partial_hover_color.clone();
+        let select_color = self.colors.select.clone();
+        let partial_select_color = self.colors.partial_select.clone();
+        let hover_color = self.colors.hover.clone();
+        let partial_hover_color = self.colors.partial_hover.clone();
 
         let ids = selection
             .0
@@ -246,7 +297,12 @@ impl NodeRenderer {
         self.vertex_renderer.send_data(context);
     }
 
-    pub fn set_transform(&mut self, context: &WebGl2RenderingContext, transform: &Matrix4) {
+    pub fn set_transform_and_screen_height(
+        &mut self,
+        context: &WebGl2RenderingContext,
+        transform: &Matrix4,
+        screen_height: usize,
+    ) {
         self.vertex_renderer.set_uniform(context, "transform", |u| {
             context.uniform_matrix4fv_with_f32_array(u, true, &transform.0)
         });
@@ -254,6 +310,9 @@ impl NodeRenderer {
             .set_uniform(context, "transform", |u| {
                 context.uniform_matrix4fv_with_f32_array(u, true, &transform.0)
             });
+
+        self.text_renderer
+            .set_transform_and_screen_height(context, transform, screen_height);
     }
 
     pub fn render(&mut self, context: &WebGl2RenderingContext, time: u32) {
@@ -287,9 +346,13 @@ impl NodeRenderer {
             .set_uniform(context, "offset", |u| context.uniform1f(u, border_offset));
         self.outline_vertex_renderer
             .render(context, WebGl2RenderingContext::TRIANGLES);
+
+        self.text_renderer.render(context, time);
     }
 
     pub fn dispose(&mut self, context: &WebGl2RenderingContext) {
         self.vertex_renderer.dispose(context);
+        self.outline_vertex_renderer.dispose(context);
+        self.text_renderer.dispose(context);
     }
 }

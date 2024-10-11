@@ -1,10 +1,12 @@
+use std::rc::Rc;
+
 use itertools::Itertools;
 use web_sys::WebGl2RenderingContext;
 
 use crate::{
     types::util::drawing::{
         diagram_layout::{Point, Transition},
-        renderers::webgl::text::text_renderer::Text,
+        renderers::{util::Font::Font, webgl::text::text_renderer::Text},
     },
     util::{logging::console, matrix4::Matrix4},
 };
@@ -31,13 +33,13 @@ impl LayerRenderer {
         context: &WebGl2RenderingContext,
         layer_divider: D,
         screen_height: usize,
-        font_data: Vec<u8>,
+        font: Rc<Font>,
         font_settings: TextRendererSettings,
     ) -> LayerRenderer {
         LayerRenderer {
             division_renderer: Box::new(layer_divider),
-            text_size: font_settings.text_size,
-            text_renderer: TextRenderer::new(context, font_data, font_settings, screen_height),
+            text_size: font.text_size(),
+            text_renderer: TextRenderer::new(context, font, font_settings, screen_height),
         }
     }
 

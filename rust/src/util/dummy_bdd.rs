@@ -104,10 +104,11 @@ impl DummyFunction {
             let mut terminals = HashMap::new();
 
             let get_text = |from: &str, to: &str| {
-                Box::new(&data[data.find(from).unwrap() + from.len() + 1..data.find(to).unwrap()])
+                let start = data.find(from).unwrap() + from.len();
+                Box::new(&data[start + 1..start + data[start..].find(to).unwrap()])
             };
 
-            let roots_text = get_text(".rootids", ".rootnames");
+            let roots_text = get_text(".rootids", "\n");
             let roots = roots_text
                 .trim()
                 .split(" ")
@@ -184,7 +185,11 @@ impl DummyFunction {
                 .map(|root| DummyFunction(DummyEdge::new(Arc::new(root), manager_ref.clone())))
                 .collect_vec();
 
-            let var_names_text = get_text(".suppvarnames", ".orderedvarnames");
+            let var_names_text = if data.find(".suppvarnames").is_some() {
+                get_text(".suppvarnames", ".orderedvarnames")
+            } else {
+                get_text(".permids", ".nroots")
+            };
             let var_names = var_names_text
                 .trim()
                 .split(" ")

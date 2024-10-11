@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use oxidd_core::Tag;
 use wasm_bindgen::prelude::*;
@@ -20,16 +20,19 @@ use crate::{
     wasm_interface::NodeGroupID,
 };
 
-use super::webgl::{
-    edge_renderer::{Edge, EdgeRenderer, EdgeRenderingType},
-    layers::{
-        layer_bg_renderer::LayerBgRenderer,
-        layer_lines_renderer::LayerLinesRenderer,
-        layer_renderer::{Layer, LayerRenderer},
+use super::{
+    util::Font::Font,
+    webgl::{
+        edge_renderer::{Edge, EdgeRenderer, EdgeRenderingType},
+        layers::{
+            layer_bg_renderer::LayerBgRenderer,
+            layer_lines_renderer::LayerLinesRenderer,
+            layer_renderer::{Layer, LayerRenderer},
+        },
+        node_renderer::{Node, NodeRenderer, NodeRenderingColorConfig, TextRenderingConfig},
+        text::text_renderer::{Text, TextRenderer, TextRendererSettings},
+        util::render_texture::{RenderTarget, ScreenTexture},
     },
-    node_renderer::{Node, NodeRenderer},
-    text::text_renderer::{Text, TextRenderer, TextRendererSettings},
-    util::render_texture::{RenderTarget, ScreenTexture},
 };
 
 /// A simple renderer that uses webgl to draw nodes and edges
@@ -47,10 +50,9 @@ impl<T: DrawTag> WebglRenderer<T> {
         context: WebGl2RenderingContext,
         screen_texture: ScreenTexture,
         edge_types: HashMap<EdgeType<T>, EdgeRenderingType>,
-        select_color: (Color, f32),
-        partial_select_color: (Color, f32),
-        hover_color: (Color, f32),
-        partial_hover_color: (Color, f32),
+        colors: NodeRenderingColorConfig,
+        font: Rc<Font>,
+        // TODO: add text configuration?
     ) -> Result<WebglRenderer<T>, JsValue> {
         let (edge_type_ids, edge_rendering_types): (
             HashMap<EdgeType<T>, usize>,
@@ -62,27 +64,33 @@ impl<T: DrawTag> WebglRenderer<T> {
                 ((edge_type.clone(), index), edge_rendering.clone())
             })
             .unzip();
+
+        let screen_height = screen_texture.get_size().1;
+        let font_settings = TextRendererSettings::new()
+            .resolution(1.5)
+            .sample_distance(35.)
+            .scale_factor_group_size(3.0)
+            .scale_cache_size(10) // Very large, mostly for testing
+            .max_scale(1.5);
+
         Ok(WebglRenderer {
             node_renderer: NodeRenderer::new(
                 &context,
-                select_color,
-                partial_select_color,
-                hover_color,
-                partial_hover_color,
+                colors,
+                TextRenderingConfig {
+                    screen_height,
+                    font: font.clone(),
+                    font_settings: font_settings.clone(),
+                },
             ),
             edge_renderer: EdgeRenderer::new(&context, edge_rendering_types),
             layer_renderer: LayerRenderer::new(
                 &context,
                 LayerBgRenderer::new(&context),
                 // LayerLinesRenderer::new(&context),
-                screen_texture.get_size().1,
-                include_bytes!("../../../../../resources/Roboto-Bold.ttf").to_vec(),
-                TextRendererSettings::new()
-                    .resolution(1.5)
-                    .sample_distance(35.)
-                    .scale_factor_group_size(3.0)
-                    .scale_cache_size(10) // Very large, mostly for testing
-                    .max_scale(1.5),
+                screen_height,
+                font,
+                font_settings,
             ),
             webgl_context: context,
             screen_texture,
@@ -92,10 +100,8 @@ impl<T: DrawTag> WebglRenderer<T> {
     pub fn from_canvas(
         canvas: HtmlCanvasElement,
         edge_types: HashMap<EdgeType<T>, EdgeRenderingType>,
-        select_color: (Color, f32),
-        partial_select_color: (Color, f32),
-        hover_color: (Color, f32),
-        partial_hover_color: (Color, f32),
+        colors: NodeRenderingColorConfig,
+        font: Rc<Font>,
     ) -> Result<WebglRenderer<T>, JsValue> {
         let context = canvas
             .get_context("webgl2")
@@ -116,10 +122,8 @@ impl<T: DrawTag> WebglRenderer<T> {
                 (1.0, 1.0, 1.0, 1.0),
             ),
             edge_types,
-            select_color,
-            partial_select_color,
-            hover_color,
-            partial_hover_color,
+            colors,
+            font,
         )
     }
 }
@@ -136,7 +140,7 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
             .set_size(transform.width as usize, height);
         let matrix = transform.get_matrix();
         self.node_renderer
-            .set_transform(&self.webgl_context, &matrix);
+            .set_transform_and_screen_height(&self.webgl_context, &matrix, height);
         self.edge_renderer
             .set_transform(&self.webgl_context, &matrix);
         self.layer_renderer
@@ -152,7 +156,18 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
                     // console::log!("pos: {}, {}", group.position, group.size * 0.5);
                     Node {
                         ID: *id,
-                        center_position: &group.position + &(&group.size * 0.5),
+                        center_position: &group.position
+                            + &Transition {
+                                new: Point {
+                                    y: 0.5 * group.size.new.y,
+                                    x: 0.,
+                                },
+                                old: Point {
+                                    y: 0.5 * group.size.old.y,
+                                    x: 0.,
+                                },
+                                ..group.size
+                            },
                         size: group.size,
                         label: group.label.clone(),
                         exists: group.exists,

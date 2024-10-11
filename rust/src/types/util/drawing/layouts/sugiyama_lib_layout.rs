@@ -21,7 +21,7 @@ use super::{
     layer_group_sorting::average_group_alignment::AverageGroupAlignment,
     layer_orderings::dummy_layer_ordering::DummyLayerOrdering,
     layered_layout::LayeredLayout,
-    layered_layout_traits::NodePositioning,
+    layered_layout_traits::{NodePositioning, WidthLabel},
     util::{
         color_label::ColorLabel,
         layered::layer_orderer::{EdgeMap, Order},
@@ -45,8 +45,11 @@ impl<T: DrawTag, GL, LL> SugiyamaLibLayout<T, GL, LL> {
     }
 }
 
-impl<T: DrawTag, GL: ColorLabel, G: GroupedGraphStructure<T, GL, String>>
-    LayoutRules<T, GL, String, G> for SugiyamaLibLayout<T, GL, String>
+impl<
+        T: DrawTag,
+        GL: ColorLabel + Into<Option<String>> + WidthLabel,
+        G: GroupedGraphStructure<T, GL, String>,
+    > LayoutRules<T, GL, String, G> for SugiyamaLibLayout<T, GL, String>
 {
     fn layout(
         &mut self,
@@ -65,6 +68,7 @@ impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for SugiyamaLibPositioning {
         graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
+        node_widths: &HashMap<NodeGroupID, f32>,
         dummy_group_start_id: NodeGroupID,
         dummy_edge_start_id: NodeGroupID,
         owners: &HashMap<NodeGroupID, NodeGroupID>,

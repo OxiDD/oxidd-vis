@@ -24,11 +24,14 @@ use web_sys::WebGl2RenderingContext;
 use crate::{
     types::util::drawing::{
         diagram_layout::{Point, Transition},
-        renderers::webgl::{
-            text::triangulate::triangulate,
-            util::{
-                render_texture::{RenderTarget, RenderTexture},
-                vertex_renderer::VertexRenderer,
+        renderers::{
+            util::Font::Font,
+            webgl::{
+                text::triangulate::triangulate,
+                util::{
+                    render_texture::{RenderTarget, RenderTexture},
+                    vertex_renderer::VertexRenderer,
+                },
             },
         },
     },
@@ -47,8 +50,7 @@ pub struct TextRenderer {
     screen_height: f32,
 
     // Font helpers
-    _font_data: Box<[u8]>,
-    font: FontRef<'static>,
+    font: Rc<Font>,
     _char_scaler_context: Box<ScaleContext>,
     char_scaler: Scaler<'static>,
 }
@@ -72,7 +74,7 @@ pub struct Text {
 impl TextRenderer {
     pub fn new(
         context: &WebGl2RenderingContext,
-        font_data: Vec<u8>,
+        font: Rc<Font>,
         settings: TextRendererSettings,
         screen_height: usize,
     ) -> TextRenderer {
@@ -90,17 +92,15 @@ impl TextRenderer {
         .unwrap();
 
         // Every time unsafe is used, we make sure we own the data in this struct first, and don't leak any data outside
-        let font_data: Box<[u8]> = font_data.into_boxed_slice();
-        let font_data_ref = unsafe { std::mem::transmute::<&[u8], &'static [u8]>(&*font_data) };
-        let font = FontRef::from_index(&font_data_ref[..], 0).unwrap();
+
         // let charmap = CharmapProxy::from_font(&font).materialize(&font);
 
-        let (scaler_context, scaler) = create_scaler(screen_height, font, &settings);
+        let (scaler_context, scaler) =
+            create_scaler(screen_height, (*font).as_ref().clone(), &settings);
         TextRenderer {
             vertex_renderer,
             char_renderer,
             atlases: LruCache::new(NonZeroUsize::new(settings.scale_cache_size as usize).unwrap()),
-            _font_data: font_data,
             settings,
             cur_scale_index: -20,
             cur_text: Vec::new(),
@@ -112,6 +112,11 @@ impl TextRenderer {
         }
     }
 
+    // Gets font size
+    pub fn get_text_size(&self) -> f32 {
+        self.font.text_size()
+    }
+
     fn get_cur_atlas(&mut self) -> &mut Atlas {
         self.atlases.get_mut(&self.cur_scale_index).unwrap()
     }
@@ -119,7 +124,7 @@ impl TextRenderer {
         self.get_scale_from_index(self.cur_scale_index)
     }
     fn get_draw_scale(&self) -> f32 {
-        self.settings.text_size
+        self.font.text_size()
     }
     fn get_atlas_resolution(&self) -> f32 {
         self.screen_height * self.settings.resolution * self.settings.scale_factor_group_size
@@ -333,8 +338,8 @@ impl TextRenderer {
             .flat_map(|text| {
                 let mut shaper_context = Box::new(ShapeContext::new());
                 let mut shaper = shaper_context
-                    .builder(self.font)
-                    .size(self.settings.text_size)
+                    .builder((*self.font).as_ref().clone())
+                    .size(self.font.text_size())
                     .build();
 
                 shaper.add_str(&text.text);
@@ -362,7 +367,7 @@ impl TextRenderer {
             .map(|&(glyph_id, _, _)| glyph_id)
             .collect::<HashSet<GlyphId>>();
 
-        let charmap = self.font.charmap();
+        let charmap = (*self.font).as_ref().charmap();
         for char in self.settings.default_chars.chars() {
             glyphs.insert(charmap.map(char));
         }
@@ -507,7 +512,8 @@ impl TextRenderer {
         let height_change = self.screen_height != height;
         if height_change {
             self.atlases.clear();
-            let (scaler_context, scaler) = create_scaler(screen_height, self.font, &self.settings);
+            let (scaler_context, scaler) =
+                create_scaler(screen_height, (*self.font).as_ref().clone(), &self.settings);
             self.char_scaler = scaler;
             self._char_scaler_context = scaler_context;
             self.screen_height = height;
@@ -532,7 +538,7 @@ impl TextRenderer {
         if cur_index != scale_index || height_change {
             self.cur_scale_index = scale_index;
 
-            let charmap = self.font.charmap();
+            let charmap = (*self.font).as_ref().charmap();
             let chars = self
                 .cur_text
                 .iter()
@@ -586,17 +592,6 @@ impl TextRenderer {
         }
     }
 
-    // pub fn set_screen_height(&mut self, context: &WebGl2RenderingContext, height: usize) {
-    //     let (scaler_context, scaler) = create_scaler(height, self.font, &self.settings);
-    //     self.char_scaler = scaler;
-    //     self._char_scaler_context = scaler_context;
-    //     self.screen_height = height as f32;
-
-    //     let chars = self.get_current_chars();
-    //     self.update_chars(context, chars.into_iter().collect());
-    //     self.set_texts(context, &self.cur_text.clone());
-    // }
-
     pub fn dispose(&mut self, context: &WebGl2RenderingContext) {
         self.vertex_renderer.dispose(context);
         self.char_renderer.dispose(context);
@@ -616,8 +611,6 @@ pub struct TextRendererSettings {
     pub resolution: f32,
     /// The base of the range of scales that use the same rendering quality: scale in [scale_step^i..scale_step^{i+1})
     pub scale_factor_group_size: f32,
-    /// The relative screen size to render the text at
-    pub text_size: f32,
     /// The sample distance between points expressed in relation to the resolution (i.e. in terms of the distance between pixels if a character is rendered at full resolution)
     pub sample_distance: f32,
     /// The maximum rendering scale to use for the atlas, above which rendering quality won't be increased anymore
@@ -641,7 +634,6 @@ impl TextRendererSettings {
         TextRendererSettings {
             resolution: 1080.,
             scale_factor_group_size: 2.0,
-            text_size: 1.0,
             sample_distance: 25.,
             max_scale: 1.0,
             max_sample_scale: 1.0,
@@ -658,10 +650,6 @@ impl TextRendererSettings {
     }
     pub fn scale_factor_group_size(mut self, scale_factor_group_size: f32) -> TextRendererSettings {
         self.scale_factor_group_size = scale_factor_group_size;
-        self
-    }
-    pub fn text_size(mut self, text_size: f32) -> TextRendererSettings {
-        self.text_size = text_size;
         self
     }
     pub fn sample_distance(mut self, sample_distance: f32) -> TextRendererSettings {

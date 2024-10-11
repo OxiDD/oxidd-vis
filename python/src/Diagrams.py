@@ -63,8 +63,6 @@ class Diagrams:
                 except Exception as error: logging.exception(error)
         except Exception as error: logging.exception(error)
 
-        print("Saving")
-
         outDiagrams = []
         for diagramData in self.diagrams:
             diagramFilePath = diagramData["name"]+".txt"
@@ -85,7 +83,5 @@ class Diagrams:
 
         with open(self.filePath, "w+") as diagramsFile:
             diagramsFile.write(json.dumps(outDiagrams))
-
-        print("Saved")
 
         

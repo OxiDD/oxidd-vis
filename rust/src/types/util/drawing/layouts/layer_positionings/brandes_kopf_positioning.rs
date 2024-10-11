@@ -29,12 +29,13 @@ use crate::{
 
 pub struct BrandesKopfPositioning;
 
-impl<T: DrawTag, GL: WidthLabel, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
+impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
     fn position_nodes(
         &self,
         graph: &impl GroupedGraphStructure<T, GL, LL>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
+        node_widths: &HashMap<NodeGroupID, f32>,
         dummy_group_start_id: NodeGroupID,
         dummy_edge_start_id: NodeGroupID,
         owners: &HashMap<NodeGroupID, NodeGroupID>,
@@ -52,10 +53,11 @@ impl<T: DrawTag, GL: WidthLabel, LL> NodePositioning<T, GL, LL> for BrandesKopfP
         let x_coords = balanced_layout(
             layers,
             &edges,
+            node_widths,
             dummy_group_start_id,
             dummy_edge_start_id,
             owners,
-            spacing,
+            spacing - 1.0, // Subtract 1.0 to account for default node width
         );
         (
             layers
@@ -125,6 +127,7 @@ fn remove_internal_group_to_other_edges(
 fn balanced_layout(
     layers: &Vec<Order>,
     edges: &EdgeMap,
+    node_widths: &HashMap<NodeGroupID, f32>,
     dummy_group_start_id: NodeGroupID,
     dummy_edge_start_id: NodeGroupID,
     owners: &HashMap<NodeGroupID, NodeGroupID>,
@@ -145,6 +148,7 @@ fn balanced_layout(
     let left_down_layout = shift_layout(&compact_horizontally(
         layers,
         &left_up_edges,
+        node_widths,
         dummy_group_start_id,
         dummy_edge_start_id,
         owners,
@@ -153,6 +157,7 @@ fn balanced_layout(
     let left_up_layout = shift_layout(&compact_horizontally(
         &up_layers,
         &left_down_edges,
+        node_widths,
         dummy_group_start_id,
         dummy_edge_start_id,
         owners,
@@ -162,6 +167,7 @@ fn balanced_layout(
     let right_down_layout = shift_layout(&compact_horizontally(
         &right_layers,
         &right_up_edges,
+        node_widths,
         dummy_group_start_id,
         dummy_edge_start_id,
         owners,
@@ -173,6 +179,7 @@ fn balanced_layout(
     let right_up_layout = shift_layout(&compact_horizontally(
         &right_up_layers,
         &right_down_edges,
+        node_widths,
         dummy_group_start_id,
         dummy_edge_start_id,
         owners,
@@ -224,6 +231,7 @@ fn get_reverse_layers(layers: &Vec<Order>) -> Vec<Order> {
 fn compact_horizontally(
     layers: &Vec<Order>,
     reverse_edges: &OrderedEdgeMap,
+    node_widths: &HashMap<NodeGroupID, f32>,
     dummy_group_start_id: NodeGroupID,
     dummy_edge_start_id: NodeGroupID,
     owners: &HashMap<NodeGroupID, NodeGroupID>,
@@ -255,7 +263,14 @@ fn compact_horizontally(
     for &node in all_nodes.clone() {
         if alignment.root[&node] == node {
             place_block(
-                node, &mut sink, &mut shift, &mut x, &pred, &alignment, spacing,
+                node,
+                &mut sink,
+                &mut shift,
+                &mut x,
+                &alignment,
+                &pred,
+                node_widths,
+                spacing,
             );
         }
     }
@@ -279,8 +294,9 @@ fn place_block(
     sink: &mut HashMap<NodeGroupID, NodeGroupID>,
     shift: &mut HashMap<NodeGroupID, f32>,
     x: &mut HashMap<NodeGroupID, f32>,
-    pred: &HashMap<NodeGroupID, NodeGroupID>,
     alignment: &VerticalAlignment,
+    pred: &HashMap<NodeGroupID, NodeGroupID>,
+    node_widths: &HashMap<NodeGroupID, f32>,
     spacing: f32,
 ) {
     if !x.contains_key(&root_node) {
@@ -288,14 +304,27 @@ fn place_block(
         let mut node = root_node; // node is iterated over from the root down
         loop {
             if pred.contains_key(&node) {
-                let pred_root = alignment.root[&pred[&node]];
-                place_block(pred_root, sink, shift, x, pred, alignment, spacing);
+                let pred_node = pred[&node];
+
+                let node_spacing = spacing + 0.5 * (node_widths[&node] + node_widths[&pred_node]);
+
+                let pred_root = alignment.root[&pred_node];
+                place_block(
+                    pred_root,
+                    sink,
+                    shift,
+                    x,
+                    alignment,
+                    pred,
+                    node_widths,
+                    spacing,
+                );
                 let pred_sink = sink[&pred_root];
                 if sink[&root_node] == root_node {
                     sink.insert(root_node, pred_sink);
                 }
                 if sink[&root_node] != pred_sink {
-                    let delta = x[&root_node] - x[&pred_root] - spacing;
+                    let delta = x[&root_node] - x[&pred_root] - node_spacing;
                     shift.insert(
                         pred_sink,
                         if shift.contains_key(&pred_sink) {
@@ -305,7 +334,10 @@ fn place_block(
                         },
                     );
                 } else {
-                    x.insert(root_node, f32::max(x[&root_node], x[&pred_root] + spacing));
+                    x.insert(
+                        root_node,
+                        f32::max(x[&root_node], x[&pred_root] + node_spacing),
+                    );
                 }
             }
             node = alignment.align[&node];

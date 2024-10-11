@@ -39,7 +39,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> LayoutRules<T, GL,
                         let height: f32 = (random() * 1. + 0.5) as f32;
 
                         NodeGroupLayout {
-                            label: group_id.to_string(),
+                            label: None,
                             // center_position: Transition::plain(Point { x, y }),
                             position: Transition {
                                 old: Point { x: 0.0, y: 0.0 },

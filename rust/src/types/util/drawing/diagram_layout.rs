@@ -192,9 +192,10 @@ where
 
 #[derive(Clone)]
 pub struct NodeGroupLayout<T: DrawTag> {
-    pub position: Transition<Point>, // Bottom left point
+    /// Bottom center point of the node
+    pub position: Transition<Point>,
     pub size: Transition<Point>,
-    pub label: String,
+    pub label: Option<String>,
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
     pub edges: HashMap<EdgeData<T>, EdgeLayout>,
     pub level_range: (LevelNo, LevelNo),
