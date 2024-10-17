@@ -99,7 +99,7 @@ impl DummyFunction {
     pub fn from_dddmp(
         manager_ref: &mut DummyManagerRef,
         data: &str,
-    ) -> (Vec<DummyFunction>, Vec<String>) {
+    ) -> (Vec<(DummyFunction, Vec<String>)>, Vec<String>) {
         manager_ref.with_manager_exclusive(|manager| {
             let mut terminals = HashMap::new();
 
@@ -114,6 +114,21 @@ impl DummyFunction {
                 .split(" ")
                 .flat_map(|n| n.parse::<usize>())
                 .collect_vec();
+            let root_names = if data.find(".rootnames").is_some() {
+                let roots_names_text = get_text(".rootnames", "\n");
+                roots_names_text
+                    .trim()
+                    .split(" ")
+                    .map(|t| t.to_string())
+                    .collect_vec()
+            } else {
+                roots
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| format!("f{i}"))
+                    .collect_vec()
+            };
+
             let node_text = get_text(".nodes", ".end");
             let nodes_data = node_text.split("\n").filter_map(|node| {
                 let parts = node.trim().split(" ").collect::<Vec<&str>>();
@@ -180,10 +195,20 @@ impl DummyFunction {
 
             manager.init_terminals(terminals);
 
-            let funcs = roots
-                .into_iter()
-                .map(|root| DummyFunction(DummyEdge::new(Arc::new(root), manager_ref.clone())))
-                .collect_vec();
+            let mut func_map = HashMap::<NodeID, (DummyFunction, Vec<String>)>::new();
+            for (root, name) in roots.into_iter().zip(root_names.into_iter()) {
+                func_map
+                    .entry(root)
+                    .or_insert_with(|| {
+                        (
+                            DummyFunction(DummyEdge::new(Arc::new(root), manager_ref.clone())),
+                            vec![],
+                        )
+                    })
+                    .1
+                    .push(name.to_string());
+            }
+            let funcs = func_map.values().cloned().collect_vec();
 
             let var_names_text = if data.find(".suppvarnames").is_some() {
                 get_text(".suppvarnames", ".orderedvarnames")
@@ -202,9 +227,10 @@ impl DummyFunction {
         manager_ref: &mut DummyManagerRef,
         data: &str,
         var_data: Option<&str>,
-    ) -> (Vec<DummyFunction>, Vec<String>) {
+    ) -> (Vec<(DummyFunction, Vec<String>)>, Vec<String>) {
         manager_ref.with_manager_exclusive(|manager| {
             let mut variables = Vec::new();
+            let mut layer_levels = Vec::<usize>::new(); // Specifies per "layer", what level it should have. Variable names and nodes refer to layers, not levels.
             let mut referenced = HashSet::<usize>::new();
             let mut defined = HashSet::<usize>::new();
             let mut root = None;
@@ -213,14 +239,27 @@ impl DummyFunction {
                 match line {
                     0 => {}
                     1 => {
-                        let order = text.split(" ").filter_map(|v| v.parse::<usize>().ok());
+                        layer_levels = text
+                            .trim()
+                            .split(" ")
+                            .filter_map(|v| v.parse::<usize>().ok())
+                            .collect();
+                        let mut order = vec![0; layer_levels.len()];
+                        for (layer, &index) in layer_levels.iter().enumerate() {
+                            order[index] = layer;
+                        }
+
                         variables = match var_data {
-                            Some(vars) => vars.split("\n").map(|v| v.trim().to_string()).collect(),
-                            _ => order.map(|v| format!("{}", v)).collect(),
+                            Some(vars) => {
+                                let var_names =
+                                    vars.split("\n").map(|v| v.trim().to_string()).collect_vec();
+                                order.iter().map(|&i| var_names[i].clone()).collect()
+                            }
+                            _ => order.iter().map(|v| format!("{}", v)).collect(),
                         };
                     }
                     _ => {
-                        let parts = text.split(" ").collect_vec();
+                        let parts = text.trim().split(" ").collect_vec();
                         if parts.len() != 4 {
                             continue;
                         }
@@ -228,9 +267,10 @@ impl DummyFunction {
                         let Ok(id) = parts[0].parse::<usize>() else {
                             continue;
                         };
-                        let Ok(level) = parts[1].parse::<u32>() else {
+                        let Ok(layer) = parts[1].parse::<usize>() else {
                             continue;
                         };
+                        let level = layer_levels.get(layer).cloned().unwrap_or(0) as u32;
                         let Ok(false_branch) = parts[2].parse::<usize>() else {
                             continue;
                         };
@@ -238,6 +278,7 @@ impl DummyFunction {
                             continue;
                         };
 
+                        console::log!("{} {} {} {}", id, level, false_branch, true_branch);
                         manager.add_node_level(id, level, None);
                         manager.add_edge(id, false_branch, manager_ref.clone());
                         manager.add_edge(id, true_branch, manager_ref.clone());
@@ -276,9 +317,14 @@ impl DummyFunction {
             manager.init_terminals(terminals);
 
             (
-                root.map(|root| DummyFunction(DummyEdge::new(Arc::new(root), manager_ref.clone())))
-                    .into_iter()
-                    .collect(),
+                root.map(|root| {
+                    (
+                        DummyFunction(DummyEdge::new(Arc::new(root), manager_ref.clone())),
+                        vec!["f".to_string()],
+                    )
+                })
+                .into_iter()
+                .collect(),
                 variables,
             )
         })

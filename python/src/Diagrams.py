@@ -2,12 +2,14 @@ import json
 import os
 import time
 import logging
+import threading
 
 class Diagrams:
     def __init__(self, path):
         self.filePath = os.path.join(os.getcwd(), path)
         self.dir = os.path.split(self.filePath)[0]
         os.makedirs(self.dir, exist_ok=True)
+        self.saveLock = threading.Lock()
         self.loadFromFile()
 
     def loadFromFile(self):
@@ -55,33 +57,34 @@ class Diagrams:
         self.diagrams = [d for d in self.diagrams if d["name"]!=name]
 
     def saveToFile(self):
-        try: 
-            for diagramData in json.load(open(self.filePath, "r")):
-                try:
-                    os.remove(os.path.join(self.dir, diagramData["diagram"]))
-                    os.remove(os.path.join(self.dir, diagramData["state"]))
-                except Exception as error: logging.exception(error)
-        except Exception as error: logging.exception(error)
+        with self.saveLock:
+            try: 
+                for diagramData in json.load(open(self.filePath, "r")):
+                    try:
+                        os.remove(os.path.join(self.dir, diagramData["state"]))
+                        os.remove(os.path.join(self.dir, diagramData["diagram"]))
+                    except Exception as error: logging.exception(error)
+            except Exception as error: logging.exception(error)
 
-        outDiagrams = []
-        for diagramData in self.diagrams:
-            diagramFilePath = diagramData["name"]+".txt"
-            with open(os.path.join(self.dir, diagramFilePath), "w+", encoding='utf-8') as diagramFile:
-                diagramFile.write(diagramData["diagram"])
+            outDiagrams = []
+            for diagramData in self.diagrams:
+                diagramFilePath = diagramData["name"]+".dddmp"
+                with open(os.path.join(self.dir, diagramFilePath), "w+", encoding='utf-8') as diagramFile:
+                    diagramFile.write(diagramData["diagram"])
 
-            stateFilePath = diagramData["name"]+"_state.json"
-            with open(os.path.join(self.dir, stateFilePath), "w+", encoding='utf-8') as stateFile:
-                stateFile.write(diagramData["state"])
+                stateFilePath = diagramData["name"]+"_state.json"
+                with open(os.path.join(self.dir, stateFilePath), "w+", encoding='utf-8') as stateFile:
+                    stateFile.write(diagramData["state"])
 
-            outDiagrams.append({
-                "name": diagramData["name"], 
-                "type": diagramData["type"],
-                "date": diagramData["date"],
-                "diagram": diagramFilePath,
-                "state": stateFilePath
-            })
+                outDiagrams.append({
+                    "name": diagramData["name"], 
+                    "type": diagramData["type"],
+                    "date": diagramData["date"],
+                    "diagram": diagramFilePath,
+                    "state": stateFilePath
+                })
 
-        with open(self.filePath, "w+") as diagramsFile:
-            diagramsFile.write(json.dumps(outDiagrams))
+            with open(self.filePath, "w+") as diagramsFile:
+                diagramsFile.write(json.dumps(outDiagrams))
 
         

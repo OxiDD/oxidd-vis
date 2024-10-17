@@ -41,6 +41,7 @@ impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
         owners: &HashMap<NodeGroupID, NodeGroupID>,
     ) -> (HashMap<NodeGroupID, Point>, HashMap<LevelNo, f32>) {
         let spacing = 2.0;
+        let layer_coord = |index: usize| (0.5 * (layers.len() as f32) - (index as f32)) * spacing;
 
         // Remove edges between dummy group nodes and nodes from other groups, such that node positioning will align these items
         let edges = remove_internal_group_to_other_edges(
@@ -63,8 +64,8 @@ impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
             layers
                 .iter()
                 .enumerate()
-                .flat_map(|(index, layer)| {
-                    let y_coord = (layers.len() - index) as f32 * spacing;
+                .flat_map(|(level, layer)| {
+                    let y_coord = layer_coord(level);
                     let x_coords = &x_coords; // create a new ref that can be moved
                     layer.keys().map(move |node| {
                         (
@@ -80,7 +81,7 @@ impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
             layers
                 .iter()
                 .enumerate()
-                .map(|(level, _)| (level as u32, (layers.len() - level) as f32 * spacing))
+                .map(|(level, _)| (level as u32, layer_coord(level)))
                 .collect(),
         )
     }

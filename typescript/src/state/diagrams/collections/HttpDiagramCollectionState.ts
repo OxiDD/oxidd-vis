@@ -139,17 +139,17 @@ export class HttpDiagramCollectionState
                         d => d.sourceName.get() == name
                     );
                     if (diagram != false) {
+                        oldDiagramState?.dispose();
                         const diagramBox = createDiagramBox(type);
                         const diagramState = new DiagramState(diagramBox, type);
                         push(diagramState.sourceName.set(name));
-                        push(diagramState.name.set(name));
+                        push(diagramState.name.set(name + " diagram"));
                         if (state != false) {
                             push(diagramState.deserialize(JSON.parse(state)));
                         } else {
-                            push(diagramState.createSectionFromDDDMP(diagram));
+                            push(diagramState.createSectionFromDDDMP(diagram, name));
                         }
                         newDiagrams.push(diagramState);
-                        oldDiagramState?.dispose();
                     } else if (oldDiagramState) {
                         newDiagrams.push(oldDiagramState);
                     }

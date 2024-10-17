@@ -56,7 +56,7 @@ export const Sidebar: FC<{state: AppState; projectUrl: string}> = ({
                         }
                     />
                 </StyledTooltipHost>
-                <StyledTooltipHost
+                {/* <StyledTooltipHost
                     content="Github repository"
                     directionalHint={DirectionalHint.rightCenter}
                     id={githubId}>
@@ -77,7 +77,7 @@ export const Sidebar: FC<{state: AppState; projectUrl: string}> = ({
                         aria-label="Github"
                         href={projectUrl}
                     />
-                </StyledTooltipHost>
+                </StyledTooltipHost> */}
             </div>
             <div
                 style={{

@@ -39,11 +39,15 @@ export const App: FC = () => {
         console.log(appState);
 
         const configuration = appState.configuration;
-        configuration.loadProfilesData().commit();
+        const loaded = configuration.loadProfilesData().commit();
+        if (!loaded) {
+            // Open the info screen on first use
+            appState.views.open(appState).commit();
+        }
 
-        window.addEventListener("beforeunload", () =>
-            appState.configuration.saveProfile().commit()
-        );
+        window.addEventListener("beforeunload", () => {
+            appState.configuration.saveProfile().commit();
+        });
         return appState;
     }, []);
 

@@ -44,7 +44,7 @@ uniform mat4 transform;
 uniform float time;
 
 float getPer(vec2 transition) {
-    return min((time - transition.x) / transition.y, 1.0f);
+    return max(0.0f, min((time - transition.x) / transition.y, 1.0f));
 }
 
 void main() {

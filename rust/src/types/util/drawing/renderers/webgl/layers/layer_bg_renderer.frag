@@ -10,5 +10,7 @@ uniform vec4 color2;
 out vec4 outColor;
 
 void main() {
-    outColor = vec4(sqrt(mix(color1.rgb * color1.rgb, color2.rgb * color2.rgb, curType)), curExists * mix(color1.a, color2.a, curType));
+    vec3 color = sqrt(mix(color1.rgb * color1.rgb, color2.rgb * color2.rgb, curType));
+    float alpha = curExists * mix(color1.a, color2.a, curType);
+    outColor = vec4(color * alpha, alpha);
 }

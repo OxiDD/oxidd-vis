@@ -73,6 +73,13 @@ impl<T: DrawTag> WebglRenderer<T> {
             .scale_cache_size(10) // Very large, mostly for testing
             .max_scale(1.5);
 
+        // context.enable(WebGl2RenderingContext::DEPTH_TEST);
+        context.enable(WebGl2RenderingContext::BLEND);
+        context.blend_func(
+            WebGl2RenderingContext::ONE,
+            WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA,
+        );
+
         Ok(WebglRenderer {
             node_renderer: NodeRenderer::new(
                 &context,
@@ -109,11 +116,6 @@ impl<T: DrawTag> WebglRenderer<T> {
             .unwrap()
             .dyn_into::<WebGl2RenderingContext>()
             .unwrap();
-        context.blend_func(
-            WebGl2RenderingContext::SRC_ALPHA,
-            WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA,
-        );
-        context.enable(WebGl2RenderingContext::BLEND);
         WebglRenderer::new(
             context,
             ScreenTexture::new(

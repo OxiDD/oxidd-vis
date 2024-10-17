@@ -11,8 +11,11 @@ use oxidd_core::{DiagramRules, HasLevel, Node};
 
 use crate::{types::util::storage::state_storage::StateStorage, util::logging::console};
 
-use super::graph_structure::{
-    Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
+use super::{
+    graph_manipulators::pointer_node_adjuster::WithPointerLabels,
+    graph_structure::{
+        Change, DrawTag, EdgeType, GraphEventsReader, GraphEventsWriter, GraphStructure,
+    },
 };
 
 pub struct OxiddGraphStructure<DT: DrawTag, F: Function, T, S: Fn(&T) -> String>
@@ -21,6 +24,7 @@ where
 {
     roots: Vec<F>,
     node_by_id: HashMap<NodeID, F>,
+    pointers: HashMap<NodeID, Vec<String>>,
     node_parents: HashMap<NodeID, HashSet<(EdgeType<DT>, NodeID)>>,
     terminal_to_string: S,
     level_labels: Vec<String>,
@@ -29,7 +33,18 @@ where
 }
 
 #[derive(Clone)]
-pub enum NodeLabel<T> {
+pub struct NodeLabel<T> {
+    pub pointers: Vec<String>,
+    pub kind: NodeType<T>,
+}
+impl<T> WithPointerLabels for NodeLabel<T> {
+    fn get_pointer_labels(&self) -> Vec<String> {
+        self.pointers.clone()
+    }
+}
+
+#[derive(Clone)]
+pub enum NodeType<T> {
     Inner(String),
     Terminal(T),
 }
@@ -39,21 +54,30 @@ where
     for<'id> F::Manager<'id>: Manager<EdgeTag = DT, Terminal = T>,
 {
     pub fn new(
-        roots: Vec<F>,
+        roots: Vec<(F, Vec<String>)>,
         level_labels: Vec<String>,
         terminal_to_string: S,
     ) -> OxiddGraphStructure<DT, F, T, S> {
         OxiddGraphStructure {
             node_by_id: roots
                 .iter()
-                .map(|root| {
+                .map(|(root, _)| {
                     (
-                        root.with_manager_shared(|manager, edge| edge.node_id()),
+                        root.with_manager_shared(|_, edge| edge.node_id()),
                         root.clone(),
                     )
                 })
                 .collect(),
-            roots,
+            roots: roots.iter().map(|(f, _)| f.clone()).collect(),
+            pointers: roots
+                .iter()
+                .map(|(f, pointers)| {
+                    (
+                        f.with_manager_shared(|_, edge| edge.node_id()),
+                        pointers.clone(),
+                    )
+                })
+                .collect(),
             level_labels,
             node_parents: HashMap::new(),
             terminal_to_string,
@@ -182,13 +206,18 @@ where
     }
 
     fn get_node_label(&self, node: NodeID) -> NodeLabel<String> {
-        if let Some(node) = self.get_node_by_id(node) {
-            return node.with_manager_shared(|manager, edge| match manager.get_node(edge) {
-                Node::Inner(n) => NodeLabel::Inner(edge.node_id().to_string()),
-                Node::Terminal(t) => NodeLabel::Terminal((&self.terminal_to_string)(t.borrow())),
-            });
+        let kind = if let Some(node) = self.get_node_by_id(node) {
+            node.with_manager_shared(|manager, edge| match manager.get_node(edge) {
+                Node::Inner(n) => NodeType::Inner(edge.node_id().to_string()),
+                Node::Terminal(t) => NodeType::Terminal((&self.terminal_to_string)(t.borrow())),
+            })
         } else {
-            NodeLabel::Inner("Not found".to_string())
+            NodeType::Inner("Not found".to_string())
+        };
+
+        NodeLabel {
+            pointers: self.pointers.get(&node).cloned().unwrap_or_else(|| vec![]),
+            kind,
         }
     }
 

@@ -8,6 +8,7 @@ use swash::{
 
 use crate::util::logging::console;
 
+const SCALERES: f32 = 200.;
 pub struct Font {
     _font_data: Box<[u8]>,
     font: FontRef<'static>,
@@ -41,8 +42,34 @@ impl Font {
         res
     }
 
+    pub fn measure_height(&self, text: &str) -> f32 {
+        let mut scaler_context = Box::new(ScaleContext::new());
+        let scaler_context_ref = unsafe {
+            std::mem::transmute::<&mut ScaleContext, &'static mut ScaleContext>(
+                scaler_context.as_mut(),
+            )
+        };
+        let mut scaler = scaler_context_ref
+            .builder(self.font)
+            .size(self.text_size * SCALERES)
+            .build();
+
+        let charmap = self.font.charmap();
+        let glyphs = text.chars().map(|char| charmap.map(char));
+        let max_height = glyphs
+            .filter_map(|glyph| Some(scaler.scale_outline(glyph)?.bounds().height()))
+            .reduce(|a, b| a.max(b));
+        max_height
+            .map(|max| max / SCALERES)
+            .unwrap_or(self.text_size)
+    }
+
     pub fn text_size(&self) -> f32 {
         self.text_size
+    }
+
+    pub fn with_text_size(&self, size: f32) -> Self {
+        Self::new(self._font_data.clone().into(), size)
     }
 }
 

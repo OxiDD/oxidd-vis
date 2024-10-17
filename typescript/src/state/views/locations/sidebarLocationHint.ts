@@ -8,7 +8,7 @@ export const sidebarLocationHint: IViewLocationHint[] = [
     },
     {
         createId: "sidebar",
-        targetId: "main",
+        targetId: "default",
         weightRatio: 0.7,
         side: "west",
     },

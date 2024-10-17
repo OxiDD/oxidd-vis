@@ -43,7 +43,7 @@ export class ToolbarState extends ViewState implements ITool {
         } as const,
         {
             createId: "toolbar",
-            targetId: "main",
+            targetId: "default",
             weightRatio: 0.2,
             side: "north",
         } as const,

@@ -58,5 +58,6 @@ void main() {
         }
     }
 
-    outColor = vec4(curColor.rgb, curColor.a * curExists * alpha);
+    float a = max(0.0f, curColor.a * curExists * alpha);
+    outColor = vec4(curColor.rgb * a, a);
 }

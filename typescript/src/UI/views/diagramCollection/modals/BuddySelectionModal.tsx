@@ -34,10 +34,10 @@ export const BuddySelectionModal: FC<{
         }
 
         for (const {data, name, type} of files) {
-            if (type == "out") {
+            if (type == "bdd") {
                 setFileTitle(name);
                 setTextContent(data);
-            } else if (type == "outv") {
+            } else if (type == "bddv") {
                 setVarsTextContent(data);
             }
         }
@@ -103,20 +103,20 @@ export const BuddySelectionModal: FC<{
                     <FileLoader
                         key={fileID}
                         onLoad={onPrimaryFileSelect}
-                        accept=".out,.outv"
+                        accept=".bdd,.bddv"
                         expanded={selected == "file"}
                     />
-                    {selectedFileType == "out" && (
+                    {selectedFileType == "bdd" && (
                         <FileLoader
                             onLoad={onSecondaryFileSelect}
-                            accept=".outv"
+                            accept=".bddv"
                             expanded={selected == "file"}
                         />
                     )}
-                    {selectedFileType == "outv" && (
+                    {selectedFileType == "bddv" && (
                         <FileLoader
                             onLoad={onSecondaryFileSelect}
-                            accept=".out"
+                            accept=".bdd"
                             expanded={selected == "file"}
                         />
                     )}

@@ -175,7 +175,6 @@ impl NodeRenderer {
         self.outline_vertex_renderer.send_data(context);
 
         // Text
-        let text_height = self.text_renderer.get_text_size();
         self.text_renderer.set_texts(
             context,
             &nodes
@@ -183,6 +182,7 @@ impl NodeRenderer {
                 .filter_map(|node| {
                     node.label.clone().map(|text| {
                         let text_width = self.font.measure_width(&text);
+                        let text_height = self.font.measure_height(&text);
                         Text {
                             text,
                             position: &node.center_position

@@ -210,12 +210,12 @@ impl<T: DrawTag> NodeGroupLayout<T> {
             Some(time) => {
                 let pos = self.position.get(time);
                 let size = self.size.get(time);
-                Rectangle::new(pos.x, pos.y, size.x, size.y)
+                Rectangle::new(pos.x - 0.5 * size.x, pos.y, size.x, size.y)
             }
             _ => {
                 let pos = self.position.new;
                 let size = self.size.new;
-                Rectangle::new(pos.x, pos.y, size.x, size.y)
+                Rectangle::new(pos.x - 0.5 * size.x, pos.y, size.x, size.y)
             }
         }
     }

@@ -26,7 +26,7 @@ out vec4 curColor;
 out float curExists;
 
 float getPer(vec2 transition) {
-    return min((time - transition.x) / transition.y, 1.0f);
+    return max(0.0f, min((time - transition.x) / transition.y, 1.0f));
 }
 
 void main() {

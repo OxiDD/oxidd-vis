@@ -30,6 +30,7 @@ use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceGroups;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder;
+use crate::types::util::graph_structure::oxidd_graph_structure::NodeType;
 use crate::util::dummy_bdd::DummyEdge;
 use crate::util::dummy_bdd::DummyFunction;
 use crate::util::dummy_bdd::DummyManager;
@@ -82,6 +83,8 @@ use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
+use super::util::graph_structure::graph_manipulators::pointer_node_adjuster::PointerLabel;
+use super::util::graph_structure::graph_manipulators::pointer_node_adjuster::PointerNodeAdjuster;
 use super::util::graph_structure::graph_manipulators::rc_graph::RCGraph;
 use super::util::graph_structure::graph_manipulators::terminal_level_adjuster::TerminalLevelAdjuster;
 use super::util::graph_structure::graph_structure::{DrawTag, EdgeType, GraphStructure};
@@ -108,7 +111,7 @@ impl QDDDiagram<DummyManagerRef> {
 impl Diagram for QDDDiagram<DummyManagerRef> {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
         let (roots, levels) = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp);
-        Some(Box::new(QDDDiagramSection { roots, levels }))
+        Some(Box::new(QDDDiagramSection::new(roots, levels)))
     }
     fn create_section_from_buddy(
         &mut self,
@@ -117,7 +120,7 @@ impl Diagram for QDDDiagram<DummyManagerRef> {
     ) -> Option<Box<dyn DiagramSection>> {
         let (roots, levels) =
             DummyFunction::from_buddy(&mut self.manager_ref, &data, vars.as_deref());
-        Some(Box::new(QDDDiagramSection { roots, levels }))
+        Some(Box::new(QDDDiagramSection::new(roots, levels)))
     }
     fn create_section_from_ids(
         &self,
@@ -129,10 +132,10 @@ impl Diagram for QDDDiagram<DummyManagerRef> {
             .map(|&(id, section)| {
                 let root_edge = DummyEdge::new(Arc::new(id), self.manager_ref.clone());
                 levels = section.get_level_labels();
-                DummyFunction(root_edge)
+                (DummyFunction(root_edge), section.get_node_labels(id))
             })
             .collect_vec();
-        Some(Box::new(QDDDiagramSection { roots, levels }))
+        Some(Box::new(QDDDiagramSection::new(roots, levels)))
     }
 }
 
@@ -140,8 +143,38 @@ pub struct QDDDiagramSection<F: Function>
 where
     for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
 {
-    roots: Vec<F>,
+    roots: Vec<(F, Vec<String>)>,
+    labels: HashMap<NodeID, Vec<String>>,
     levels: Vec<String>,
+}
+
+impl<F: Function> QDDDiagramSection<F>
+where
+    for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
+{
+    fn new(roots: Vec<(F, Vec<String>)>, levels: Vec<String>) -> Self {
+        let s = QDDDiagramSection {
+            labels: roots
+                .iter()
+                .map(|(f, names)| {
+                    (
+                        f.with_manager_shared(|_, edge| edge.node_id()),
+                        names.clone(),
+                    )
+                })
+                .collect(),
+            roots,
+            levels,
+        };
+        console::log!(
+            "init {}",
+            s.labels
+                .iter()
+                .map(|(id, names)| format!("{}:[{}]", id, names.iter().join(",")))
+                .join(", ")
+        );
+        s
+    }
 }
 
 impl<
@@ -157,6 +190,9 @@ where
 {
     fn get_level_labels(&self) -> Vec<String> {
         self.levels.clone()
+    }
+    fn get_node_labels(&self, node: NodeID) -> Vec<String> {
+        self.labels.get(&node).cloned().unwrap_or_else(|| vec![])
     }
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
         let c0 = (1.0, 0.2, 0.2);
@@ -175,29 +211,9 @@ where
         let renderer = WebglRenderer::from_canvas(
             canvas,
             HashMap::from([
+                // True edge
                 (
                     EdgeType::new((), 0),
-                    EdgeRenderingType {
-                        color: c0,
-                        hover_color: mix_color(c0, hover_color.0, hover_color.1),
-                        select_color: mix_color(c0, select_color.0, select_color.1),
-                        partial_hover_color: mix_color(
-                            c0,
-                            partial_hover_color.0,
-                            partial_hover_color.1,
-                        ),
-                        partial_select_color: mix_color(
-                            c0,
-                            partial_select_color.0,
-                            partial_select_color.1,
-                        ),
-                        width: 0.2,
-                        dash_solid: 0.3,
-                        dash_transparent: 0.15,
-                    },
-                ),
-                (
-                    EdgeType::new((), 1),
                     EdgeRenderingType {
                         color: c1,
                         hover_color: mix_color(c1, hover_color.0, hover_color.1),
@@ -217,6 +233,29 @@ where
                         dash_transparent: 0.0, // No dashing
                     },
                 ),
+                // False edge
+                (
+                    EdgeType::new((), 1),
+                    EdgeRenderingType {
+                        color: c0,
+                        hover_color: mix_color(c0, hover_color.0, hover_color.1),
+                        select_color: mix_color(c0, select_color.0, select_color.1),
+                        partial_hover_color: mix_color(
+                            c0,
+                            partial_hover_color.0,
+                            partial_hover_color.1,
+                        ),
+                        partial_select_color: mix_color(
+                            c0,
+                            partial_select_color.0,
+                            partial_select_color.1,
+                        ),
+                        width: 0.2,
+                        dash_solid: 0.3,
+                        dash_transparent: 0.15,
+                    },
+                ),
+                // Both edge
                 (
                     EdgeType::new((), 2),
                     EdgeRenderingType {
@@ -315,7 +354,7 @@ pub struct QDDDiagramDrawer<
     >,
 }
 
-type GraphLabel = PresenceLabel<NodeLabel<String>>;
+type GraphLabel = PresenceLabel<PointerLabel<NodeLabel<String>>>;
 type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
 type MGraph<T, G> = RCGraph<
     T,
@@ -323,8 +362,13 @@ type MGraph<T, G> = RCGraph<
     String,
     TerminalLevelAdjuster<T, GraphLabel, String, MPresenceAdjuster<T, G>>,
 >;
-type MPresenceAdjuster<T, G> =
-    RCGraph<T, GraphLabel, String, NodePresenceAdjuster<T, NodeLabel<String>, String, G>>;
+type MPresenceAdjuster<T, G> = RCGraph<
+    T,
+    GraphLabel,
+    String,
+    NodePresenceAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
+>;
+type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, G>;
 type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData>;
 
 impl<
@@ -336,29 +380,31 @@ impl<
 {
     pub fn new(graph: G, renderer: R, layout: L, font: Rc<Font>) -> QDDDiagramDrawer<T, G, R, L> {
         let original_roots = graph.get_roots().clone();
-        let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(graph));
+        let pointer_adjuster = PointerNodeAdjuster::new(
+            graph,
+            EdgeType {
+                tag: T::default(),
+                index: 2,
+            },
+            true,
+            "".to_string(),
+        );
+        let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(pointer_adjuster));
         let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
         let roots = modified_graph.get_roots();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
 
-        let root_colors = vec![
-            (0.0, 0.9, 0.3),
-            (0.9, 0.0, 0.6),
-            (0.0, 0.5, 0.2),
-            (0.5, 0.0, 0.0),
-        ];
-        let roots_lookup = original_roots
-            .iter()
-            .enumerate()
-            .map(|(i, &root)| (root, i))
-            .collect::<HashMap<_, _>>();
         let grouped_graph = GMGraph::new_shared(group_manager.clone(), move |nodes| {
             // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
 
             let color = match (nodes.get(0), nodes.get(1)) {
                 (
                     Some(&PresenceLabel {
-                        original_label: NodeLabel::Terminal(ref terminal),
+                        original_label:
+                            PointerLabel::Node(NodeLabel {
+                                pointers: _,
+                                kind: NodeType::Terminal(ref terminal),
+                            }),
                         original_id: _,
                     }),
                     None,
@@ -369,38 +415,30 @@ impl<
                         (1., 0.2, 0.2)
                     }
                 }
-                (Some(_), None) => (0.3, 0.3, 0.3),
-                _ => (0.7, 0.7, 0.7),
-            };
-            let border_color = match (nodes.get(0), nodes.get(1)) {
                 (
                     Some(&PresenceLabel {
-                        original_label: _,
-                        original_id: id,
+                        original_label: PointerLabel::Pointer(_),
+                        original_id: _,
                     }),
                     None,
-                ) => {
-                    if let Some(root_index) = roots_lookup.get(&id) {
-                        if let Some(&(r, g, b)) = root_colors.get(*root_index) {
-                            (r, g, b, 1.0)
-                        } else {
-                            (0.0, 0.0, 0.0, 0.0)
-                        }
-                    } else {
-                        (0.0, 0.0, 0.0, 0.0)
-                    }
-                }
-                _ => (0.0, 0.0, 0.0, 0.0),
+                ) => (0.5, 0.5, 1.0),
+                (Some(_), None) => (0.1, 0.1, 0.1),
+                _ => (0.7, 0.7, 0.7),
+            };
+            let name: Option<String> = match (nodes.get(0), nodes.get(1)) {
+                (
+                    Some(&PresenceLabel {
+                        original_label: PointerLabel::Pointer(ref text),
+                        original_id: _,
+                    }),
+                    None,
+                ) => Some(text.clone()),
+                _ => None,
             };
 
-            let name = if nodes.len() > 1 {
-                Some(format!("Count {}", nodes.len()))
-            } else {
-                None
-            };
             NodeData {
                 color,
-                border_color,
+                border_color: (0.0, 0.0, 0.0, 0.0),
                 width: 1.
                     + match name {
                         Some(ref text) => font.measure_width(&text),
@@ -471,7 +509,10 @@ impl<
             let terminals = adjuster.get_terminals();
             let mut terminals = terminals.iter().filter_map(|&node| {
                 match adjuster.get_node_label(node).original_label {
-                    NodeLabel::Terminal(t) if t == terminal => Some(node),
+                    PointerLabel::Node(NodeLabel {
+                        pointers: _,
+                        kind: NodeType::Terminal(t),
+                    }) if t == terminal => Some(node),
                     _ => None,
                 }
             });

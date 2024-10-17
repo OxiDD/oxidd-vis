@@ -60,7 +60,7 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
             onContextMenu={e => e.preventDefault()}
             ref={ref}
             {...moveListeners}
-            css={{padding: 0, overflow: "hidden"}}>
+            css={{padding: 0, overflow: "hidden", backgroundColor: "white"}}>
             <BoxSelection
                 onStart={m => m.buttons == 1}
                 onHighlight={(rect, e) => {

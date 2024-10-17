@@ -134,7 +134,7 @@ export class DiagramVisualizationState extends ViewState {
         const yRel = area.left_top.y / canvasArea.height - 0.5;
         const widthRel = area.size.x / canvasArea.width;
         const heightRel = area.size.y / canvasArea.height;
-        return this.drawer.get_nodes(xRel, -yRel - heightRel, widthRel, heightRel, 500); // TODO: create selection number setting
+        return this.drawer.get_nodes(xRel, -yRel - heightRel, widthRel, heightRel, 2000); // TODO: create selection number setting
     }
 
     /**

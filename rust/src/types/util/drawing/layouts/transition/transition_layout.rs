@@ -408,9 +408,18 @@ fn layout_removed_group<T: DrawTag>(
                 },
                 exists: Transition {
                     old_time: old_time + duration,
-                    duration: 1,
+                    duration: durations.delete_duration,
                     old: group.exists.get(time),
                     new: 0.,
+                },
+                size: Transition {
+                    old_time,
+                    duration,
+                    old: group.size.get(time),
+                    new: Point {
+                        x: group.size.new.x.min(target.size.new.x),
+                        y: group.size.new.y.min(target.size.new.y),
+                    },
                 },
                 edges: deleted_edges_layout,
                 ..group.clone()

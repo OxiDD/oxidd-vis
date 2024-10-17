@@ -43,7 +43,6 @@ class Server(BaseHTTPRequestHandler):
                 self.wfile.write(open(path, "rb").read())
             else:
                 path = os.path.join(os.getcwd(), "webfiles/"+self.path[1::])
-                print(path, os.path.isfile(path))
                 if os.path.isfile(path):
                     self.wfile.write(open(path, "rb").read())
 

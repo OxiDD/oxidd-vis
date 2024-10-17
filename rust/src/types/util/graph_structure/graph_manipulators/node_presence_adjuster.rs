@@ -24,13 +24,15 @@ use crate::{
     util::{free_id_manager::FreeIdManager, logging::console},
 };
 
-/// We distinguish 2 different nodeID kinds:
-/// - source node IDs, corresponding to the ID of the underlying graph(s)
-/// - output node IDs, corresponding to the IDs used to interface with this graph
-///
-/// The source node IDs are distinguished into 2 labeled kinds:
-/// - left node IDs, corresponding to the underlying graph we are wrapping
-/// - right node IDs, corresponding to the created virtual nodes
+/// The NodePresenceAdjuster allows nodes to be hidden or duplicated in order to improve structural properties of the graph for better layouting.
+
+// We distinguish 2 different nodeID kinds:
+// - source node IDs, corresponding to the ID of the underlying graph(s)
+// - output node IDs, corresponding to the IDs used to interface with this graph
+//
+// The source node IDs are distinguished into 2 labeled kinds:
+// - left node IDs, corresponding to the underlying graph we are wrapping
+// - right node IDs, corresponding to the created virtual nodes
 pub struct NodePresenceAdjuster<
     T: DrawTag + 'static,
     NL: Clone,

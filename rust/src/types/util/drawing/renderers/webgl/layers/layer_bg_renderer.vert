@@ -20,7 +20,7 @@ out float curType;
 out float curExists;
 
 float getPer(vec2 transition) {
-    return min((time - transition.x) / transition.y, 1.0f);
+    return max(0.0f, min((time - transition.x) / transition.y, 1.0f));
 }
 
 void main() {
@@ -42,6 +42,6 @@ void main() {
 
     float transformedYPos = (transform * vec4(0.0f, curYPosition, 0.0f, 1.0f) *
         vec4(vec3(2.0f), 1.0f)).y;
-    gl_Position = vec4(cornerPos.x, transformedYPos, 0.0f, 1.0f);
+    gl_Position = vec4(cornerPos.x, transformedYPos, -0.1f, 1.0f);
     // gl_Position = vec4(cornerPos, 0.0f, 1.0f);
 }

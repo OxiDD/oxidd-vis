@@ -26,7 +26,7 @@ out vec3 curColor;
 out float curExists;
 
 float getPer(vec2 transition) {
-    return min((time - transition.x) / transition.y, 1.0f);
+    return max(0.0f, min((time - transition.x) / transition.y, 1.0f));
 }
 
 void main() {
@@ -49,4 +49,5 @@ void main() {
     /**/: corner == 2 || corner == 4 ?/**/ vec2(-0.5f, -0.5f) //
     /**/:                             /**/ vec2(-0.5f, 0.5f));
     gl_Position = transform * vec4(curPosition + cornerPos, 0.0f, 1.0f) * vec4(vec3(2.0f), 1.0f); // 2 to to make the default width and height of the screen 1, instead of 2
+    gl_Position.z = float(gl_VertexID) * 1e-10f;
 }
