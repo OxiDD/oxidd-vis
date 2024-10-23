@@ -13,6 +13,7 @@ export function useWatch(): IWatcher {
     if (observer.current) observer.current.destroy(); // Dispose data from the last render
 
     const outWatch = useRef<IWatcher>();
+    // We use passive derived, so we don't retain a lot of unnecessary listeners until garbage collection kicks in
     const derived = new PassiveDerived<number>((watch, prev) => {
         outWatch.current = watch;
         return (prev ?? 0) + 1;

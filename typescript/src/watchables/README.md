@@ -13,6 +13,6 @@ const derived = new Derived(compute);
 compute(w => w.get()) == derived.get();
 ```
 
-This equivalence holds at any point in time (except for when dirty events are dispatched), and for any compute function (which is pure except for usage of other watchables, which are all watched).
+This equivalence holds at any point in time (except for when dirty events are dispatched), and for any compute function (which is pure when not considering usage of other watched watchables).
 
 This file will be improved/extended in the future. For now, see the test files to get a rough idea for usage and primitives.
