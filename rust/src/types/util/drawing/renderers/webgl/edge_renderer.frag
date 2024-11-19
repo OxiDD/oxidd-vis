@@ -122,5 +122,5 @@ void main() {
         typeColor = typeData.partialSelectColor;
     if(outState >= 4.f)
         typeColor = typeData.selectColor;
-    outColor = vec4(typeColor * alpha, curExists * alpha);
+    outColor = vec4(typeColor * curExists * alpha, curExists * alpha);
 }
