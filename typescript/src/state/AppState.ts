@@ -1,6 +1,5 @@
 import {Constant} from "../watchables/Constant";
 import {Derived} from "../watchables/Derived";
-import {PassiveDerived} from "../watchables/PassiveDerived";
 import {IWatchable} from "../watchables/_types/IWatchable";
 import {dummyMutator} from "../watchables/mutator/Mutator";
 import {IMutator} from "../watchables/mutator/_types/IMutator";

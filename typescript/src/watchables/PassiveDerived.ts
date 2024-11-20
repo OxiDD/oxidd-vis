@@ -3,7 +3,7 @@ import {IDerivedCompute} from "./_types/IDerivedCompute";
 import {IRunnable} from "./_types/IRunnable";
 
 /**
- * A simple passive derived value. This value is lazily computed, and cached unless no listeners exist. This prevents the derived value from listening to dependency changes, when it is not being used.
+ * A simple passive derived value. This value is lazily computed, and cached unless no listeners exist. This prevents the derived value from listening to dependency changes, when it is not being used anymore.
  *
  * Invariants/properties of `w = new PassiveDerived(c)` for some compute function `c`, with a set of dependencies `D: Set<IWatchable<unknown>>`:
  * 1.  Transparency: At any given point `w.get() == c(...)`
