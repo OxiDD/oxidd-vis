@@ -10,23 +10,28 @@ use priority_queue::PriorityQueue;
 
 use crate::{
     types::util::{
-        drawing::diagram_layout::{LayerLayout, Point, Transition},
+        drawing::diagram_layout::{LayerLayout, LayerStyle, NodeStyle},
         graph_structure::{
             graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
         },
     },
-    util::{logging::console, rectangle::Rectangle},
+    util::{
+        logging::console,
+        rectangle::Rectangle,
+        transition::{Interpolatable, Transition},
+    },
 };
 
 pub fn compute_layers_layout<
     T: DrawTag,
-    GL,
-    G: GroupedGraphStructure<T, GL, String>,
+    NS: NodeStyle,
+    LS: LayerStyle,
+    G: GroupedGraphStructure<T, NS, LS>,
     I: Iterator<Item = (usize, Rectangle)>,
 >(
     graph: &G,
     node_positions: I,
-) -> Vec<LayerLayout> {
+) -> Vec<LayerLayout<LS>> {
     let mut layer_start_positions = HashMap::<LevelNo, f32>::new();
     let mut layer_end_positions = HashMap::<LevelNo, f32>::new();
     for (group_id, point) in node_positions {
@@ -66,7 +71,7 @@ pub fn compute_layers_layout<
             )
         });
 
-    let mut layout: Vec<LayerLayout> = Vec::new();
+    let mut layout: Vec<LayerLayout<LS>> = Vec::new();
     let mut min: Option<f32> = None;
     let mut index = 0;
     for ((start_layer, start_y), (end_layer, end_y)) in
@@ -80,12 +85,14 @@ pub fn compute_layers_layout<
             start_layer,
             end_layer,
             index: Transition::plain(index as f32),
-            label: (start_layer..end_layer)
-                .map(|level| graph.get_level_label(level))
-                .join(", \n"),
             top: Transition::plain(start_y),
             bottom: Transition::plain(end_y),
             exists: Transition::plain(1.),
+            style: Transition::plain(LS::squash(
+                (start_layer..end_layer)
+                    .map(|level| graph.get_level_label(level))
+                    .collect_vec(),
+            )),
         });
         index += 1;
     }

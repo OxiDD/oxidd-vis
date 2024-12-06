@@ -22,20 +22,20 @@ use swash::{
 use web_sys::WebGl2RenderingContext;
 
 use crate::{
-    types::util::drawing::{
-        diagram_layout::{Point, Transition},
-        renderers::{
-            util::Font::Font,
-            webgl::{
-                text::triangulate::triangulate,
-                util::{
-                    render_texture::{RenderTarget, RenderTexture},
-                    vertex_renderer::VertexRenderer,
-                },
+    types::util::drawing::renderers::{
+        util::Font::Font,
+        webgl::{
+            text::triangulate::triangulate,
+            util::{
+                render_texture::{RenderTarget, RenderTexture},
+                vertex_renderer::VertexRenderer,
             },
         },
     },
-    util::{logging::console, matrix4::Matrix4, rectangle::Rectangle},
+    util::{
+        logging::console, matrix4::Matrix4, point::Point, rectangle::Rectangle,
+        transition::Transition,
+    },
 };
 
 pub struct TextRenderer {

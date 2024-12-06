@@ -2,9 +2,17 @@ use std::collections::HashMap;
 
 use oxidd_core::Tag;
 
-use crate::types::util::{
-    drawing::{diagram_layout::DiagramLayout, layout_rules::LayoutRules},
-    graph_structure::{graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure},
+use crate::{
+    types::util::{
+        drawing::{
+            diagram_layout::{DiagramLayout, LayerStyle, NodeStyle},
+            layout_rules::LayoutRules,
+        },
+        graph_structure::{
+            graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
+        },
+    },
+    util::transition::Interpolatable,
 };
 
 ///
@@ -24,16 +32,16 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> ToggleLayout<T, GL
     }
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> LayoutRules<T, GL, LL, G>
-    for ToggleLayout<T, GL, LL, G>
+impl<T: DrawTag, S: NodeStyle, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>
+    LayoutRules<T, S, LS, G> for ToggleLayout<T, S, LS, G>
 {
     fn layout(
         &mut self,
         graph: &G,
-        old: &DiagramLayout<T>,
+        old: &DiagramLayout<T, S, LS>,
         new_sources: &G::Tracker,
         time: u32,
-    ) -> DiagramLayout<T> {
+    ) -> DiagramLayout<T, S, LS> {
         if self.layouts.len() == 0 {
             return DiagramLayout {
                 groups: HashMap::new(),

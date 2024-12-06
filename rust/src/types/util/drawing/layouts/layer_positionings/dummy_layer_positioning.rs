@@ -6,17 +6,15 @@ use oxidd_core::Tag;
 
 use crate::{
     types::util::{
-        drawing::{
-            diagram_layout::Point,
-            layouts::{
-                layered_layout_traits::{NodePositioning, WidthLabel},
-                util::layered::layer_orderer::{EdgeMap, Order},
-            },
+        drawing::layouts::{
+            layered_layout_traits::{NodePositioning, WidthLabel},
+            util::layered::layer_orderer::{EdgeMap, Order},
         },
         graph_structure::{
             graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
         },
     },
+    util::point::Point,
     wasm_interface::NodeGroupID,
 };
 

@@ -14,8 +14,8 @@ use crate::{
     types::util::{
         drawing::{
             diagram_layout::{
-                DiagramLayout, EdgeLayout, EdgePoint, LayerLayout, NodeGroupLayout, Point,
-                Transition,
+                DiagramLayout, EdgeLayout, EdgePoint, LayerLayout, LayerStyle, NodeGroupLayout,
+                NodeStyle,
             },
             layout_rules::LayoutRules,
         },
@@ -24,7 +24,7 @@ use crate::{
             grouped_graph_structure::{EdgeData, GroupedGraphStructure, SourceReader},
         },
     },
-    util::logging::console,
+    util::{logging::console, point::Point},
     wasm_interface::NodeGroupID,
 };
 
@@ -78,19 +78,23 @@ pub struct TargetEdge<T: DrawTag> {
 }
 
 /// Relates new elements and old elements to one and another, to be used in making smooth transitions
-pub fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
+pub fn relate_elements<
+    T: DrawTag,
+    S: NodeStyle,
+    LS: LayerStyle,
+    G: GroupedGraphStructure<T, S, LS>,
+>(
     graph: &G,
-    old: &DiagramLayout<T>,
-    new: &DiagramLayout<T>,
+    old: &DiagramLayout<T, S, LS>,
+    new: &DiagramLayout<T, S, LS>,
     sources: &G::Tracker,
     time: u32,
 ) -> ElementRelations<T> {
-    let mut previous_nodes = map_groups::<T, GL, LL, G>(old, new, sources, time);
+    let mut previous_nodes = map_groups::<T, S, LS, G>(old, new, sources, time);
     select_node_representation(&mut previous_nodes, &new);
-    let deleted_nodes =
-        find_deleted_nodes::<T, GL, LL, G>(old, new, sources, &previous_nodes, time);
+    let deleted_nodes = find_deleted_nodes::<T, S, LS, G>(old, new, sources, &previous_nodes, time);
     let previous_edges = map_edges(graph, old, new, sources, &previous_nodes, time);
-    let deleted_edges = find_deleted_edges::<T, GL, LL, G>(
+    let deleted_edges = find_deleted_edges::<T, S, LS, G>(
         old,
         new,
         sources,
@@ -109,9 +113,9 @@ pub fn relate_elements<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
     }
 }
 
-pub fn map_groups<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
-    old: &DiagramLayout<T>,
-    new: &DiagramLayout<T>,
+pub fn map_groups<T: DrawTag, S: NodeStyle, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>(
+    old: &DiagramLayout<T, S, LS>,
+    new: &DiagramLayout<T, S, LS>,
     sources: &G::Tracker,
     time: u32,
 ) -> HashMap<NodeGroupID, TargetGroup> {
@@ -177,9 +181,9 @@ pub fn map_groups<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
         .collect()
 }
 
-pub fn select_node_representation<T: DrawTag>(
+pub fn select_node_representation<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     previous_nodes: &mut HashMap<NodeGroupID, TargetGroup>,
-    new: &DiagramLayout<T>,
+    new: &DiagramLayout<T, S, LS>,
 ) {
     let mut reverse_node_mapping: HashMap<NodeGroupID, HashSet<NodeGroupID>> = HashMap::new();
     for (&node, source_target) in previous_nodes.iter() {
@@ -209,10 +213,10 @@ pub fn select_node_representation<T: DrawTag>(
     }
 }
 
-pub fn map_edges<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
+pub fn map_edges<T: DrawTag, S: NodeStyle, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>(
     graph: &G,
-    old: &DiagramLayout<T>,
-    new: &DiagramLayout<T>,
+    old: &DiagramLayout<T, S, LS>,
+    new: &DiagramLayout<T, S, LS>,
     sources: &G::Tracker,
     previous_nodes: &HashMap<NodeGroupID, TargetGroup>,
     time: u32,
@@ -310,9 +314,14 @@ pub fn map_edges<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
     edge_mapping
 }
 
-pub fn find_deleted_nodes<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
-    old: &DiagramLayout<T>,
-    new: &DiagramLayout<T>,
+pub fn find_deleted_nodes<
+    T: DrawTag,
+    S: NodeStyle,
+    LS: LayerStyle,
+    G: GroupedGraphStructure<T, S, LS>,
+>(
+    old: &DiagramLayout<T, S, LS>,
+    new: &DiagramLayout<T, S, LS>,
     sources: &G::Tracker,
     previous_nodes: &HashMap<NodeGroupID, TargetGroup>,
     time: u32,
@@ -372,9 +381,14 @@ pub fn find_deleted_nodes<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL
         .collect()
 }
 
-pub fn find_deleted_edges<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>>(
-    old: &DiagramLayout<T>,
-    new: &DiagramLayout<T>,
+pub fn find_deleted_edges<
+    T: DrawTag,
+    S: NodeStyle,
+    LS: LayerStyle,
+    G: GroupedGraphStructure<T, S, LS>,
+>(
+    old: &DiagramLayout<T, S, LS>,
+    new: &DiagramLayout<T, S, LS>,
     sources: &G::Tracker,
     previous_nodes: &HashMap<NodeGroupID, TargetGroup>,
     deleted_nodes: &HashMap<NodeGroupID, Option<TargetGroup>>,

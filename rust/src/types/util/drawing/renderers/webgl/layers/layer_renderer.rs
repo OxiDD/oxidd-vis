@@ -4,11 +4,8 @@ use itertools::Itertools;
 use web_sys::WebGl2RenderingContext;
 
 use crate::{
-    types::util::drawing::{
-        diagram_layout::{Point, Transition},
-        renderers::{util::Font::Font, webgl::text::text_renderer::Text},
-    },
-    util::{logging::console, matrix4::Matrix4},
+    types::util::drawing::renderers::{util::Font::Font, webgl::text::text_renderer::Text},
+    util::{logging::console, matrix4::Matrix4, point::Point, transition::Transition},
 };
 
 use super::super::text::text_renderer::{TextRenderer, TextRendererSettings};

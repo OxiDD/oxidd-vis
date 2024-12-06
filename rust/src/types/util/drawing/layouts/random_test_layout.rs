@@ -5,28 +5,34 @@ use js_sys::Math::random;
 use oxidd::{Edge, Function, InnerNode, Manager};
 use oxidd_core::{DiagramRules, Tag};
 
-use crate::types::util::{
-    drawing::{
-        diagram_layout::{
-            DiagramLayout, EdgeLayout, EdgePoint, NodeGroupLayout, Point, Transition,
+use crate::types::util::drawing::diagram_layout::{LayerStyle, NodeStyle};
+use crate::util::point::Point;
+use crate::util::transition::Interpolatable;
+use crate::{
+    types::util::{
+        drawing::{
+            diagram_layout::{DiagramLayout, EdgeLayout, EdgePoint, NodeGroupLayout},
+            layout_rules::LayoutRules,
         },
-        layout_rules::LayoutRules,
+        graph_structure::{
+            graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
+        },
     },
-    graph_structure::{graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure},
+    util::transition::Transition,
 };
 
 pub struct RandomTestLayout;
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> LayoutRules<T, GL, LL, G>
-    for RandomTestLayout
+impl<T: DrawTag, S: NodeStyle, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>
+    LayoutRules<T, S, LS, G> for RandomTestLayout
 {
     fn layout(
         &mut self,
         graph: &G,
-        old: &DiagramLayout<T>,
+        old: &DiagramLayout<T, S, LS>,
         sources: &G::Tracker,
         time: u32,
-    ) -> DiagramLayout<T> {
+    ) -> DiagramLayout<T, S, LS> {
         let groups = graph.get_all_groups();
         DiagramLayout {
             groups: groups
@@ -37,10 +43,9 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> LayoutRules<T, GL,
                         let y: f32 = (random() * 20. - 10.) as f32;
                         let width: f32 = (random() * 1. + 0.5) as f32;
                         let height: f32 = (random() * 1. + 0.5) as f32;
+                        let group_label = graph.get_group_label(group_id);
 
                         NodeGroupLayout {
-                            label: None,
-                            // center_position: Transition::plain(Point { x, y }),
                             position: Transition {
                                 old: Point { x: 0.0, y: 0.0 },
                                 new: Point { x, y },
@@ -48,27 +53,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> LayoutRules<T, GL,
                                 duration: 1000,
                             },
                             level_range: graph.get_level_range(group_id),
-                            // size: Transition::plain(Point {
-                            //     x: width,
-                            //     y: height,
-                            // }),
-                            color: Transition {
-                                old: (0., 0., 0.),
-                                new: (random() as f32, random() as f32, random() as f32),
-                                old_time: time,
-                                duration: 1000,
-                            },
-                            outline_color: Transition {
-                                old: (0., 0., 0., 0.),
-                                new: (
-                                    random() as f32,
-                                    random() as f32,
-                                    random() as f32,
-                                    random() as f32,
-                                ),
-                                old_time: time,
-                                duration: 1000,
-                            },
+                            style: Transition::plain(group_label),
                             size: Transition {
                                 old: Point { x: 0.0, y: 0.0 },
                                 new: Point {

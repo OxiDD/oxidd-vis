@@ -1,12 +1,12 @@
 use web_sys::WebGl2RenderingContext;
 
-use crate::types::util::drawing::diagram_layout::Transition;
+use crate::util::transition::{Interpolatable, Transition};
 
 use super::vertex_renderer::VertexRenderer;
 
 pub fn set_animated_data<
     const L: usize,
-    T,
+    T: Interpolatable,
     I: Iterator<Item = Transition<T>> + Clone,
     V: Fn(T) -> [f32; L],
 >(

@@ -8,31 +8,28 @@ use oxidd_core::Tag;
 
 use crate::{
     types::util::{
-        drawing::{
-            diagram_layout::Point,
-            layouts::{
-                layered_layout::{is_edge_dummy, is_group_dummy},
-                layered_layout_traits::{NodePositioning, WidthLabel},
-                util::layered::layer_orderer::{
-                    get_edge_index_sequence, get_ordered_edge_map, get_sequence, swap_edges,
-                    EdgeMap, Order, OrderedEdgeMap,
-                },
+        drawing::layouts::{
+            layered_layout::{is_edge_dummy, is_group_dummy},
+            layered_layout_traits::{NodePositioning, WidthLabel},
+            util::layered::layer_orderer::{
+                get_edge_index_sequence, get_ordered_edge_map, get_sequence, swap_edges, EdgeMap,
+                Order, OrderedEdgeMap,
             },
         },
         graph_structure::{
             graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
         },
     },
-    util::logging::console,
+    util::{logging::console, point::Point},
     wasm_interface::NodeGroupID,
 };
 
 pub struct BrandesKopfPositioning;
 
-impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for BrandesKopfPositioning {
+impl<T: DrawTag, S, LS> NodePositioning<T, S, LS> for BrandesKopfPositioning {
     fn position_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, GL, LL>,
+        graph: &impl GroupedGraphStructure<T, S, LS>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         node_widths: &HashMap<NodeGroupID, f32>,

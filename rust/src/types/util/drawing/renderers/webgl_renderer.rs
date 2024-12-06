@@ -10,13 +10,18 @@ use web_sys::{
 use crate::{
     types::util::{
         drawing::{
-            diagram_layout::{DiagramLayout, Point, Transition},
-            layouts::util::color_label::Color,
+            diagram_layout::{DiagramLayout, LayerStyle, NodeStyle},
             renderer::{GroupSelection, Renderer},
         },
         graph_structure::graph_structure::{DrawTag, EdgeType},
     },
-    util::{logging::console, transformation::Transformation},
+    util::{
+        color::{Color, TransparentColor},
+        logging::console,
+        point::Point,
+        transformation::Transformation,
+        transition::{Interpolatable, Transition},
+    },
     wasm_interface::NodeGroupID,
 };
 
@@ -130,7 +135,7 @@ impl<T: DrawTag> WebglRenderer<T> {
     }
 }
 
-impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
+impl<T: DrawTag, S: WebglNodeStyle, LS: WebglLayerStyle> Renderer<T, S, LS> for WebglRenderer<T> {
     fn set_transform(&mut self, transform: Transformation) {
         let height = transform.height as usize;
         // if self.screen_texture.get_size().1 != height {
@@ -148,13 +153,14 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
         self.layer_renderer
             .set_transform_and_screen_height(&self.webgl_context, &matrix, height);
     }
-    fn update_layout(&mut self, layout: &DiagramLayout<T>) {
+    fn update_layout(&mut self, layout: &DiagramLayout<T, S, LS>) {
         self.node_renderer.set_nodes(
             &self.webgl_context,
             &layout
                 .groups
                 .iter()
                 .map(|(id, group)| {
+                    let style = &group.style;
                     // console::log!("pos: {}, {}", group.position, group.size * 0.5);
                     Node {
                         ID: *id,
@@ -171,10 +177,20 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
                                 ..group.size
                             },
                         size: group.size,
-                        label: group.label.clone(),
+                        label: style.new.get_label().clone(),
                         exists: group.exists,
-                        color: group.color,
-                        outline_color: group.outline_color,
+                        color: Transition {
+                            old_time: style.old_time,
+                            duration: style.duration,
+                            old: style.old.get_color(),
+                            new: style.new.get_color(),
+                        },
+                        outline_color: Transition {
+                            old_time: style.old_time,
+                            duration: style.duration,
+                            old: style.old.get_outline_color(),
+                            new: style.new.get_outline_color(),
+                        },
                     }
                 })
                 .collect(),
@@ -211,7 +227,7 @@ impl<T: DrawTag> Renderer<T> for WebglRenderer<T> {
                 .map(|layer| Layer {
                     top: layer.top,
                     bottom: layer.bottom,
-                    label: layer.label.clone(),
+                    label: layer.style.new.get_label(),
                     index: layer.index,
                     exists: layer.exists,
                 })
@@ -239,4 +255,13 @@ impl<T: DrawTag> Drop for WebglRenderer<T> {
         self.edge_renderer.dispose(&self.webgl_context);
         self.layer_renderer.dispose(&self.webgl_context);
     }
+}
+
+pub trait WebglNodeStyle: NodeStyle {
+    fn get_color(&self) -> Color;
+    fn get_outline_color(&self) -> TransparentColor;
+    fn get_label(&self) -> Option<String>;
+}
+pub trait WebglLayerStyle: LayerStyle {
+    fn get_label(&self) -> String;
 }

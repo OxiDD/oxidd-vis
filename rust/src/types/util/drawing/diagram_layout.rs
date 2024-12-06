@@ -11,198 +11,25 @@ use oxidd_core::Tag;
 
 use crate::{
     types::util::graph_structure::{graph_structure::DrawTag, grouped_graph_structure::EdgeData},
-    util::rectangle::Rectangle,
+    util::{
+        point::Point,
+        rectangle::Rectangle,
+        transition::{Interpolatable, Transition},
+    },
     wasm_interface::{NodeGroupID, NodeID},
 };
 
-use super::layouts::util::color_label::{Color, TransparentColor};
-
-#[derive(Copy, Clone, Default)]
-pub struct Point {
-    pub x: f32,
-    pub y: f32,
-}
-impl Hash for Point {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        ((self.x * 100.) as usize).hash(state);
-        ((self.y * 100.) as usize).hash(state);
-    }
-}
-impl Point {
-    pub fn distance(&self, other: &Point) -> f32 {
-        let dx = other.x - self.x;
-        let dy = other.y - self.y;
-        (dx * dx + dy * dy).sqrt()
-    }
-    pub fn length(&self) -> f32 {
-        (self.x * self.x + self.y * self.y).sqrt()
-    }
-}
-impl Add for Point {
-    type Output = Point;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Point {
-            x: self.x + rhs.x,
-            y: self.y + rhs.y,
-        }
-    }
-}
-impl Sub for Point {
-    type Output = Point;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Point {
-            x: self.x - rhs.x,
-            y: self.y - rhs.y,
-        }
-    }
-}
-impl<R: Clone> Mul<R> for Point
-where
-    f32: Mul<R, Output = f32>,
-{
-    type Output = Point;
-
-    fn mul(self, rhs: R) -> Self::Output {
-        Point {
-            x: self.x * rhs.clone(),
-            y: self.y * rhs,
-        }
-    }
-}
-impl<R: Clone> Mul<R> for &Point
-where
-    f32: Mul<R, Output = f32>,
-{
-    type Output = Point;
-
-    fn mul(self, rhs: R) -> Self::Output {
-        Point {
-            x: self.x * rhs.clone(),
-            y: self.y * rhs,
-        }
-    }
-}
-impl Mul<Point> for f32 {
-    type Output = Point;
-
-    fn mul(self, rhs: Point) -> Self::Output {
-        Point {
-            x: self * rhs.x,
-            y: self * rhs.y,
-        }
-    }
-}
-impl Display for Point {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {})", self.x, self.y)
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct Transition<T> {
-    pub old_time: u32, // ms
-    pub duration: u32, // ms
-    pub old: T,
-    pub new: T,
-}
-impl<T> Transition<T>
-where
-    for<'a> &'a T: Mul<f32, Output = T>,
-    T: Add<Output = T>,
-{
-    pub fn get(&self, time: u32) -> T {
-        let per = self.get_per(time);
-        &self.old * (1.0 - per) + &self.new * per
-    }
-}
-impl<T> Transition<T> {
-    pub fn get_per(&self, time: u32) -> f32 {
-        let per = (time as f32 - self.old_time as f32) / self.duration as f32;
-        f32::max(0.0, f32::min(per, 1.0))
-    }
-}
-impl<T: Copy> Transition<T> {
-    pub fn plain(val: T) -> Transition<T> {
-        Transition {
-            old: val,
-            new: val,
-            old_time: 0,
-            duration: 0,
-        }
-    }
-}
-impl<T> Add for &Transition<T>
-where
-    for<'a> &'a T: Mul<f32, Output = T>,
-    T: Add<Output = T>,
-{
-    type Output = Transition<T>;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        let old_time = u32::max(rhs.old_time, self.old_time);
-        let duration = u32::max(rhs.duration, self.duration);
-
-        Transition {
-            old_time,
-            duration,
-            old: self.get(old_time) + rhs.get(old_time),
-            new: self.get(old_time + duration) + rhs.get(old_time + duration),
-        }
-    }
-}
-impl<T: Display> Display for Transition<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} -> {} @ {} for {}",
-            self.old, self.new, self.old_time, self.duration
-        )
-    }
-}
-
-// impl<T, L: Clone + Sized + Mul<T, Output = T>> Mul<Transition<T>> for L {
-//     type Output = Transition<T>;
-
-//     fn mul(self, rhs: Transition<T>) -> Self::Output {
-//         Transition {
-//             old_time: rhs.old_time,
-//             duration: rhs.duration,
-//             old: self * rhs.old,
-//             new: self * rhs.new,
-//         }
-//     }
-// }
-impl<R: Clone, T> Mul<R> for &Transition<T>
-where
-    for<'a> &'a T: Mul<R, Output = T>,
-{
-    type Output = Transition<T>;
-
-    fn mul(self, rhs: R) -> Self::Output {
-        Transition {
-            old_time: self.old_time,
-            duration: self.duration,
-            old: &self.old * rhs.clone(),
-            new: &self.new * rhs,
-        }
-    }
-}
-
 #[derive(Clone)]
-pub struct NodeGroupLayout<T: DrawTag> {
+pub struct NodeGroupLayout<T: DrawTag, S: NodeStyle> {
     /// Bottom center point of the node
     pub position: Transition<Point>,
     pub size: Transition<Point>,
-    pub label: Option<String>,
     pub exists: Transition<f32>, // A number between 0 and 1 of whether this node is visible (0-1)
     pub edges: HashMap<EdgeData<T>, EdgeLayout>,
     pub level_range: (LevelNo, LevelNo),
-    pub color: Transition<Color>,
-    pub outline_color: Transition<TransparentColor>,
+    pub style: Transition<S>,
 }
-impl<T: DrawTag> NodeGroupLayout<T> {
+impl<T: DrawTag, S: NodeStyle> NodeGroupLayout<T, S> {
     // TODO: possibly consider the selection time? (animations should be quick and not have a huge effect however)
 
     pub fn get_rect(&self, time: Option<u32>) -> Rectangle {
@@ -239,19 +66,24 @@ pub struct EdgePoint {
 }
 
 #[derive(Clone)]
-pub struct LayerLayout {
+pub struct LayerLayout<S: LayerStyle> {
     pub start_layer: LevelNo,
     pub end_layer: LevelNo,
-    pub label: String,
     pub top: Transition<f32>,
     pub bottom: Transition<f32>,
     pub index: Transition<f32>,
     pub exists: Transition<f32>,
+    pub style: Transition<S>,
 }
 
 #[derive(Clone)]
-pub struct DiagramLayout<T: DrawTag> {
-    pub groups: HashMap<NodeGroupID, NodeGroupLayout<T>>,
+pub struct DiagramLayout<T: DrawTag, S: NodeStyle, LS: LayerStyle> {
+    pub groups: HashMap<NodeGroupID, NodeGroupLayout<T, S>>,
     /// Note: this vector has to be sorted in increasing order of start_layer
-    pub layers: Vec<LayerLayout>,
+    pub layers: Vec<LayerLayout<LS>>,
 }
+
+pub trait LayerStyle: Interpolatable + Clone + Sized {
+    fn squash(layers: Vec<Self>) -> Self;
+}
+pub trait NodeStyle: Interpolatable + Clone {}

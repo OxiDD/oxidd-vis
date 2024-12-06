@@ -8,18 +8,22 @@ use web_sys::WebGl2RenderingContext;
 
 use crate::{
     types::util::drawing::{
-        diagram_layout::{Point, Transition},
-        layouts::util::color_label::{Color, TransparentColor},
         renderer::GroupSelection,
         renderers::{util::Font::Font, webgl::util::set_animated_data::set_animated_data},
     },
-    util::{logging::console, matrix4::Matrix4},
+    util::{
+        color::{Color, TransparentColor},
+        logging::console,
+        matrix4::Matrix4,
+        point::Point,
+        transition::{Interpolatable, Transition},
+    },
     wasm_interface::NodeGroupID,
 };
 
 use super::{
     text::text_renderer::{Text, TextRenderer, TextRendererSettings},
-    util::{mix_color::mix_color, vertex_renderer::VertexRenderer},
+    util::vertex_renderer::VertexRenderer,
 };
 
 pub struct NodeRenderer {
@@ -132,7 +136,7 @@ impl NodeRenderer {
         );
         set_animated_data(
             "color",
-            nodes6.map(|n| n.color),
+            nodes6.map(|n| n.color.clone()),
             |v| [v.0, v.1, v.2],
             context,
             &mut self.vertex_renderer,
@@ -167,7 +171,7 @@ impl NodeRenderer {
         );
         set_animated_data(
             "color",
-            outline_nodes6.map(|n| n.outline_color),
+            outline_nodes6.map(|n| n.outline_color.clone()),
             |v| [v.0, v.1, v.2, v.3],
             context,
             &mut self.outline_vertex_renderer,
@@ -239,25 +243,25 @@ impl NodeRenderer {
 
         let color_updates = ids.filter_map(|id| {
             let new_color = if new_select.contains(&id) {
-                Some(select_color)
+                Some(select_color.clone())
             } else if new_partial_select.contains(&id) {
-                Some(partial_select_color)
+                Some(partial_select_color.clone())
             } else if new_hover.contains(&id) {
-                Some(hover_color)
+                Some(hover_color.clone())
             } else if new_partial_hover.contains(&id) {
-                Some(partial_hover_color)
+                Some(partial_hover_color.clone())
             } else {
                 None
             };
 
             let old_color = if old_select.contains(&id) {
-                Some(select_color)
+                Some(select_color.clone())
             } else if old_partial_select.contains(&id) {
-                Some(partial_select_color)
+                Some(partial_select_color.clone())
             } else if old_hover.contains(&id) {
-                Some(hover_color)
+                Some(hover_color.clone())
             } else if old_partial_hover.contains(&id) {
-                Some(partial_hover_color)
+                Some(partial_hover_color.clone())
             } else {
                 None
             };
@@ -273,11 +277,12 @@ impl NodeRenderer {
             if let Some(node_data) = self.node_indices.get(id) {
                 let data_index = node_data.index * 6;
                 let node_color = maybe_color
-                    .map(|(color, per)| mix_color(node_data.color, color, per))
-                    .unwrap_or(node_data.color);
+                    .clone()
+                    .map(|(color, per)| node_data.color.mix(&color, per))
+                    .unwrap_or_else(|| node_data.color.clone());
                 let old_node_color = maybe_color
-                    .map(|(color, per)| mix_color(node_data.color, color, per))
-                    .unwrap_or(node_data.color);
+                    .map(|(color, per)| node_data.color.mix(&color, per))
+                    .unwrap_or_else(|| node_data.color.clone());
                 for i in 0..6 {
                     self.vertex_renderer.update_data(
                         context,

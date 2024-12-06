@@ -5,11 +5,10 @@ use ordered_float::OrderedFloat;
 use web_sys::WebGl2RenderingContext as Gl;
 
 use crate::{
-    types::util::drawing::{
-        diagram_layout::{Point, Transition},
-        renderers::webgl::{text::text_renderer::Text, util::vertex_renderer::VertexRenderer},
+    types::util::drawing::renderers::webgl::{
+        text::text_renderer::Text, util::vertex_renderer::VertexRenderer,
     },
-    util::{logging::console, matrix4::Matrix4},
+    util::{logging::console, matrix4::Matrix4, transition::Transition},
 };
 
 use super::{

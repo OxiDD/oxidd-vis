@@ -28,9 +28,12 @@ use crate::configuration::types::label_config::LabelConfig;
 use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
+use crate::types::util::drawing::renderers::webgl_renderer::WebglLayerStyle;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceGroups;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder;
 use crate::types::util::graph_structure::oxidd_graph_structure::NodeType;
+use crate::util::color::Color;
+use crate::util::color::TransparentColor;
 use crate::util::dummy_bdd::DummyEdge;
 use crate::util::dummy_bdd::DummyFunction;
 use crate::util::dummy_bdd::DummyManager;
@@ -39,6 +42,7 @@ use crate::util::free_id_manager::FreeIdManager;
 use crate::util::logging::console;
 use crate::util::rc_refcell::MutRcRefCell;
 use crate::util::rectangle::Rectangle;
+use crate::util::transition::Interpolatable;
 use crate::wasm_interface::NodeGroupID;
 use crate::wasm_interface::NodeID;
 use crate::wasm_interface::StepData;
@@ -58,6 +62,8 @@ use oxidd_core::{util::DropWith, Tag};
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
+use super::util::drawing::diagram_layout::LayerStyle;
+use super::util::drawing::diagram_layout::NodeStyle;
 use super::util::drawing::drawer::Drawer;
 use super::util::drawing::layout_rules::LayoutRules;
 use super::util::drawing::layouts::layer_group_sorting::average_group_alignment::AverageGroupAlignment;
@@ -71,14 +77,11 @@ use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
 use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition::transition_layout::TransitionLayout;
-use super::util::drawing::layouts::util::color_label::Color;
-use super::util::drawing::layouts::util::color_label::ColorLabel;
-use super::util::drawing::layouts::util::color_label::TransparentColor;
 use super::util::drawing::renderer::Renderer;
 use super::util::drawing::renderers::util::Font::Font;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl::node_renderer::NodeRenderingColorConfig;
-use super::util::drawing::renderers::webgl::util::mix_color::mix_color;
+use super::util::drawing::renderers::webgl_renderer::WebglNodeStyle;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
 use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
@@ -195,14 +198,14 @@ where
         self.labels.get(&node).cloned().unwrap_or_else(|| vec![])
     }
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
-        let c0 = (1.0, 0.2, 0.2);
-        let c1 = (0.2, 1.0, 0.2);
-        let c2 = (0.6, 0.6, 0.6);
+        let c0 = Color(1.0, 0.2, 0.2);
+        let c1 = Color(0.2, 1.0, 0.2);
+        let c2 = Color(0.6, 0.6, 0.6);
 
-        let select_color = ((0.3, 0.3, 1.0), 0.8);
-        let partial_select_color = ((0.6, 0.0, 1.0), 0.7);
-        let hover_color = ((0.0, 0.0, 1.0), 0.3);
-        let partial_hover_color = ((1.0, 0.0, 0.8), 0.2);
+        let select_color = (Color(0.3, 0.3, 1.0), 0.8);
+        let partial_select_color = (Color(0.6, 0.0, 1.0), 0.7);
+        let hover_color = (Color(0.0, 0.0, 1.0), 0.3);
+        let partial_hover_color = (Color(1.0, 0.0, 0.8), 0.2);
 
         let font = Rc::new(Font::new(
             include_bytes!("../../resources/Roboto-Bold.ttf").to_vec(),
@@ -215,19 +218,12 @@ where
                 (
                     EdgeType::new((), 0),
                     EdgeRenderingType {
+                        hover_color: c1.mix(&hover_color.0, hover_color.1),
+                        select_color: c1.mix(&select_color.0, select_color.1),
+                        partial_hover_color: c1.mix(&partial_hover_color.0, partial_hover_color.1),
+                        partial_select_color: c1
+                            .mix(&partial_select_color.0, partial_select_color.1),
                         color: c1,
-                        hover_color: mix_color(c1, hover_color.0, hover_color.1),
-                        select_color: mix_color(c1, select_color.0, select_color.1),
-                        partial_hover_color: mix_color(
-                            c1,
-                            partial_hover_color.0,
-                            partial_hover_color.1,
-                        ),
-                        partial_select_color: mix_color(
-                            c1,
-                            partial_select_color.0,
-                            partial_select_color.1,
-                        ),
                         width: 0.2,
                         dash_solid: 1.0,
                         dash_transparent: 0.0, // No dashing
@@ -237,19 +233,12 @@ where
                 (
                     EdgeType::new((), 1),
                     EdgeRenderingType {
+                        hover_color: c0.mix(&hover_color.0, hover_color.1),
+                        select_color: c0.mix(&select_color.0, select_color.1),
+                        partial_hover_color: c0.mix(&partial_hover_color.0, partial_hover_color.1),
+                        partial_select_color: c0
+                            .mix(&partial_select_color.0, partial_select_color.1),
                         color: c0,
-                        hover_color: mix_color(c0, hover_color.0, hover_color.1),
-                        select_color: mix_color(c0, select_color.0, select_color.1),
-                        partial_hover_color: mix_color(
-                            c0,
-                            partial_hover_color.0,
-                            partial_hover_color.1,
-                        ),
-                        partial_select_color: mix_color(
-                            c0,
-                            partial_select_color.0,
-                            partial_select_color.1,
-                        ),
                         width: 0.2,
                         dash_solid: 0.3,
                         dash_transparent: 0.15,
@@ -259,19 +248,12 @@ where
                 (
                     EdgeType::new((), 2),
                     EdgeRenderingType {
+                        hover_color: c2.mix(&hover_color.0, hover_color.1),
+                        select_color: c2.mix(&select_color.0, select_color.1),
+                        partial_hover_color: c2.mix(&partial_hover_color.0, partial_hover_color.1),
+                        partial_select_color: c2
+                            .mix(&partial_select_color.0, partial_select_color.1),
                         color: c2,
-                        hover_color: mix_color(c2, hover_color.0, hover_color.1),
-                        select_color: mix_color(c2, select_color.0, select_color.1),
-                        partial_hover_color: mix_color(
-                            c2,
-                            partial_hover_color.0,
-                            partial_hover_color.1,
-                        ),
-                        partial_select_color: mix_color(
-                            c2,
-                            partial_select_color.0,
-                            partial_select_color.1,
-                        ),
                         width: 0.15,
                         dash_solid: 1.0,
                         dash_transparent: 0.0,
@@ -306,6 +288,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct NodeData {
     color: Color,
     border_color: TransparentColor,
@@ -313,39 +296,71 @@ pub struct NodeData {
     name: Option<String>,
 }
 
-impl ColorLabel for NodeData {
+impl Interpolatable for NodeData {
+    fn mix(&self, other: &Self, frac: f32) -> Self {
+        NodeData {
+            color: self.color.mix(&other.color, frac),
+            border_color: self.border_color.mix(&other.border_color, frac),
+            width: self.width * (1.0 - frac) + other.width * frac,
+            name: self.name.clone(),
+        }
+    }
+}
+impl WebglNodeStyle for NodeData {
     fn get_color(&self) -> Color {
-        self.color
+        self.color.clone()
     }
 
     fn get_outline_color(&self) -> TransparentColor {
-        self.border_color
+        self.border_color.clone()
+    }
+
+    fn get_label(&self) -> Option<String> {
+        self.name.clone()
     }
 }
-
 impl WidthLabel for NodeData {
     fn get_width(&self) -> f32 {
         self.width
     }
 }
+impl NodeStyle for NodeData {}
 
-impl Into<Option<String>> for NodeData {
-    fn into(self) -> Option<String> {
-        self.name
+#[derive(Clone)]
+pub struct LayerData {
+    name: String,
+}
+impl Interpolatable for LayerData {
+    fn mix(&self, other: &Self, frac: f32) -> Self {
+        LayerData {
+            name: self.name.clone(),
+        }
+    }
+}
+impl LayerStyle for LayerData {
+    fn squash(layers: Vec<Self>) -> Self {
+        LayerData {
+            name: layers.into_iter().map(|s| s.name).join(", \n"),
+        }
+    }
+}
+impl WebglLayerStyle for LayerData {
+    fn get_label(&self) -> String {
+        self.name.clone()
     }
 }
 
 pub struct QDDDiagramDrawer<
     T: DrawTag + Serializable<T> + 'static,
     G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
-    R: Renderer<T>,
-    L: LayoutRules<T, NodeData, String, GMGraph<T, G>>,
+    R: Renderer<T, NodeData, LayerData>,
+    L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>>,
 > {
     graph: MGraph<T, G>,
     group_manager: MutRcRefCell<GM<T, G>>,
     presence_adjuster: MPresenceAdjuster<T, G>,
     time: MutRcRefCell<u32>,
-    drawer: MutRcRefCell<Drawer<T, NodeData, R, L, GMGraph<T, G>>>,
+    drawer: MutRcRefCell<Drawer<T, NodeData, LayerData, R, L, GMGraph<T, G>>>,
     config: Configuration<
         CompositeConfig<(
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
@@ -369,13 +384,13 @@ type MPresenceAdjuster<T, G> = RCGraph<
     NodePresenceAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
 >;
 type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, G>;
-type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData>;
+type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData, LayerData>;
 
 impl<
         T: DrawTag + Serializable<T> + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
-        R: Renderer<T> + 'static,
-        L: LayoutRules<T, NodeData, String, GMGraph<T, G>> + 'static,
+        R: Renderer<T, NodeData, LayerData> + 'static,
+        L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>> + 'static,
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L, font: Rc<Font>) -> QDDDiagramDrawer<T, G, R, L> {
@@ -394,59 +409,65 @@ impl<
         let roots = modified_graph.get_roots();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
 
-        let grouped_graph = GMGraph::new_shared(group_manager.clone(), move |nodes| {
-            // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
+        let grouped_graph = GMGraph::new_shared(
+            group_manager.clone(),
+            move |nodes| {
+                // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
 
-            let color = match (nodes.get(0), nodes.get(1)) {
-                (
-                    Some(&PresenceLabel {
-                        original_label:
-                            PointerLabel::Node(NodeLabel {
-                                pointers: _,
-                                kind: NodeType::Terminal(ref terminal),
-                            }),
-                        original_id: _,
-                    }),
-                    None,
-                ) => {
-                    if terminal == "T" {
-                        (0.2, 1., 0.2)
-                    } else {
-                        (1., 0.2, 0.2)
+                let color = match (nodes.get(0), nodes.get(1)) {
+                    (
+                        Some(&PresenceLabel {
+                            original_label:
+                                PointerLabel::Node(NodeLabel {
+                                    pointers: _,
+                                    kind: NodeType::Terminal(ref terminal),
+                                }),
+                            original_id: _,
+                        }),
+                        None,
+                    ) => {
+                        if terminal == "T" {
+                            Color(0.2, 1., 0.2)
+                        } else {
+                            Color(1., 0.2, 0.2)
+                        }
                     }
-                }
-                (
-                    Some(&PresenceLabel {
-                        original_label: PointerLabel::Pointer(_),
-                        original_id: _,
-                    }),
-                    None,
-                ) => (0.5, 0.5, 1.0),
-                (Some(_), None) => (0.1, 0.1, 0.1),
-                _ => (0.7, 0.7, 0.7),
-            };
-            let name: Option<String> = match (nodes.get(0), nodes.get(1)) {
-                (
-                    Some(&PresenceLabel {
-                        original_label: PointerLabel::Pointer(ref text),
-                        original_id: _,
-                    }),
-                    None,
-                ) => Some(text.clone()),
-                _ => None,
-            };
+                    (
+                        Some(&PresenceLabel {
+                            original_label: PointerLabel::Pointer(_),
+                            original_id: _,
+                        }),
+                        None,
+                    ) => Color(0.5, 0.5, 1.0),
+                    (Some(_), None) => Color(0.1, 0.1, 0.1),
+                    _ => Color(0.7, 0.7, 0.7),
+                };
+                let name: Option<String> = match (nodes.get(0), nodes.get(1)) {
+                    (
+                        Some(&PresenceLabel {
+                            original_label: PointerLabel::Pointer(ref text),
+                            original_id: _,
+                        }),
+                        None,
+                    ) => Some(text.clone()),
+                    _ => None,
+                };
 
-            NodeData {
-                color,
-                border_color: (0.0, 0.0, 0.0, 0.0),
-                width: 1.
-                    + match name {
-                        Some(ref text) => font.measure_width(&text),
-                        None => 0.,
-                    },
-                name,
-            }
-        });
+                NodeData {
+                    color,
+                    border_color: TransparentColor(0.0, 0.0, 0.0, 0.0),
+                    width: 1.
+                        + match name {
+                            Some(ref text) => font.measure_width(&text),
+                            None => 0.,
+                        },
+                    name,
+                }
+            },
+            move |layer_label| LayerData {
+                name: layer_label.clone(),
+            },
+        );
 
         let terminal_config = CompositeConfig::new(
             (
@@ -561,8 +582,8 @@ impl<
 impl<
         T: DrawTag + Serializable<T> + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
-        R: Renderer<T>,
-        L: LayoutRules<T, NodeData, String, GMGraph<T, G>>,
+        R: Renderer<T, NodeData, LayerData>,
+        L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>>,
     > DiagramSectionDrawer for QDDDiagramDrawer<T, G, R, L>
 {
     fn render(&mut self, time: u32) -> () {

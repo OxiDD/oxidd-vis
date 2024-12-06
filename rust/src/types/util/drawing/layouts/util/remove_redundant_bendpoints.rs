@@ -1,4 +1,4 @@
-use crate::{types::util::drawing::diagram_layout::Point, util::logging::console};
+use crate::util::{logging::console, point::Point};
 
 pub fn remove_redundant_bendpoints(points: &Vec<Point>) -> Vec<Point> {
     if points.len() <= 2 {

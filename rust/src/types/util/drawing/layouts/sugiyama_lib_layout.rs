@@ -4,14 +4,14 @@ use oxidd_core::Tag;
 use crate::{
     types::util::{
         drawing::{
-            diagram_layout::{DiagramLayout, Point},
+            diagram_layout::{DiagramLayout, LayerStyle, NodeStyle},
             layout_rules::LayoutRules,
         },
         graph_structure::{
             graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
         },
     },
-    util::logging::console,
+    util::{logging::console, point::Point, transition::Interpolatable},
     wasm_interface::NodeGroupID,
 };
 use rust_sugiyama::from_edges;
@@ -22,18 +22,15 @@ use super::{
     layer_orderings::dummy_layer_ordering::DummyLayerOrdering,
     layered_layout::LayeredLayout,
     layered_layout_traits::{NodePositioning, WidthLabel},
-    util::{
-        color_label::ColorLabel,
-        layered::layer_orderer::{EdgeMap, Order},
-    },
+    util::layered::layer_orderer::{EdgeMap, Order},
 };
 
-pub struct SugiyamaLibLayout<T: DrawTag, GL, LL> {
+pub struct SugiyamaLibLayout<T: DrawTag, S, LS> {
     layout:
-        LayeredLayout<T, GL, LL, DummyLayerOrdering, AverageGroupAlignment, SugiyamaLibPositioning>,
+        LayeredLayout<T, S, LS, DummyLayerOrdering, AverageGroupAlignment, SugiyamaLibPositioning>,
 }
-impl<T: DrawTag, GL, LL> SugiyamaLibLayout<T, GL, LL> {
-    pub fn new(max_curve_offset: f32) -> SugiyamaLibLayout<T, GL, LL> {
+impl<T: DrawTag, S, LS> SugiyamaLibLayout<T, S, LS> {
+    pub fn new(max_curve_offset: f32) -> SugiyamaLibLayout<T, S, LS> {
         SugiyamaLibLayout {
             layout: LayeredLayout::new(
                 DummyLayerOrdering,
@@ -45,27 +42,24 @@ impl<T: DrawTag, GL, LL> SugiyamaLibLayout<T, GL, LL> {
     }
 }
 
-impl<
-        T: DrawTag,
-        GL: ColorLabel + Into<Option<String>> + WidthLabel,
-        G: GroupedGraphStructure<T, GL, String>,
-    > LayoutRules<T, GL, String, G> for SugiyamaLibLayout<T, GL, String>
+impl<T: DrawTag, S: NodeStyle + WidthLabel, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>
+    LayoutRules<T, S, LS, G> for SugiyamaLibLayout<T, S, LS>
 {
     fn layout(
         &mut self,
         graph: &G,
-        old: &DiagramLayout<T>,
+        old: &DiagramLayout<T, S, LS>,
         sources: &G::Tracker,
         time: u32,
-    ) -> DiagramLayout<T> {
+    ) -> DiagramLayout<T, S, LS> {
         self.layout.layout(graph, old, sources, time)
     }
 }
 struct SugiyamaLibPositioning;
-impl<T: DrawTag, GL, LL> NodePositioning<T, GL, LL> for SugiyamaLibPositioning {
+impl<T: DrawTag, S, LS> NodePositioning<T, S, LS> for SugiyamaLibPositioning {
     fn position_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, GL, LL>,
+        graph: &impl GroupedGraphStructure<T, S, LS>,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         node_widths: &HashMap<NodeGroupID, f32>,

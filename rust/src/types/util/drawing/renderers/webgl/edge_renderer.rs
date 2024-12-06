@@ -9,11 +9,12 @@ use web_sys::{WebGl2RenderingContext, WebGlTexture};
 
 use crate::{
     types::util::drawing::{
-        diagram_layout::{Point, Transition},
         renderer::GroupSelection,
         renderers::webgl::util::set_animated_data::{self, set_animated_data},
     },
-    util::{logging::console, matrix4::Matrix4},
+    util::{
+        color::Color, logging::console, matrix4::Matrix4, point::Point, transition::Transition,
+    },
     wasm_interface::NodeGroupID,
 };
 
@@ -38,11 +39,11 @@ pub struct Edge {
 
 #[derive(Clone)]
 pub struct EdgeRenderingType {
-    pub color: (f32, f32, f32),
-    pub select_color: (f32, f32, f32),
-    pub partial_select_color: (f32, f32, f32),
-    pub hover_color: (f32, f32, f32),
-    pub partial_hover_color: (f32, f32, f32),
+    pub color: Color,
+    pub select_color: Color,
+    pub partial_select_color: Color,
+    pub hover_color: Color,
+    pub partial_hover_color: Color,
     pub width: f32,
     pub dash_solid: f32, // The distance per period over which this dash should be solid
     pub dash_transparent: f32, // The distance per
@@ -240,30 +241,30 @@ impl EdgeRenderer {
         self.vertex_renderer
             .set_uniform(context, "time", |u| context.uniform1f(u, time as f32));
         for (index, edge_type) in self.edge_types.iter().enumerate() {
-            let c = edge_type.color;
+            let c = edge_type.color.clone();
             self.vertex_renderer
                 .set_uniform(context, &format!("edgeTypes[{index}].color"), |u| {
                     context.uniform3f(u, c.0, c.1, c.2)
                 });
-            let c = edge_type.hover_color;
+            let c = edge_type.hover_color.clone();
             self.vertex_renderer.set_uniform(
                 context,
                 &format!("edgeTypes[{index}].hoverColor"),
                 |u| context.uniform3f(u, c.0, c.1, c.2),
             );
-            let c = edge_type.select_color;
+            let c = edge_type.select_color.clone();
             self.vertex_renderer.set_uniform(
                 context,
                 &format!("edgeTypes[{index}].selectColor"),
                 |u| context.uniform3f(u, c.0, c.1, c.2),
             );
-            let c = edge_type.partial_hover_color;
+            let c = edge_type.partial_hover_color.clone();
             self.vertex_renderer.set_uniform(
                 context,
                 &format!("edgeTypes[{index}].partialHoverColor"),
                 |u| context.uniform3f(u, c.0, c.1, c.2),
             );
-            let c = edge_type.partial_select_color;
+            let c = edge_type.partial_select_color.clone();
             self.vertex_renderer.set_uniform(
                 context,
                 &format!("edgeTypes[{index}].partialSelectColor"),

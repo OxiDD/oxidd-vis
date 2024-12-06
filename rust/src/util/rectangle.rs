@@ -1,8 +1,6 @@
 use std::fmt::Display;
 
-use crate::types::util::drawing::diagram_layout::Point;
-
-use super::matrix4::Matrix4;
+use super::{matrix4::Matrix4, point::Point};
 
 #[derive(Clone)]
 pub struct Rectangle {

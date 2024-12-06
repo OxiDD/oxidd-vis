@@ -14,7 +14,7 @@ use crate::{
     types::util::{
         drawing::{
             diagram_layout::{
-                DiagramLayout, EdgeLayout, EdgePoint, NodeGroupLayout, Point, Transition,
+                DiagramLayout, EdgeLayout, EdgePoint, LayerStyle, NodeGroupLayout, NodeStyle,
             },
             layout_rules::LayoutRules,
         },
@@ -23,14 +23,18 @@ use crate::{
             grouped_graph_structure::{EdgeCountData, EdgeData, GroupedGraphStructure},
         },
     },
-    util::{logging::console, rectangle::Rectangle},
+    util::{
+        logging::console,
+        point::Point,
+        rectangle::Rectangle,
+        transition::{Interpolatable, Transition},
+    },
     wasm_interface::NodeGroupID,
 };
 
 use super::{
     layered_layout_traits::{LayerGroupSorting, LayerOrdering, NodePositioning, WidthLabel},
     util::{
-        color_label::ColorLabel,
         compute_layers_layout::compute_layers_layout,
         layered::layer_orderer::{get_sequence, EdgeMap, Order},
         remove_redundant_bendpoints::remove_redundant_bendpoints,
@@ -93,20 +97,21 @@ pub fn is_edge_dummy(node: NodeGroupID, dummy_edge_start_id: NodeGroupID) -> boo
 
 impl<
         T: DrawTag,
-        GL: ColorLabel + Into<Option<String>> + WidthLabel,
-        O: LayerOrdering<T, GL, String>,
-        S: LayerGroupSorting<T, GL, String>,
-        P: NodePositioning<T, GL, String>,
-        G: GroupedGraphStructure<T, GL, String>,
-    > LayoutRules<T, GL, String, G> for LayeredLayout<T, GL, String, O, S, P>
+        NS: NodeStyle + WidthLabel,
+        LS: LayerStyle,
+        O: LayerOrdering<T, NS, LS>,
+        S: LayerGroupSorting<T, NS, LS>,
+        P: NodePositioning<T, NS, LS>,
+        G: GroupedGraphStructure<T, NS, LS>,
+    > LayoutRules<T, NS, LS, G> for LayeredLayout<T, NS, LS, O, S, P>
 {
     fn layout(
         &mut self,
         graph: &G,
-        old: &DiagramLayout<T>,
+        old: &DiagramLayout<T, NS, LS>,
         sources: &G::Tracker,
         time: u32,
-    ) -> DiagramLayout<T> {
+    ) -> DiagramLayout<T, NS, LS> {
         // Setup the layers and edges, and a way of adding o them
         let mut layers: Vec<Order> = Vec::new();
         let mut edges: HashMap<NodeGroupID, HashSet<NodeGroupID>> = HashMap::new();
@@ -407,8 +412,8 @@ fn remove_group_crossings(
     }
 }
 
-fn format_layout<T: DrawTag, GL: ColorLabel + Into<Option<String>> + WidthLabel>(
-    graph: &impl GroupedGraphStructure<T, GL, String>,
+fn format_layout<T: DrawTag, NS: NodeStyle + WidthLabel, LS: LayerStyle>(
+    graph: &impl GroupedGraphStructure<T, NS, LS>,
     max_curve_offset: f32,
     node_positions: HashMap<usize, Point>,
     node_widths: &HashMap<NodeGroupID, f32>,
@@ -416,7 +421,7 @@ fn format_layout<T: DrawTag, GL: ColorLabel + Into<Option<String>> + WidthLabel>
     edge_bend_nodes: HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>>,
     edge_connection_nodes: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)>,
     dummy_group_start_id: usize,
-) -> DiagramLayout<T> {
+) -> DiagramLayout<T, NS, LS> {
     let node_size = 1.; // TODO: make configurable
     let node_size_shift = -0.5
         * Point {
@@ -484,7 +489,7 @@ fn format_layout<T: DrawTag, GL: ColorLabel + Into<Option<String>> + WidthLabel>
                 (
                     group_id,
                     NodeGroupLayout {
-                        label: graph.get_group_label(group_id).into(),
+                        style: Transition::plain(graph.get_group_label(group_id)),
                         position: Transition::plain(*bottom_node_positions.get(&group_id).unwrap()),
                         size: Transition::plain(Point {
                             x: node_width,
@@ -494,10 +499,6 @@ fn format_layout<T: DrawTag, GL: ColorLabel + Into<Option<String>> + WidthLabel>
                                     * node_size,
                         }),
                         level_range: (s, e),
-                        color: Transition::plain(graph.get_group_label(group_id).get_color()),
-                        outline_color: Transition::plain(
-                            graph.get_group_label(group_id).get_outline_color(),
-                        ),
                         exists: Transition::plain(1.),
                         edges: graph
                             .get_children(group_id)

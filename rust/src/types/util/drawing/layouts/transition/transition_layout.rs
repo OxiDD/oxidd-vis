@@ -14,18 +14,17 @@ use crate::{
     types::util::{
         drawing::{
             diagram_layout::{
-                DiagramLayout, EdgeLayout, EdgePoint, LayerLayout, NodeGroupLayout, Point,
-                Transition,
+                DiagramLayout, EdgeLayout, EdgePoint, LayerLayout, LayerStyle, NodeGroupLayout,
+                NodeStyle,
             },
             layout_rules::LayoutRules,
-            layouts::util::color_label::{mix, mix_transparent, Color, TransparentColor},
         },
         graph_structure::{
             graph_structure::DrawTag,
             grouped_graph_structure::{EdgeData, GroupedGraphStructure, SourceReader},
         },
     },
-    util::logging::console,
+    util::{logging::console, point::Point, transition::Transition},
     wasm_interface::NodeGroupID,
 };
 
@@ -40,24 +39,29 @@ use super::{
 ///
 pub struct TransitionLayout<
     T: DrawTag,
-    GL,
-    LL,
-    G: GroupedGraphStructure<T, GL, LL>,
-    L: LayoutRules<T, GL, LL, G>,
+    S: NodeStyle,
+    LS: LayerStyle,
+    G: GroupedGraphStructure<T, S, LS>,
+    L: LayoutRules<T, S, LS, G>,
 > {
     layout: L,
     durations: TransitionDurations,
-    group_label: PhantomData<GL>,
-    level_label: PhantomData<LL>,
+    group_label: PhantomData<S>,
+    level_label: PhantomData<LS>,
     // TODO: see if these generics and  phantom data is even needed
     tag: PhantomData<T>,
     graph: PhantomData<G>,
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, GL, LL, G>>
-    TransitionLayout<T, GL, LL, G, L>
+impl<
+        T: DrawTag,
+        S: NodeStyle,
+        LS: LayerStyle,
+        G: GroupedGraphStructure<T, S, LS>,
+        L: LayoutRules<T, S, LS, G>,
+    > TransitionLayout<T, S, LS, G, L>
 {
-    pub fn new(layout: L) -> TransitionLayout<T, GL, LL, G, L> {
+    pub fn new(layout: L) -> TransitionLayout<T, S, LS, G, L> {
         let speed_modifier = 1; // for testing
                                 // TODO: add parameters
         TransitionLayout {
@@ -82,16 +86,21 @@ pub struct TransitionDurations {
     insert_duration: u32,
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, GL, LL, G>>
-    LayoutRules<T, GL, LL, G> for TransitionLayout<T, GL, LL, G, L>
+impl<
+        T: DrawTag,
+        S: NodeStyle,
+        LS: LayerStyle,
+        G: GroupedGraphStructure<T, S, LS>,
+        L: LayoutRules<T, S, LS, G>,
+    > LayoutRules<T, S, LS, G> for TransitionLayout<T, S, LS, G, L>
 {
     fn layout(
         &mut self,
         graph: &G,
-        old: &DiagramLayout<T>,
+        old: &DiagramLayout<T, S, LS>,
         sources: &G::Tracker,
         time: u32,
-    ) -> DiagramLayout<T> {
+    ) -> DiagramLayout<T, S, LS> {
         let duration = self.durations.transition_duration;
         let old_time = time;
         let new = self.layout.layout(graph, old, sources, time);
@@ -154,7 +163,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
             .map(|(&id, group, _)| {
                 (
                     id,
-                    layout_added_group(
+                    layout_added_group::<T, S, LS>(
                         id,
                         group,
                         &some_updated_parents,
@@ -194,17 +203,17 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, L: LayoutRules<T, 
     }
 }
 
-fn layout_updated_group<T: DrawTag>(
+fn layout_updated_group<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     id: NodeGroupID,
-    group: &NodeGroupLayout<T>,
-    old_group: &NodeGroupLayout<T>,
+    group: &NodeGroupLayout<T, S>,
+    old_group: &NodeGroupLayout<T, S>,
     target_data: &TargetGroup,
-    old: &DiagramLayout<T>,
-    new: &DiagramLayout<T>,
+    old: &DiagramLayout<T, S, LS>,
+    new: &DiagramLayout<T, S, LS>,
     durations: &TransitionDurations,
     relations: &ElementRelations<T>,
     time: u32,
-) -> NodeGroupLayout<T> {
+) -> NodeGroupLayout<T, S> {
     let old_time = time;
     let duration = durations.transition_duration;
 
@@ -238,7 +247,6 @@ fn layout_updated_group<T: DrawTag>(
             old: start_size,
             new: group.size.new,
         },
-        label: group.label.clone(),
         exists: Transition {
             old_time,
             duration,
@@ -259,30 +267,24 @@ fn layout_updated_group<T: DrawTag>(
             })
             .chain(deleted_edges_layout.into_iter())
             .collect(),
-        color: Transition {
+        style: Transition {
             old_time,
             duration,
-            old: get_current_color(old_group.color, time),
-            new: group.color.new,
-        },
-        outline_color: Transition {
-            old_time,
-            duration,
-            old: get_current_transparent_color(old_group.outline_color, time),
-            new: group.outline_color.new,
+            old: old_group.style.get(time),
+            new: group.style.new.clone(),
         },
     }
 }
 
-fn layout_added_group<T: DrawTag>(
+fn layout_added_group<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     id: NodeGroupID,
-    group: &NodeGroupLayout<T>,
+    group: &NodeGroupLayout<T, S>,
     // Per node, potentially a parent edge that is a node in both the old and new layout
     some_updated_parents: &HashMap<usize, usize>,
-    updated_groups: &HashMap<usize, NodeGroupLayout<T>>,
+    updated_groups: &HashMap<usize, NodeGroupLayout<T, S>>,
     durations: &TransitionDurations,
     time: u32,
-) -> NodeGroupLayout<T> {
+) -> NodeGroupLayout<T, S> {
     let old_time = time;
     let duration = durations.transition_duration;
 
@@ -295,11 +297,12 @@ fn layout_added_group<T: DrawTag>(
                 old: parent.position.get(time),
                 new: group.position.new,
             },
-            color: Transition {
+
+            style: Transition {
                 old_time,
                 duration,
-                old: get_current_color(parent.color, time),
-                new: group.color.new,
+                old: parent.style.get(time),
+                new: group.style.new.clone(),
             },
             edges: group
                 .edges
@@ -359,15 +362,15 @@ fn layout_added_group<T: DrawTag>(
     }
 }
 
-fn layout_removed_group<T: DrawTag>(
+fn layout_removed_group<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     id: NodeGroupID,
-    group: &NodeGroupLayout<T>,
+    group: &NodeGroupLayout<T, S>,
     target_data: &Option<TargetGroup>,
-    new: &DiagramLayout<T>,
+    new: &DiagramLayout<T, S, LS>,
     durations: &TransitionDurations,
     relations: &ElementRelations<T>,
     time: u32,
-) -> NodeGroupLayout<T> {
+) -> NodeGroupLayout<T, S> {
     let old_time = time;
     let duration = durations.transition_duration;
 
@@ -400,11 +403,11 @@ fn layout_removed_group<T: DrawTag>(
                     old: cur_pos,
                     new: target.position.new + offset.clone(),
                 },
-                color: Transition {
+                style: Transition {
                     old_time,
                     duration,
-                    old: get_current_color(group.color, time),
-                    new: target.color.new,
+                    old: group.style.get(time),
+                    new: target.style.new.clone(),
                 },
                 exists: Transition {
                     old_time: old_time + duration,
@@ -438,13 +441,13 @@ fn layout_removed_group<T: DrawTag>(
     }
 }
 
-fn layout_current_edge<T: DrawTag>(
+fn layout_current_edge<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     from: NodeGroupID,
     edge: &EdgeData<T>,
     edge_layout: &EdgeLayout,
-    old_group: &NodeGroupLayout<T>,
-    old: &DiagramLayout<T>,
-    new: &DiagramLayout<T>,
+    old_group: &NodeGroupLayout<T, S>,
+    old: &DiagramLayout<T, S, LS>,
+    new: &DiagramLayout<T, S, LS>,
     durations: &TransitionDurations,
     relations: &ElementRelations<T>,
     time: u32,
@@ -605,9 +608,9 @@ fn layout_current_edge<T: DrawTag>(
     }
 }
 
-fn layout_deleted_edges<T: DrawTag>(
+fn layout_deleted_edges<T: DrawTag, S: NodeStyle>(
     from: NodeGroupID,
-    group: &NodeGroupLayout<T>,
+    group: &NodeGroupLayout<T, S>,
     point_pos: Point,
     durations: &TransitionDurations,
     relations: &ElementRelations<T>,
@@ -707,12 +710,4 @@ fn layout_deleted_edges<T: DrawTag>(
         .into_iter()
         .flatten()
         .collect()
-}
-
-fn get_current_color(val: Transition<Color>, time: u32) -> Color {
-    mix(&val.old, &val.new, val.get_per(time))
-}
-
-fn get_current_transparent_color(val: Transition<TransparentColor>, time: u32) -> TransparentColor {
-    mix_transparent(&val.old, &val.new, val.get_per(time))
 }

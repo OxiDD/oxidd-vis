@@ -1,9 +1,12 @@
+pub mod color;
 pub mod convert_file;
 pub mod dummy_bdd;
 pub mod free_id_manager;
 pub mod logging;
 pub mod matrix4;
 pub mod panic_hook;
+pub mod point;
 pub mod rc_refcell;
 pub mod rectangle;
 pub mod transformation;
+pub mod transition;

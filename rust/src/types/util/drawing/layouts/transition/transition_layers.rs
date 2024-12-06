@@ -1,17 +1,20 @@
 use itertools::{EitherOrBoth, Itertools};
 
-use crate::types::util::drawing::diagram_layout::{LayerLayout, Transition};
+use crate::{
+    types::util::drawing::diagram_layout::{LayerLayout, LayerStyle},
+    util::transition::Transition,
+};
 
-pub fn transition_layers(
-    old: &Vec<LayerLayout>,
-    new: &Vec<LayerLayout>,
+pub fn transition_layers<LS: LayerStyle>(
+    old: &Vec<LayerLayout<LS>>,
+    new: &Vec<LayerLayout<LS>>,
     duration: u32,
     old_time: u32,
     time: u32,
-) -> Vec<LayerLayout> {
+) -> Vec<LayerLayout<LS>> {
     let mut out = Vec::new();
 
-    let transition_out = |old_layer: &LayerLayout, out: &mut Vec<LayerLayout>| {
+    let transition_out = |old_layer: &LayerLayout<LS>, out: &mut Vec<LayerLayout<LS>>| {
         let exists = old_layer.exists.get(time);
         if exists > 0. {
             out.push(LayerLayout {
@@ -111,13 +114,13 @@ pub fn transition_layers(
     out
 }
 
-pub fn transition_layers_shift(
-    old: &Vec<LayerLayout>,
-    new: &Vec<LayerLayout>,
+pub fn transition_layers_shift<LS: LayerStyle>(
+    old: &Vec<LayerLayout<LS>>,
+    new: &Vec<LayerLayout<LS>>,
     duration: u32,
     old_time: u32,
     time: u32,
-) -> Vec<LayerLayout> {
+) -> Vec<LayerLayout<LS>> {
     let prev_bottom = old.iter().last().map(|last_old| last_old.bottom.get(time));
 
     new.iter()

@@ -22,29 +22,32 @@ use crate::{
     },
     util::{
         logging::console,
+        point::Point,
         rc_refcell::{MutRcRefCell, RcRefCell},
         rectangle::Rectangle,
         transformation::Transformation,
+        transition::Interpolatable,
     },
     wasm_interface::NodeGroupID,
 };
 
 use super::{
-    diagram_layout::{DiagramLayout, Point},
+    diagram_layout::{DiagramLayout, LayerStyle, NodeStyle},
     layout_rules::LayoutRules,
     renderer::{GroupSelection, Renderer},
 };
 
 pub struct Drawer<
     T: DrawTag,
-    GL,
-    R: Renderer<T>,
-    L: LayoutRules<T, GL, String, G>,
-    G: GroupedGraphStructure<T, GL, String>,
+    S: NodeStyle,
+    LS: LayerStyle,
+    R: Renderer<T, S, LS>,
+    L: LayoutRules<T, S, LS, G>,
+    G: GroupedGraphStructure<T, S, LS>,
 > {
     renderer: R,
     layout_rules: L,
-    layout: DiagramLayout<T>,
+    layout: DiagramLayout<T, S, LS>,
     graph: MutRcRefCell<G>,
     sources: G::Tracker,
     transform: Transformation,
@@ -55,13 +58,14 @@ type SelectionData = (Vec<NodeGroupID>, Vec<NodeGroupID>);
 
 impl<
         T: DrawTag,
-        GL,
-        R: Renderer<T>,
-        L: LayoutRules<T, GL, String, G>,
-        G: GroupedGraphStructure<T, GL, String>,
-    > Drawer<T, GL, R, L, G>
+        S: NodeStyle,
+        LS: LayerStyle,
+        R: Renderer<T, S, LS>,
+        L: LayoutRules<T, S, LS, G>,
+        G: GroupedGraphStructure<T, S, LS>,
+    > Drawer<T, S, LS, R, L, G>
 {
-    pub fn new(renderer: R, layout_rules: L, graph: MutRcRefCell<G>) -> Drawer<T, GL, R, L, G> {
+    pub fn new(renderer: R, layout_rules: L, graph: MutRcRefCell<G>) -> Drawer<T, S, LS, R, L, G> {
         Drawer {
             sources: graph.get().create_node_tracker(),
             renderer,
