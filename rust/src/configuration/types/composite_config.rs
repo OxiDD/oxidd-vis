@@ -15,7 +15,7 @@ use crate::configuration::{
 #[derive(Clone)]
 pub struct CompositeConfig<C> {
     config: ConfigurationObject<CompositeConfig<C>, CompositeValue>,
-    data: Rc<C>,
+    readonly_data: Rc<C>,
 }
 
 struct CompositeValue(Vec<Box<dyn Abstractable>>);
@@ -27,7 +27,7 @@ impl<C: 'static> CompositeConfig<C> {
     ) -> CompositeConfig<C> {
         CompositeConfig {
             config: ConfigurationObject::new(CompositeValue(children(&data))),
-            data: Rc::new(data),
+            readonly_data: Rc::new(data),
         }
     }
 }
@@ -36,7 +36,8 @@ impl<C: 'static> Deref for CompositeConfig<C> {
     type Target = C;
 
     fn deref(&self) -> &Self::Target {
-        &self.data
+        // Readonly is fine, since all config objects can be cloned to make them mutable
+        &self.readonly_data
     }
 }
 

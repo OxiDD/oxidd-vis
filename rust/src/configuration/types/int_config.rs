@@ -6,8 +6,8 @@ use wasm_bindgen::JsValue;
 use crate::{
     configuration::{
         configuration_object::{
-            AbstractConfigurationObject, Abstractable, Configurable, ConfigurationObject,
-            ValueMapping,
+            AbstractConfigurationObject, Abstractable, ConfigObjectGetter, Configurable,
+            ConfigurationObject, ValueMapping,
         },
         configuration_object_types::ConfigurationObjectType,
         mutator::Mutator,
@@ -79,23 +79,12 @@ impl Abstractable for IntConfig {
         AbstractConfigurationObject::new(ConfigurationObjectType::Int, self.data.clone())
     }
 }
-impl IntConfig {
-    pub fn add_value_dirty_listener<F: FnMut() -> () + 'static>(&mut self, listener: F) -> usize {
-        self.data
-            .add_dirty_listener(Rc::new(RefCell::new(listener)))
-    }
-
-    pub fn remove_value_dirty_listener(&mut self, listener: usize) -> bool {
-        self.data.remove_dirty_listener(listener)
-    }
-
-    pub fn add_value_change_listener<F: FnMut() -> () + 'static>(&mut self, listener: F) -> usize {
-        self.data
-            .add_change_listener(Rc::new(RefCell::new(listener)))
-    }
-
-    pub fn remove_value_change_listener(&mut self, listener: usize) -> bool {
-        self.data.remove_change_listener(listener)
+impl ConfigObjectGetter<IntConfig, IntValue> for IntConfig {
+    fn with_config_object<O, U: FnOnce(&mut ConfigurationObject<IntConfig, IntValue>) -> O>(
+        &mut self,
+        e: U,
+    ) -> O {
+        e(&mut self.data)
     }
 }
 

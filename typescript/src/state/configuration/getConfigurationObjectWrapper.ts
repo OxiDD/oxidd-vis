@@ -4,6 +4,7 @@ import {IntConfig} from "./types/IntConfig";
 import {LabelConfig} from "./types/LabelConfig";
 import {CompositeConfig} from "./types/CompositeConfig";
 import {ChoiceConfig} from "./types/ChoiceConfig";
+import {ButtonConfig} from "./types/ButtonConfig";
 
 /**
  * Creates the configuration object wrapper from the given abstract configuration object
@@ -22,6 +23,8 @@ export function getConfigurationObjectWrapper(
         return new CompositeConfig(object);
     } else if (type == ConfigurationObjectType.Choice) {
         return new ChoiceConfig(object);
+    } else if (type == ConfigurationObjectType.Button) {
+        return new ButtonConfig(object);
     }
     return null as never;
 }

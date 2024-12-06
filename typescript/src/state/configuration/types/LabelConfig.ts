@@ -13,7 +13,7 @@ export class LabelConfig extends ConfigurationObject<{label: string; style: numb
     /** The label style */
     public readonly style = new Derived<LabelStyle>(watch => watch(this._value).style);
     /** The label text */
-    public readonly label = new Derived<String>(watch => watch(this._value).label);
+    public readonly label = new Derived<string>(watch => watch(this._value).label);
 
     /**
      * Creates a new label config object

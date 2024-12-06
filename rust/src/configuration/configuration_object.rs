@@ -296,3 +296,23 @@ impl AbstractConfigurationObject {
             .add_change_listener(Rc::new(RefCell::new(listener)))
     }
 }
+
+pub trait ConfigObjectGetter<T: ValueMapping<V> + 'static, V: 'static> {
+    fn with_config_object<O, U: FnOnce(&mut ConfigurationObject<T, V>) -> O>(&mut self, e: U) -> O;
+
+    fn add_value_dirty_listener<F: FnMut() -> () + 'static>(&mut self, listener: F) -> usize {
+        self.with_config_object(|data| data.add_dirty_listener(Rc::new(RefCell::new(listener))))
+    }
+
+    fn remove_value_dirty_listener(&mut self, listener: usize) -> bool {
+        self.with_config_object(|data| data.remove_dirty_listener(listener))
+    }
+
+    fn add_value_change_listener<F: FnMut() -> () + 'static>(&mut self, listener: F) -> usize {
+        self.with_config_object(|data| data.add_change_listener(Rc::new(RefCell::new(listener))))
+    }
+
+    fn remove_value_change_listener(&mut self, listener: usize) -> bool {
+        self.with_config_object(|data| data.remove_change_listener(listener))
+    }
+}

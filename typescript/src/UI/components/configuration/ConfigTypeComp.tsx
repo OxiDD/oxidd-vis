@@ -8,6 +8,8 @@ import {CompositeConfig} from "../../../state/configuration/types/CompositeConfi
 import {CompositeConfigComp} from "./CompositeConfigComp";
 import {ChoiceConfig} from "../../../state/configuration/types/ChoiceConfig";
 import {ChoiceConfigComp} from "./ChoiceConfigComp";
+import {ButtonConfigComp} from "./ButtonConfigComp";
+import {ButtonConfig} from "../../../state/configuration/types/ButtonConfig";
 
 export const ConfigTypeComp: FC<{value: IConfigObjectType}> = ({value}) => {
     if (value instanceof IntConfig) return <IntConfigComp value={value} />;
@@ -16,5 +18,6 @@ export const ConfigTypeComp: FC<{value: IConfigObjectType}> = ({value}) => {
     if (value instanceof CompositeConfig)
         return <CompositeConfigComp value={value} ChildComp={ConfigTypeComp} />;
     if (value instanceof ChoiceConfig) return <ChoiceConfigComp value={value} />;
+    if (value instanceof ButtonConfig) return <ButtonConfigComp value={value} />;
     return <></>;
 };

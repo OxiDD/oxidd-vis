@@ -20,6 +20,7 @@ use crate::configuration::configuration_object::AbstractConfigurationObject;
 use crate::configuration::configuration_object::Abstractable;
 use crate::configuration::observe_configuration::after_configuration_change;
 use crate::configuration::observe_configuration::on_configuration_change;
+use crate::configuration::types::button_config::ButtonConfig;
 use crate::configuration::types::choice_config::Choice;
 use crate::configuration::types::choice_config::ChoiceConfig;
 use crate::configuration::types::composite_config::CompositeConfig;
@@ -365,6 +366,7 @@ pub struct QDDDiagramDrawer<
         CompositeConfig<(
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
+            ButtonConfig,
         )>,
     >,
 }
@@ -488,9 +490,20 @@ impl<
                         Choice::new(PresenceRemainder::Hide, "hide"),
                     ]),
                 ),
+                ButtonConfig::new_labeled("press me"),
             ),
-            |(f1, f2)| vec![Box::new(f1.clone()), Box::new(f2.clone())],
+            |(f1, f2, f3)| {
+                vec![
+                    Box::new(f1.clone()),
+                    Box::new(f2.clone()),
+                    Box::new(f3.clone()),
+                ]
+            },
         );
+        terminal_config
+            .2
+            .clone()
+            .add_press_listener(|| console::log!("I was pressed!"));
         let config = Configuration::new(terminal_config.clone());
 
         let mut out = QDDDiagramDrawer {

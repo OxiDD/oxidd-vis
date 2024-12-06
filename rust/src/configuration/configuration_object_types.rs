@@ -7,4 +7,5 @@ pub enum ConfigurationObjectType {
     Choice,
     Label,
     Composite,
+    Button,
 }
