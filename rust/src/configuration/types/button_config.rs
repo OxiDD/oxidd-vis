@@ -76,12 +76,15 @@ impl ValueMapping<ButtonValue> for ButtonConfig {
             .into()
     }
     fn from_js_value(js_val: JsValue, cur: &ButtonValue) -> Option<ButtonValue> {
-        let press_count = JsObject::load(js_val)
+        let obj = JsObject::load(js_val);
+        let press_count = obj
             .get("pressCount")
             .and_then(|v| v.as_f64().map(|f| f as usize))
             .unwrap_or_default();
+        let text = obj.get("text").and_then(|v| v.as_string());
         Some(ButtonValue {
             press_count,
+            text,
             ..cur.clone()
         })
     }

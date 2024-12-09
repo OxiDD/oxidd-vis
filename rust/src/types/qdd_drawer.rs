@@ -26,6 +26,7 @@ use crate::configuration::types::choice_config::ChoiceConfig;
 use crate::configuration::types::composite_config::CompositeConfig;
 use crate::configuration::types::int_config::IntConfig;
 use crate::configuration::types::label_config::LabelConfig;
+use crate::configuration::types::text_output_config::TextOutputConfig;
 use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
@@ -367,6 +368,7 @@ pub struct QDDDiagramDrawer<
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
             ButtonConfig,
+            TextOutputConfig,
         )>,
     >,
 }
@@ -491,19 +493,22 @@ impl<
                     ]),
                 ),
                 ButtonConfig::new_labeled("press me"),
+                TextOutputConfig::new(true),
             ),
-            |(f1, f2, f3)| {
+            |(f1, f2, f3, f4)| {
                 vec![
                     Box::new(f1.clone()),
                     Box::new(f2.clone()),
                     Box::new(f3.clone()),
+                    Box::new(f4.clone()),
                 ]
             },
         );
+        let mut output = terminal_config.3.clone();
         terminal_config
             .2
             .clone()
-            .add_press_listener(|| console::log!("I was pressed!"));
+            .add_press_listener(move || output.set("I was pressed".into()).commit());
         let config = Configuration::new(terminal_config.clone());
 
         let mut out = QDDDiagramDrawer {

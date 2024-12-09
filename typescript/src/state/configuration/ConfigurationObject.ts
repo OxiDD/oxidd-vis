@@ -115,7 +115,7 @@ export class ConfigurationObject<V> {
      */
     public deserialize(config: IConfigObjectSerialization<V>): IMutator {
         return chain(push => {
-            push(this.setValue(config.value));
+            push(this.deserializeValue(config.value));
             const children = this._children.get();
             config.children.forEach((childData, i) => {
                 const child = children[i];
@@ -124,5 +124,14 @@ export class ConfigurationObject<V> {
                 push(child.deserialize(childData as never));
             });
         });
+    }
+
+    /**
+     * Deserializes the current value
+     * @param value The value to deserialize
+     * @returns The mutator to commit the change
+     */
+    public deserializeValue(value: V): IMutator {
+        return this.setValue(value);
     }
 }

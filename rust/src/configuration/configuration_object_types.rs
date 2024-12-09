@@ -8,4 +8,5 @@ pub enum ConfigurationObjectType {
     Label,
     Composite,
     Button,
+    TextOutput,
 }

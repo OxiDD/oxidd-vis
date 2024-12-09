@@ -1,6 +1,7 @@
 import {AbstractConfigurationObject} from "oxidd-viz-rust";
 import {ConfigurationObject} from "../ConfigurationObject";
 import {Derived} from "../../../watchables/Derived";
+import {IMutator} from "../../../watchables/mutator/_types/IMutator";
 
 /**
  * A configuration object for button presses
@@ -27,5 +28,12 @@ export class ButtonConfig extends ConfigurationObject<{
             text: current.text,
             pressCount: current.pressCount + 1,
         }).commit();
+    }
+
+    /** @override */
+    public deserializeValue(value: {pressCount: number; text: string}): IMutator {
+        // Don't deserialize the pressCount as that would force a press on load
+        const current = this._value.get();
+        return this.setValue({pressCount: current.pressCount, text: value.text});
     }
 }
