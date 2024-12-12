@@ -660,17 +660,17 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         self.group_by_id.keys().into_iter().map(|&id| id).collect()
     }
 
-    fn get_hidden(&self) -> Option<NodeGroupID> {
+    fn get_hidden(&self) -> Vec<NodeGroupID> {
         if self.group_by_id.contains_key(&0) {
-            Some(0)
+            vec![0]
         } else {
-            None
+            vec![]
         }
     }
 
-    fn get_parents(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>> {
+    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
         self.group_by_id.get(&group).map_or_else(
-            || Vec::default().into_iter(),
+            || Vec::default(),
             |group| {
                 group
                     .in_edges
@@ -689,14 +689,13 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                         },
                     )
                     .collect::<Vec<EdgeCountData<T>>>()
-                    .into_iter()
             },
         )
     }
 
-    fn get_children(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>> {
+    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
         self.group_by_id.get(&group).map_or_else(
-            || Vec::default().into_iter(),
+            || Vec::default(),
             |group| {
                 group
                     .out_edges
@@ -716,7 +715,6 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                     )
                     .sorted()
                     .collect::<Vec<EdgeCountData<T>>>()
-                    .into_iter()
             },
         )
     }
@@ -735,7 +733,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         )
     }
 
-    fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID> {
+    fn get_nodes_of_group(&self, group: NodeGroupID) -> Vec<NodeID> {
         self.group_by_id
             .get(&group)
             .map_or_else(
@@ -743,6 +741,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 |group| group.nodes.keys().cloned().collect_vec().into_iter(),
             )
             .sorted()
+            .collect_vec()
     }
 
     fn get_group(&self, node: NodeID) -> NodeGroupID {

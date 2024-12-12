@@ -89,6 +89,7 @@ use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl::node_renderer::NodeRenderingColorConfig;
 use super::util::drawing::renderers::webgl_renderer::WebglNodeStyle;
 use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
+use super::util::graph_structure::graph_manipulators::group_presence_adjuster::GroupPresenceAdjuster;
 use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
 use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
@@ -414,7 +415,12 @@ type MPresenceAdjuster<T, G> = RCGraph<
     NodePresenceAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
 >;
 type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, G>;
-type GMGraph<T, G> = GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData, LayerData>;
+type GMGraph<T, G> = GroupPresenceAdjuster<
+    T,
+    NodeData,
+    LayerData,
+    GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData, LayerData>,
+>;
 
 impl<
         T: DrawTag + Serializable<T> + 'static,
@@ -439,7 +445,7 @@ impl<
         let roots = modified_graph.get_roots();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
 
-        let grouped_graph = GMGraph::new_shared(
+        let mut grouped_graph = GMGraph::new(GroupLabelAdjuster::new_shared(
             group_manager.clone(),
             move |nodes| {
                 // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
@@ -499,7 +505,8 @@ impl<
             move |layer_label| LayerData {
                 name: layer_label.clone(),
             },
-        );
+        ));
+        grouped_graph.hide(1);
 
         let terminal_config = CompositeConfig::new(
             (
@@ -562,10 +569,10 @@ impl<
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         }
 
-        let max = 500;
-        if out.group_manager.read().get_nodes_of_group(from).len() < max {
-            out.reveal_all(from, max);
-        }
+        // let max = 500;
+        // if out.group_manager.read().get_nodes_of_group(from).len() < max {
+        //     out.reveal_all(from, max);
+        // }
 
         // Connect the config
         let drawer = out.drawer.clone();
@@ -619,7 +626,7 @@ impl<
             self.group_manager.read().get_nodes_of_group(explored_group)
         };
         let mut count = 0;
-        for node_id in nodes.rev() {
+        for node_id in nodes.into_iter().rev() {
             // console::log!("{node_id}");
             self.create_group(vec![TargetID(TargetIDType::NodeID, node_id)]);
 

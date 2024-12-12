@@ -1,11 +1,18 @@
-use std::{marker::PhantomData, vec::IntoIter};
+use std::{
+    io::{Cursor, Result},
+    marker::PhantomData,
+    vec::IntoIter,
+};
 
 use oxidd::LevelNo;
 
 use crate::{
-    types::util::graph_structure::{
-        graph_structure::DrawTag,
-        grouped_graph_structure::{EdgeCountData, GroupedGraphStructure},
+    types::util::{
+        graph_structure::{
+            graph_structure::DrawTag,
+            grouped_graph_structure::{EdgeCountData, GroupedGraphStructure},
+        },
+        storage::state_storage::StateStorage,
     },
     util::rc_refcell::MutRcRefCell,
     wasm_interface::{NodeGroupID, NodeID},
@@ -57,7 +64,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> GroupedGraphS
         self.graph.read().get_all_groups()
     }
 
-    fn get_hidden(&self) -> Option<NodeGroupID> {
+    fn get_hidden(&self) -> Vec<NodeGroupID> {
         self.graph.read().get_hidden()
     }
 
@@ -69,18 +76,15 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> GroupedGraphS
         self.graph.read().get_group_label(node)
     }
 
-    fn get_parents(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>> {
+    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
         self.graph.read().get_parents(group)
     }
 
-    fn get_children(
-        &self,
-        group: crate::wasm_interface::NodeGroupID,
-    ) -> IntoIter<EdgeCountData<T>> {
+    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
         self.graph.read().get_children(group)
     }
 
-    fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID> {
+    fn get_nodes_of_group(&self, group: NodeGroupID) -> Vec<NodeID> {
         self.graph.read().get_nodes_of_group(group)
     }
 
@@ -98,5 +102,21 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> GroupedGraphS
 
     fn create_node_tracker(&mut self) -> Self::Tracker {
         self.graph.get().create_node_tracker()
+    }
+}
+
+impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> StateStorage
+    for LevelLabelAdjuster<T, GL, LL, G, NLL>
+where
+    G: StateStorage,
+{
+    fn write(&self, stream: &mut Cursor<&mut Vec<u8>>) -> Result<()> {
+        self.graph.read().write(stream)?;
+        Ok(())
+    }
+
+    fn read(&mut self, stream: &mut Cursor<&Vec<u8>>) -> Result<()> {
+        self.graph.get().read(stream)?;
+        Ok(())
     }
 }

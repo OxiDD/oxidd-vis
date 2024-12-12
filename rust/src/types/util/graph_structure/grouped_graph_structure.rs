@@ -11,12 +11,12 @@ pub trait GroupedGraphStructure<T: DrawTag, GL, LL> {
     type Tracker: NodeTracker;
     fn get_roots(&self) -> Vec<NodeGroupID>;
     fn get_all_groups(&self) -> Vec<NodeGroupID>;
-    fn get_hidden(&self) -> Option<NodeGroupID>;
+    fn get_hidden(&self) -> Vec<NodeGroupID>;
     fn get_group(&self, node: NodeID) -> NodeGroupID;
-    fn get_group_label(&self, node: NodeID) -> GL;
-    fn get_parents(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>>;
-    fn get_children(&self, group: NodeGroupID) -> IntoIter<EdgeCountData<T>>;
-    fn get_nodes_of_group(&self, group: NodeGroupID) -> IntoIter<NodeID>;
+    fn get_group_label(&self, group: NodeID) -> GL;
+    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>>;
+    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>>;
+    fn get_nodes_of_group(&self, group: NodeGroupID) -> Vec<NodeID>;
     fn get_level_range(&self, group: NodeGroupID) -> (LevelNo, LevelNo);
     fn get_level_label(&self, level: LevelNo) -> LL;
     /// Refreshes the node groups according to changes of the underlying graph

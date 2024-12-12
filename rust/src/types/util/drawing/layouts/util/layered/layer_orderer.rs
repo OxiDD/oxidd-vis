@@ -31,7 +31,7 @@ pub type OrderedEdgeMap = HashMap<NodeID, Vec<NodeID>>;
 // Counts the number of crossings between two layers
 pub fn count_crossings(order: (&Order, &Order), edges: &EdgeMap) -> usize {
     let ordered_nodes = get_sequence(&order.0);
-    let sorted_edge_indices: HashMap<NodeID, Vec<NodeID>> = order
+    let sorted_edge_indices: HashMap<NodeID, Vec<(NodeID, usize)>> = order
         .0
         .keys()
         .map(|node| {
@@ -39,7 +39,7 @@ pub fn count_crossings(order: (&Order, &Order), edges: &EdgeMap) -> usize {
                 *node,
                 edges
                     .get(node)
-                    .map(|weights| get_edge_index_sequence(weights.keys(), &order.1))
+                    .map(|weights| get_edge_index_sequence(weights.iter(), &order.1))
                     .unwrap_or_else(|| Vec::new()),
             )
         })
@@ -73,27 +73,28 @@ pub fn swap_edges(edges: &EdgeMap) -> EdgeMap {
     out
 }
 
-pub fn count_pair_crossings((node_edges, next_node_edges): (&Vec<usize>, &Vec<usize>)) -> usize {
+pub fn count_pair_crossings(
+    (node_edges, next_node_edges): (&Vec<(usize, usize)>, &Vec<(usize, usize)>),
+) -> usize {
     let mut cross_count = 0;
-    for &edge in node_edges {
-        for &next_edge in next_node_edges {
+    for &(edge, weight) in node_edges {
+        for &(next_edge, next_weight) in next_node_edges {
             if next_edge >= edge {
                 break;
             }
             // Every edge of the next node (on the right) that starts before the main node's edge (on the left), must cross
-            cross_count += 1;
+            cross_count += weight * next_weight;
         }
     }
     cross_count
 }
 
-pub fn get_edge_index_sequence<'a, I: Iterator<Item = &'a NodeID>>(
+pub fn get_edge_index_sequence<'a, I: Iterator<Item = (&'a NodeID, &'a usize)>>(
     edges: I,
     order: &Order,
-) -> Vec<usize> {
+) -> Vec<(usize, usize)> {
     edges
-        .filter_map(|to| order.get(to))
-        .map(|index| *index)
+        .filter_map(|(to, &weight)| order.get(to).map(|&index| (index, weight)))
         .sorted()
         .collect()
 }

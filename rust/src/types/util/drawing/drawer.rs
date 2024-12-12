@@ -128,6 +128,7 @@ impl<
                 self.graph
                     .read()
                     .get_nodes_of_group(group_id)
+                    .into_iter()
                     .take(max_group_expansion)
             })
             .collect()

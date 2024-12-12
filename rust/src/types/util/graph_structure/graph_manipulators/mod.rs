@@ -1,4 +1,5 @@
 pub mod abstracted_graph;
+pub mod group_presence_adjuster;
 pub mod label_adjusters;
 pub mod node_presence_adjuster;
 pub mod pointer_node_adjuster;

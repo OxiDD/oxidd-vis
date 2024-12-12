@@ -98,7 +98,7 @@ fn hierarchical_barycenter_order(
 
     // Apply a final downwards sweep, since the resulting layout seems more intuitive for top-down reading of BDDs
     let old_crossings = count_graph_crossings(&orders, edges);
-    let new_orders = apply_barycenters_oneway(&orders, reversed_edges, ordering);
+    let new_orders = apply_barycenters_oneway(&orders, reversed_edges, edges, ordering);
     let new_crossings = count_graph_crossings(&new_orders, edges);
     if new_crossings <= old_crossings {
         orders = new_orders;
@@ -120,7 +120,7 @@ fn apply_barycenter_iterative(
     for i in 0..max_iterations {
         let old_crossings = crossings;
 
-        let new_down_orders = apply_barycenters_oneway(&orders, reversed_edges, ordering);
+        let new_down_orders = apply_barycenters_oneway(&orders, reversed_edges, edges, ordering);
         let new_crossings = count_graph_crossings(&new_down_orders, edges);
         if new_crossings <= crossings {
             crossings = new_crossings;
@@ -128,7 +128,7 @@ fn apply_barycenter_iterative(
         }
 
         orders.reverse();
-        let mut new_up_orders = apply_barycenters_oneway(&orders, edges, ordering);
+        let mut new_up_orders = apply_barycenters_oneway(&orders, edges, reversed_edges, ordering);
         new_up_orders.reverse();
         let new_crossings = count_graph_crossings(&new_up_orders, edges);
         if new_crossings <= crossings {
@@ -192,6 +192,7 @@ fn reverse_equal_nodes(
 
 fn apply_barycenters_oneway(
     orders: &Vec<Order>,
+    reverse_edges: &EdgeMap,
     edges: &EdgeMap,
     ordering: &dyn LayerOrderer,
 ) -> Vec<Order> {
@@ -199,10 +200,21 @@ fn apply_barycenters_oneway(
         return orders.clone();
     };
     let mut out = vec![prev_layer.clone()];
+
     for layer in orders.iter().skip(1) {
-        let new_layer = ordering.order(layer, &prev_layer, edges);
-        out.push(new_layer);
-        prev_layer = out.last().unwrap(); // == new_layer
+        let new_layer = ordering.order(layer, &prev_layer, reverse_edges);
+        if false {
+            let old_crossings = count_crossings((prev_layer, layer), edges);
+            let new_crossings = count_crossings((prev_layer, &new_layer), edges);
+            out.push(if old_crossings >= new_crossings {
+                new_layer
+            } else {
+                layer.clone()
+            });
+        } else {
+            out.push(new_layer);
+        }
+        prev_layer = out.last().unwrap(); // == new_layer/layer
     }
     out
 }
