@@ -36,11 +36,19 @@ impl TextOutputConfig {
     }
 
     pub fn set(&mut self, output: String) -> Mutator<(), ()> {
-        console::log!("Set value");
         self.data.set_value(|cur| {
             Some(TextOutputValue {
                 output: Some(output),
                 output_version: cur.output_version + 1,
+                ..cur.clone()
+            })
+        })
+    }
+
+    pub fn reset(&mut self) -> Mutator<(), ()> {
+        self.data.set_value(|cur| {
+            Some(TextOutputValue {
+                output: None,
                 ..cur.clone()
             })
         })

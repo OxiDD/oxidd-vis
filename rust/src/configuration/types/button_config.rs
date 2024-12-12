@@ -84,7 +84,7 @@ impl ValueMapping<ButtonValue> for ButtonConfig {
         let text = obj.get("text").and_then(|v| v.as_string());
         Some(ButtonValue {
             press_count,
-            text,
+            // text,
             ..cur.clone()
         })
     }

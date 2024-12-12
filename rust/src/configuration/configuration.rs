@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use crate::util::{free_id_manager::FreeIdManager, rc_refcell::MutRcRefCell};
 
 use super::configuration_object::{AbstractConfigurationObject, Abstractable};
@@ -11,6 +13,7 @@ impl<C: Abstractable> Configuration<C> {
         Configuration { config }
     }
 }
+// impl Deref for Configuration<>
 
 impl<C: Abstractable> Abstractable for Configuration<C> {
     fn get_abstract(&self) -> AbstractConfigurationObject {

@@ -82,7 +82,7 @@ impl<T: DrawTag, S, LS> NodePositioning<T, S, LS> for SugiyamaLibPositioning {
         let layouts = from_edges(
             &edges
                 .iter()
-                .flat_map(|(from, to_set)| to_set.iter().map(move |to| (*from as u32, *to as u32)))
+                .flat_map(|(from, to_set)| to_set.keys().map(move |to| (*from as u32, *to as u32)))
                 .collect::<Vec<(u32, u32)>>()[..],
         )
         .vertex_spacing(spacing)

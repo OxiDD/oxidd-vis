@@ -96,7 +96,7 @@ fn remove_internal_group_to_other_edges(
             // Is any node representing a group, except the last node representing said group
             let is_non_end_group_node = dummy_owners.get(&node).is_some()
                 && edges
-                    .iter()
+                    .keys()
                     .any(|to| dummy_owners.get(&node) == dummy_owners.get(to));
 
             (
@@ -104,17 +104,17 @@ fn remove_internal_group_to_other_edges(
                 if is_non_end_group_node {
                     edges
                         .iter()
-                        .filter(|&to| dummy_owners.get(&node) == dummy_owners.get(to))
+                        .filter(|(to, _)| dummy_owners.get(&node) == dummy_owners.get(to))
                         // .filter(|&to| false)
-                        .cloned()
+                        .map(|(&to, &weight)| (to, weight))
                         .collect()
                 } else {
                     edges
                         .iter()
-                        .filter(|&&to| {
+                        .filter(|&(&to, _)| {
                             !is_group_dummy(to, dummy_group_start_id, dummy_edge_start_id)
                         })
-                        .cloned()
+                        .map(|(&to, &weight)| (to, weight))
                         .collect()
                 },
             )

@@ -85,16 +85,26 @@ fn hierarchical_barycenter_order(
         );
 
         if i == max_phase2_iterations - 1 {
-            return orders; // Prevent unnecessary equal reversal
+            break;
         }
 
         if let Some(new_orders) = reverse_equal_nodes(&orders, edges, reversed_edges, ordering) {
             orders = new_orders;
         } else {
             console::log!("used {} phase 2 iters", i + 1);
-            return orders;
+            break;
         }
     }
+
+    // Apply a final downwards sweep, since the resulting layout seems more intuitive for top-down reading of BDDs
+    let old_crossings = count_graph_crossings(&orders, edges);
+    let new_orders = apply_barycenters_oneway(&orders, reversed_edges, ordering);
+    let new_crossings = count_graph_crossings(&new_orders, edges);
+    if new_crossings <= old_crossings {
+        orders = new_orders;
+    }
+    console::log!("crossings old: {}, new: {}", old_crossings, new_crossings);
+
     orders
 }
 
@@ -112,7 +122,7 @@ fn apply_barycenter_iterative(
 
         let new_down_orders = apply_barycenters_oneway(&orders, reversed_edges, ordering);
         let new_crossings = count_graph_crossings(&new_down_orders, edges);
-        if new_crossings < crossings {
+        if new_crossings <= crossings {
             crossings = new_crossings;
             orders = new_down_orders;
         }
@@ -121,7 +131,7 @@ fn apply_barycenter_iterative(
         let mut new_up_orders = apply_barycenters_oneway(&orders, edges, ordering);
         new_up_orders.reverse();
         let new_crossings = count_graph_crossings(&new_up_orders, edges);
-        if new_crossings < crossings {
+        if new_crossings <= crossings {
             crossings = new_crossings;
             orders = new_up_orders;
         } else {

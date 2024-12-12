@@ -80,6 +80,10 @@ impl<
         }
     }
 
+    pub fn get_current_layout(&self) -> DiagramLayout<T, S, LS> {
+        self.layout.clone()
+    }
+
     pub fn layout(&mut self, time: u32) {
         self.graph.get().refresh();
         self.layout =

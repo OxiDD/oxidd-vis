@@ -33,12 +33,12 @@ impl LayerOrderer for BarycenterOrdering {
 // Applies a single barycenter sort on the second row of the order
 fn apply_single_barycenter_order(layer: &Order, next_layer: &Order, edges: &EdgeMap) -> Order {
     layer
-        .keys()
-        .map(|&node| (node, get_barycenter(node, next_layer, edges)))
-        .sorted_by_key(|(node, center)| (*center, *node)) // Use nodeID as a secondary sort condition for stability
+        .iter()
+        .map(|(&node, &index)| (node, get_barycenter(node, next_layer, edges), index))
+        .sorted_by_key(|&(_, center, prev_index)| (center, prev_index)) // Use nodeID as a secondary sort condition for stability
         // .sorted_by_key(|(_, center)| *center)
         .enumerate()
-        .map(|(index, (node, _))| (node, index))
+        .map(|(index, (node, _, _))| (node, index))
         .collect()
 }
 
@@ -47,12 +47,15 @@ fn get_barycenter(node: NodeID, other_layer: &Order, edges: &EdgeMap) -> Ratio<u
     let Some(edges) = edges.get(&node) else {
         return Ratio::new(0, 1);
     };
-    for to in edges {
+
+    let mut total_weights = 0;
+    for (to, weight) in edges {
         if let Some(node_pos) = other_layer.get(to) {
-            sum += node_pos;
+            sum += *node_pos * weight;
+            total_weights += weight;
         }
     }
-    Ratio::new(sum, edges.len())
+    Ratio::new(sum, total_weights)
 }
 
 fn get_equal_barycenter_groups(

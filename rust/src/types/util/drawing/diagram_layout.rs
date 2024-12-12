@@ -54,7 +54,7 @@ pub struct EdgeLayout {
     pub end_offset: Transition<Point>,
     pub points: Vec<EdgePoint>,
     pub exists: Transition<f32>, // Transition for newly created edges
-    pub curve_offset: Transition<f32>, // If no bendpoints are used, this curve offset can be used for curving the edge
+    pub curve_offset: Transition<f32>, // If no bendpoints are used, this curve offset can be used for curving the edge, in the range [-1, 1], 0 represents no bend
 }
 
 #[derive(Copy, Clone)]

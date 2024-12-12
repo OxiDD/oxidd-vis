@@ -13,6 +13,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::u32;
 use web_sys::console::log;
 
 use crate::configuration::configuration::Configuration;
@@ -80,6 +81,9 @@ use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
 use super::util::drawing::layouts::toggle_layout::ToggleLayout;
 use super::util::drawing::layouts::transition::transition_layout::TransitionLayout;
 use super::util::drawing::renderer::Renderer;
+use super::util::drawing::renderers::latex_renderer::LatexLayerStyle;
+use super::util::drawing::renderers::latex_renderer::LatexNodeStyle;
+use super::util::drawing::renderers::latex_renderer::LatexRenderer;
 use super::util::drawing::renderers::util::Font::Font;
 use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
 use super::util::drawing::renderers::webgl::node_renderer::NodeRenderingColorConfig;
@@ -272,7 +276,7 @@ where
         )
         .unwrap();
         let layout = LayeredLayout::new(
-            SugiyamaOrdering::new(1, 1),
+            SugiyamaOrdering::new(2, 2),
             // AverageGroupAlignment,
             OrderingGroupAlignment,
             BrandesKopfPositioning,
@@ -296,6 +300,8 @@ pub struct NodeData {
     border_color: TransparentColor,
     width: f32,
     name: Option<String>,
+    is_terminal: Option<usize>,
+    is_group: bool,
 }
 
 impl Interpolatable for NodeData {
@@ -304,8 +310,23 @@ impl Interpolatable for NodeData {
             color: self.color.mix(&other.color, frac),
             border_color: self.border_color.mix(&other.border_color, frac),
             width: self.width * (1.0 - frac) + other.width * frac,
-            name: self.name.clone(),
+            name: other.name.clone(),
+            is_terminal: other.is_terminal.clone(),
+            is_group: other.is_group,
         }
+    }
+}
+impl LatexNodeStyle for NodeData {
+    fn is_terminal(&self) -> Option<String> {
+        self.is_terminal.map(|v| format!("terminal{}", v))
+    }
+
+    fn is_group(&self) -> bool {
+        self.is_group
+    }
+
+    fn get_label(&self) -> Option<String> {
+        self.name.clone()
     }
 }
 impl WebglNodeStyle for NodeData {
@@ -347,6 +368,11 @@ impl LayerStyle for LayerData {
     }
 }
 impl WebglLayerStyle for LayerData {
+    fn get_label(&self) -> String {
+        self.name.clone()
+    }
+}
+impl LatexLayerStyle for LayerData {
     fn get_label(&self) -> String {
         self.name.clone()
     }
@@ -418,7 +444,7 @@ impl<
             move |nodes| {
                 // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
 
-                let color = match (nodes.get(0), nodes.get(1)) {
+                let (is_terminal, is_group, color) = match (nodes.get(0), nodes.get(1)) {
                     (
                         Some(&PresenceLabel {
                             original_label:
@@ -431,9 +457,9 @@ impl<
                         None,
                     ) => {
                         if terminal == "T" {
-                            Color(0.2, 1., 0.2)
+                            (Some(1), false, Color(0.2, 1., 0.2))
                         } else {
-                            Color(1., 0.2, 0.2)
+                            (Some(0), false, Color(1., 0.2, 0.2))
                         }
                     }
                     (
@@ -442,9 +468,9 @@ impl<
                             original_id: _,
                         }),
                         None,
-                    ) => Color(0.5, 0.5, 1.0),
-                    (Some(_), None) => Color(0.1, 0.1, 0.1),
-                    _ => Color(0.7, 0.7, 0.7),
+                    ) => (None, false, Color(0.5, 0.5, 1.0)),
+                    (Some(_), None) => (None, false, Color(0.1, 0.1, 0.1)),
+                    _ => (None, true, Color(0.7, 0.7, 0.7)),
                 };
                 let name: Option<String> = match (nodes.get(0), nodes.get(1)) {
                     (
@@ -466,6 +492,8 @@ impl<
                             None => 0.,
                         },
                     name,
+                    is_terminal,
+                    is_group,
                 }
             },
             move |layer_label| LayerData {
@@ -492,7 +520,7 @@ impl<
                         Choice::new(PresenceRemainder::Hide, "hide"),
                     ]),
                 ),
-                ButtonConfig::new_labeled("press me"),
+                ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
             ),
             |(f1, f2, f3, f4)| {
@@ -504,11 +532,6 @@ impl<
                 ]
             },
         );
-        let mut output = terminal_config.3.clone();
-        terminal_config
-            .2
-            .clone()
-            .add_press_listener(move || output.set("I was pressed".into()).commit());
         let config = Configuration::new(terminal_config.clone());
 
         let mut out = QDDDiagramDrawer {
@@ -523,6 +546,17 @@ impl<
             )),
             config,
         };
+
+        let drawer = out.drawer.clone();
+        let mut latex_renderer = LatexRenderer::new();
+        let mut output = terminal_config.3.clone();
+        terminal_config.2.clone().add_press_listener(move || {
+            latex_renderer.update_layout(&drawer.get().get_current_layout());
+            latex_renderer.render(u32::MAX);
+            let out = latex_renderer.get_output();
+            output.set(out.into()).commit();
+        });
+
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         for root in roots {
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
@@ -626,6 +660,7 @@ impl<
     }
 
     fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
+        // self.config.
         self.group_manager.get().create_group(from)
     }
 

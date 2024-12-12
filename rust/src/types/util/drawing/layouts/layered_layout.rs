@@ -55,6 +55,7 @@ pub struct LayeredLayout<
     tag: PhantomData<T>,
     group_label: PhantomData<GL>,
     level_label: PhantomData<LL>,
+    group_edge_weight: usize,
 }
 
 impl<
@@ -80,6 +81,7 @@ impl<
             tag: PhantomData,
             group_label: PhantomData,
             level_label: PhantomData,
+            group_edge_weight: 1000, // TODO: make configurable
         }
     }
 }
@@ -114,7 +116,7 @@ impl<
     ) -> DiagramLayout<T, NS, LS> {
         // Setup the layers and edges, and a way of adding o them
         let mut layers: Vec<Order> = Vec::new();
-        let mut edges: HashMap<NodeGroupID, HashSet<NodeGroupID>> = HashMap::new();
+        let mut edges: EdgeMap = HashMap::new();
 
         let mut dummy_owners: HashMap<NodeGroupID, NodeGroupID> = HashMap::new();
         let mut next_free_id = 0; // uninitialized, will be initialized by add_groups
@@ -123,6 +125,7 @@ impl<
             graph,
             &mut layers,
             &mut edges,
+            self.group_edge_weight,
             &mut dummy_owners,
             &mut next_free_id,
         );
@@ -215,17 +218,18 @@ fn add_to_layer(layers: &mut Vec<Order>, layer: usize, id: NodeGroupID) {
     layer.insert(id, layer.len());
 }
 
-fn add_to_edges(edges: &mut EdgeMap, from: NodeGroupID, to: NodeGroupID) {
+fn add_to_edges(edges: &mut EdgeMap, from: NodeGroupID, to: NodeGroupID, weight: usize) {
     edges
         .entry(from)
-        .or_insert_with(|| HashSet::new())
-        .insert(to);
+        .or_insert_with(|| HashMap::new())
+        .insert(to, weight);
 }
 
 fn add_groups_with_dummies<T: DrawTag, GL, LL>(
     graph: &impl GroupedGraphStructure<T, GL, LL>,
     layers: &mut Vec<Order>,
     edges: &mut EdgeMap,
+    group_edge_weight: usize,
     dummy_owners: &mut HashMap<NodeGroupID, NodeGroupID>,
     next_free_id: &mut NodeGroupID,
 ) -> (NodeGroupID, HashMap<NodeGroupID, HashMap<u32, usize>>) {
@@ -247,7 +251,7 @@ fn add_groups_with_dummies<T: DrawTag, GL, LL>(
         for layer in start + 1..=end {
             let layer_group_id = *next_free_id;
             *next_free_id += 1;
-            add_to_edges(edges, prev, layer_group_id);
+            add_to_edges(edges, prev, layer_group_id, group_edge_weight);
             dummy_owners.insert(layer_group_id, group);
             add_to_layer(layers, layer as usize, layer_group_id);
             group_layers
@@ -306,7 +310,7 @@ fn add_edges_with_dummies<T: DrawTag, GL, LL>(
                 dummy_owners.insert(id, first_bend_id);
                 bends.push(id);
                 add_to_layer(layers, layer as usize, id);
-                add_to_edges(edges, prev, id);
+                add_to_edges(edges, prev, id, 1);
                 prev = id;
             }
             edge_bend_nodes.insert((group, edge_data.clone()), bends);
@@ -333,7 +337,7 @@ fn add_edges_with_dummies<T: DrawTag, GL, LL>(
             };
             edge_connection_nodes
                 .insert((group, edge_data), (*group_connection, to_group_connection));
-            add_to_edges(edges, prev, to_group_connection);
+            add_to_edges(edges, prev, to_group_connection, 1);
         }
     }
 
@@ -377,7 +381,7 @@ fn remove_group_crossings(
             while node_index < from_index {
                 let node = layer[node_index];
                 if let Some(node_edges) = edges.get_mut(&node) {
-                    node_edges.retain(|to_node| {
+                    node_edges.retain(|to_node, _| {
                         next_layer
                             .get(to_node)
                             .map(|&index| index <= to_index)
@@ -398,7 +402,7 @@ fn remove_group_crossings(
             while node_index > from_index {
                 let node = layer[node_index];
                 if let Some(node_edges) = edges.get_mut(&node) {
-                    node_edges.retain(|to_node| {
+                    node_edges.retain(|to_node, _| {
                         next_layer
                             .get(to_node)
                             .map(|&index| index >= to_index)

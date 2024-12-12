@@ -24,21 +24,23 @@ pub trait LayerOrderer {
 }
 
 pub type Order = HashMap<NodeID, usize>; // A mapping from node id to index in the order, hence this map should be a bijection from some X subset of NodeID, to the set of [0..|X|-1]
-pub type EdgeMap = HashMap<NodeID, HashSet<NodeID>>;
+pub type EdgeMap = HashMap<NodeID, HashMap<NodeID, usize>>; // A mapping from node to node, with a given weight
 
 pub type OrderedEdgeMap = HashMap<NodeID, Vec<NodeID>>;
 
 // Counts the number of crossings between two layers
 pub fn count_crossings(order: (&Order, &Order), edges: &EdgeMap) -> usize {
     let ordered_nodes = get_sequence(&order.0);
-    let empty = HashSet::new();
     let sorted_edge_indices: HashMap<NodeID, Vec<NodeID>> = order
         .0
         .keys()
         .map(|node| {
             (
                 *node,
-                get_edge_index_sequence(edges.get(node).unwrap_or(&empty), &order.1),
+                edges
+                    .get(node)
+                    .map(|weights| get_edge_index_sequence(weights.keys(), &order.1))
+                    .unwrap_or_else(|| Vec::new()),
             )
         })
         .collect();
@@ -62,10 +64,10 @@ pub fn count_crossings(order: (&Order, &Order), edges: &EdgeMap) -> usize {
 pub fn swap_edges(edges: &EdgeMap) -> EdgeMap {
     let mut out = HashMap::new();
     for (from, node_edges) in edges {
-        for to in node_edges {
+        for (to, &weight) in node_edges {
             out.entry(*to)
-                .or_insert_with(|| HashSet::new())
-                .insert(*from);
+                .or_insert_with(|| HashMap::new())
+                .insert(*from, weight);
         }
     }
     out
@@ -85,9 +87,11 @@ pub fn count_pair_crossings((node_edges, next_node_edges): (&Vec<usize>, &Vec<us
     cross_count
 }
 
-pub fn get_edge_index_sequence(edges: &HashSet<NodeID>, order: &Order) -> Vec<usize> {
+pub fn get_edge_index_sequence<'a, I: Iterator<Item = &'a NodeID>>(
+    edges: I,
+    order: &Order,
+) -> Vec<usize> {
     edges
-        .iter()
         .filter_map(|to| order.get(to))
         .map(|index| *index)
         .sorted()
@@ -103,7 +107,7 @@ pub fn get_ordered_edge_map(edge_map: &EdgeMap, orders: &Vec<Order>) -> OrderedE
                 out.insert(
                     *node,
                     edges
-                        .iter()
+                        .keys()
                         .filter_map(|to| next_layer.get(to).map(|index| (to, index)))
                         .sorted_by_key(|(_, &index)| index)
                         .map(|(to, _)| *to)
