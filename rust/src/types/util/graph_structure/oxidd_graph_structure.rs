@@ -195,6 +195,7 @@ where
             let r = node.with_manager_shared(|manager, edge| manager.get_node(edge).level());
             return r;
         }
+        console::log!("Unknown node's level requested: {}", node_id);
         0
     }
 

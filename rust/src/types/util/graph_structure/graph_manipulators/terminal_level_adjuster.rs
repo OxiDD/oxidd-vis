@@ -71,6 +71,7 @@ impl<T: DrawTag + 'static, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     fn process_graph_changes(&mut self) {
         let events = self.graph.consume_events(&self.graph_events);
 
+        let mut level_change_events = Vec::<Change>::new();
         let mut maybe_terminals: Option<Vec<NodeID>> = None;
         for event in events.clone() {
             match event {
@@ -93,13 +94,19 @@ impl<T: DrawTag + 'static, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                             .map(|&(_, p)| p)
                             .collect();
                         self.terminal_parents_cache.insert(node, parents);
+                        level_change_events.push(Change::LevelChange { node });
                     }
                 }
                 _ => {}
             }
         }
 
-        self.event_writer.write_vec(events);
+        self.event_writer.write_vec(
+            level_change_events
+                .into_iter()
+                .chain(events.into_iter())
+                .collect(),
+        );
     }
 }
 

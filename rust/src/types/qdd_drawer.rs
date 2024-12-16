@@ -506,7 +506,7 @@ impl<
                 name: layer_label.clone(),
             },
         ));
-        grouped_graph.hide(1);
+        grouped_graph.hide(0);
 
         let terminal_config = CompositeConfig::new(
             (
@@ -564,7 +564,7 @@ impl<
             output.set(out.into()).commit();
         });
 
-        let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+        // let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         for root in roots {
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         }

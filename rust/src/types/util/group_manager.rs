@@ -167,11 +167,14 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                         None
                     });
                     if let Some(group) = add_group {
-                        // // Don't add it to the group in which it's already implicitly present
-                        // if group == 0 {
-                        //     return;
-                        // }
-                        self.add_node_to_group(node, group);
+                        if self.get_node_group_id(node) == None {
+                            // // Don't add it to the group in which it's already implicitly present
+                            // if group == 0 {
+                            //     return;
+                            // }
+
+                            self.add_node_to_group(node, group);
+                        }
                     } else {
                         let group_id =
                             self.create_group(vec![TargetID(TargetIDType::NodeID, node)]);
@@ -206,11 +209,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         }
     }
 
-    fn get_node_group_id(&self, node: NodeID) -> NodeGroupID {
+    fn get_node_group_id(&self, node: NodeID) -> Option<NodeGroupID> {
         if let Some(group_id) = self.group_id_by_node.get(&node) {
-            *group_id
+            Some(*group_id)
         } else {
-            0
+            None
         }
     }
 
@@ -281,6 +284,27 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         let from_level = self.graph.get_level(from_source);
         let to_level = self.graph.get_level(to_source);
 
+        let has_from = self
+            .group_by_id
+            .get_mut(&from)
+            .and_then(|from_group| from_group.nodes.get_mut(&from_source))
+            .is_some();
+        let has_to = self
+            .group_by_id
+            .get_mut(&to)
+            .and_then(|to_group| to_group.nodes.get_mut(&to_source))
+            .is_some();
+
+        if !has_from {
+            self.ensure_node_in_group(from_source);
+            return;
+        }
+        if !has_to {
+            self.ensure_node_in_group(to_source);
+            return;
+        }
+
+        // self.ensure_node_in_group(from_source);
         if let Some(from_group) = self.group_by_id.get_mut(&from) {
             GroupManager::<T, NL, LL, G>::add_edges_to_set(
                 &mut from_group.out_edges,
@@ -289,41 +313,36 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
             );
             from_group
                 .nodes
-                .entry(from_source)
-                .or_insert_with(|| ConnectionData::new())
+                .get_mut(&from_source)
+                .unwrap()
                 .children
                 .insert((from_level, to_level, edge_type, to_source));
         }
 
+        // self.ensure_node_in_group(to_source);
         if let Some(to_group) = self.group_by_id.get_mut(&to) {
             GroupManager::<T, NL, LL, G>::add_edges_to_set(
                 &mut to_group.in_edges,
                 EdgeData::new(from, to_level, from_level, edge_type),
                 count,
             );
-            to_group
-                .nodes
-                .entry(to_source)
-                .or_insert_with(|| ConnectionData::new())
-                .parents
-                .insert((from_level, to_level, edge_type, from_source));
+            to_group.nodes.get_mut(&to_source).unwrap().parents.insert((
+                from_level,
+                to_level,
+                edge_type,
+                from_source,
+            ));
         }
     }
 
     fn remove_node_from_group(&mut self, node: NodeID) -> NodeGroupID {
         let cur_group_id = self.get_node_group_id(node);
-        if cur_group_id == 0 && !self.group_by_id.contains_key(&0) {
+        let Some(cur_group_id) = cur_group_id else {
             return 0;
-        }
+        };
 
         // Check if the node is explicitly contained (instead of implicitly, which can happen for the 0 group)
         let Some(cur_group) = self.group_by_id.get(&cur_group_id) else {
-            console::log!(
-                "cur group {}, for node {}, does not exist",
-                cur_group_id,
-                node
-            );
-
             return cur_group_id;
         };
         let contained = cur_group.nodes.contains_key(&node);
@@ -335,7 +354,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         if let Some(connections) = cur_group.nodes.get(&node) {
             let connections = connections.clone();
             for (from_level, to_level, edge_type, child_id) in connections.children {
-                let child_group_id = self.get_node_group_id(child_id);
+                let Some(child_group_id) = self.get_node_group_id(child_id) else {
+                    continue;
+                };
                 if contained && cur_group_id != child_group_id {
                     self.remove_edges(
                         cur_group_id,
@@ -351,7 +372,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
             }
 
             for (from_level, to_level, edge_type, parent_id) in connections.parents {
-                let parent_group_id = self.get_node_group_id(parent_id);
+                let Some(parent_group_id) = self.get_node_group_id(parent_id) else {
+                    continue;
+                };
                 if contained && parent_group_id != cur_group_id {
                     self.remove_edges(
                         parent_group_id,
@@ -375,8 +398,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         cur_group.layer_min.remove(&node);
         cur_group.layer_max.remove(&node);
 
-        // Default node to be in group 0
-        self.group_id_by_node.insert(node, 0);
+        self.group_id_by_node.remove(&node);
 
         cur_group_id
     }
@@ -405,33 +427,91 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 
         // Add new connections
         for (edge_type, child_id) in self.graph.get_children(node) {
-            let child_group_id = self.get_node_group_id(child_id);
-            let child_level = self.graph.get_level(child_id);
+            let child_group_id = self.get_node_group_id(child_id).unwrap_or(0);
 
             if group_id != child_group_id {
                 self.add_edges(group_id, node, child_group_id, child_id, edge_type, 1);
             }
-
-            // Ensure the child id is in there, which may not have been the case initially for the initial group 0
-            if child_group_id == 0 {
-                let Some(child_group) = self.group_by_id.get_mut(&child_group_id) else {
-                    continue;
-                };
-                if !child_group.nodes.contains_key(&child_id) {
-                    child_group.nodes.insert(child_id, ConnectionData::new());
-                    child_group.layer_min.push(child_id, Reverse(child_level));
-                    child_group.layer_max.push(child_id, child_level);
-                }
-            }
         }
 
         for (edge_type, parent_id) in self.graph.get_known_parents(node) {
-            let parent_group_id = self.get_node_group_id(parent_id);
+            let parent_group_id = self.get_node_group_id(parent_id).unwrap_or(0);
 
             if parent_group_id != group_id {
                 self.add_edges(parent_group_id, parent_id, group_id, node, edge_type, 1);
             }
         }
+    }
+
+    // Makes sure that a node is in a group (group 0 if it was not yet found before)
+    fn ensure_node_in_group(&mut self, node_id: NodeID) {
+        let group_id = self.get_node_group_id(node_id).unwrap_or(0);
+        let Some(node_group) = self.group_by_id.get_mut(&group_id) else {
+            return;
+        };
+        if !node_group.nodes.contains_key(&node_id) {
+            self.add_node_to_group(node_id, group_id);
+        }
+    }
+
+    fn refill_if_hidden_emptying(&mut self) {
+        let Some(hidden_group) = self.group_by_id.get_mut(&0) else {
+            return;
+        };
+
+        // If the group is almost empty, also make sure its connections are known
+        if hidden_group.nodes.len() == 1 {
+            let &node_id = hidden_group.nodes.keys().next().unwrap();
+            for (_, neighbor) in self
+                .graph
+                .get_children(node_id)
+                .into_iter()
+                .chain(self.graph.get_known_parents(node_id).into_iter())
+            {
+                self.ensure_node_in_group(neighbor);
+            }
+        }
+    }
+
+    fn format_groups(&self) -> String {
+        format!(
+            "({})",
+            self.group_by_id
+                .iter()
+                .map(|(&group_id, group)| format!(
+                    "{}: {{\n    range: ({}, {}), \n    nodes:({}),\n    in:[{}],\n    out:[{}]\n}}",
+                    group_id,
+                    group.layer_min.peek().map(|v| format!("{}", v.1.0)).unwrap_or_default(),
+                    group.layer_max.peek().map(|v| format!("{}", v.1)).unwrap_or_default(),
+                    group
+                        .nodes
+                        .iter()
+                        .map(|(node, edge)| format!(
+                            "{}: {{in: [{}], out: [{}]}}",
+                            node,
+                            edge.parents
+                                .iter()
+                                .map(|(_, _, _, to)| format!("{}", to))
+                                .join(", "),
+                            edge.children
+                                .iter()
+                                .map(|(_, _, _, to)| format!("{}", to))
+                                .join(", ")
+                        ))
+                        .join(", "),
+                    group
+                        .in_edges
+                        .iter()
+                        .map(|(ed, count)| format!("({}, {})", ed.to_string(group_id), count))
+                        .join(", "),
+                    group
+                        .out_edges
+                        .iter()
+                        .map(|(ed, count)| format!("({}, {})", ed.to_string(group_id), count))
+                        .join(", ")
+                ))
+                .join(", \n")
+        )
     }
 }
 
@@ -479,6 +559,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                 layer_max,
             },
         );
+        for root_id in root_ids {
+            self.group_id_by_node.insert(root_id, 0);
+        }
         self.graph.consume_events(&self.graph_events);
     }
 
@@ -501,6 +584,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
             if from_id_type == TargetIDType::NodeID {
                 let old_group_id = self.remove_node_from_group(from_id);
                 self.add_node_to_group(from_id, to);
+                if old_group_id == 0 {
+                    self.refill_if_hidden_emptying();
+                }
                 self.remove_group_if_empty(old_group_id);
             } else if from_id == to {
                 continue;
@@ -540,50 +626,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                         .collect(),
                     to,
                 );
-
-                // let from_group = &self.get_node_group(from_id);
-                // let out_edges = from_group.out_edges.clone();
-                // let in_edges = from_group.in_edges.clone();
-                // let from_nodes = from_group.nodes.clone();
-                // let layer_min: Vec<(NodeID, Reverse<LevelNo>)> =
-                //     from_group.layer_min.iter().map(|(&n, &i)| (n, i)).collect();
-                // let layer_max: Vec<(NodeID, LevelNo)> =
-                //     from_group.layer_max.iter().map(|(&n, &i)| (n, i)).collect();
-
-                // for edge_data in out_edges.keys() {
-                //     let count = out_edges[edge_data];
-                //     let EdgeData {
-                //         to: edge_to,
-                //         from_level,
-                //         to_level,
-                //         edge_type,
-                //     } = *edge_data;
-
-                //     self.remove_edges(from_id, from_level, edge_to, to_level, edge_type, count);
-                //     self.add_edges(to, from_level, edge_to, to_level, edge_type, count);
-                // }
-                // for edge_data in in_edges.keys() {
-                //     let count = in_edges[edge_data];
-                //     let EdgeData {
-                //         to: edge_to,
-                //         from_level,
-                //         to_level,
-                //         edge_type,
-                //     } = *edge_data;
-
-                //     self.remove_edges(edge_to, to_level, from_id, from_level, edge_type, count);
-                //     self.add_edges(edge_to, to_level, to, from_level, edge_type, count);
-                // }
-
-                // for from_node in from_nodes.keys() {
-                //     self.group_id_by_node.insert(*from_node, to);
-                // }
-                // let to_group = self.get_node_group_mut(to);
-                // to_group.nodes.extend(from_nodes);
-                // to_group.layer_min.extend(layer_min);
-                // to_group.layer_max.extend(layer_max);
-
-                // self.remove_group(from_id);
+                // TODO: make a more efficient merge that doesn't need to handle the group node by node
             } else {
                 return false;
             }
@@ -599,7 +642,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         let sources = from
             .iter()
             .map(|&TargetID(target_type, id)| match target_type {
-                TargetIDType::NodeID => self.get_node_group_id(id),
+                TargetIDType::NodeID => self.get_node_group_id(id).unwrap_or(0),
                 _ => id,
             })
             .filter(|id| self.group_by_id.contains_key(id))
@@ -638,6 +681,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                 if self.get_nodes_of_group(self.get_group(child)).len() == 1 {
                     continue;
                 }
+
                 self.create_group(vec![TargetID(TargetIDType::NodeID, child)]);
             }
         }
@@ -652,7 +696,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         let root_nodes = self.graph.get_roots();
         root_nodes
             .into_iter()
-            .map(|root_node| self.get_node_group_id(root_node))
+            .map(|root_node| self.get_node_group_id(root_node).unwrap_or(0))
             .collect()
     }
 
@@ -745,7 +789,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 
     fn get_group(&self, node: NodeID) -> NodeGroupID {
-        self.get_node_group_id(node)
+        self.get_node_group_id(node).unwrap_or(0)
     }
 
     fn create_node_tracker(&mut self) -> Self::Tracker {
@@ -810,15 +854,18 @@ where
             console::log!("Created events: {}", events.iter().join(",\n"));
         }
 
+        let mut all_found_nodes = HashSet::new();
         let group_count = stream.read_u32::<LittleEndian>()?;
+        let mut to_add = Vec::new();
         for _ in 0..group_count {
             let group_id = stream.read_u32::<LittleEndian>()? as usize;
             let node_count = stream.read_u32::<LittleEndian>()?;
 
             let mut targets = Vec::<TargetID>::new();
             for _ in 0..node_count {
-                let node = stream.read_u32::<LittleEndian>()?;
-                targets.push(TargetID::new(TargetIDType::NodeID, node as usize));
+                let node = stream.read_u32::<LittleEndian>()? as usize;
+                targets.push(TargetID::new(TargetIDType::NodeID, node));
+                all_found_nodes.insert(node);
             }
 
             if !self.group_by_id.contains_key(&group_id) {
@@ -835,8 +882,48 @@ where
                 );
             }
 
+            to_add.push((targets, group_id));
+            // self.set_group(targets, group_id);
+        }
+
+        self.explore_from_root(all_found_nodes);
+
+        for (targets, group_id) in to_add {
             self.set_group(targets, group_id);
         }
         Ok(())
+    }
+}
+
+impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManager<T, NL, LL, G>
+where
+    G: StateStorage,
+{
+    // This function can be used to make sure that all nodes in the given set are found through "children" accesses. The graph structure assumes that all reference node IDs are found this way, so it's important that if the ID is obtained another way it's found using this function before further use
+    fn explore_from_root(&mut self, nodes: HashSet<NodeID>) {
+        let mut found = HashSet::new();
+        let mut frontier = Vec::new();
+
+        for node in self.graph.get_roots() {
+            if !nodes.contains(&node) {
+                continue;
+            }
+            found.insert(node);
+            frontier.push(node);
+        }
+
+        while !frontier.is_empty() {
+            let node = frontier.pop().unwrap();
+            for (_, child) in self.graph.get_children(node) {
+                if !nodes.contains(&child) {
+                    continue;
+                }
+                if found.contains(&child) {
+                    continue;
+                }
+                found.insert(child);
+                frontier.push(child);
+            }
+        }
     }
 }
