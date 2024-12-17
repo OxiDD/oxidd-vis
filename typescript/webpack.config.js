@@ -1,9 +1,10 @@
 const path = require("path");
+const webpack = require('webpack');
 const build = path.join(process.cwd(), "build");
-const FilterWebpackOutput = require("filter-webpack-output");
+const CopyPlugin = require("copy-webpack-plugin");
 module.exports = env => ({
     entry: "./src/index.tsx",
-    devtool: env == "prod" ? undefined : "inline-source-map",
+    devtool: env == "prod" ? undefined : "source-map",
     mode: env == "prod" ? "production" : "development",
     module: {
         rules: [
@@ -19,8 +20,7 @@ module.exports = env => ({
             {
                 test: /\.txt$/i,
                 use: "raw-loader",
-            },
-            {}
+            }
         ],
     },
     experiments: {
@@ -39,15 +39,16 @@ module.exports = env => ({
     },
     resolve: {
         extensions: [".tsx", ".ts", ".js", ".txt"],
-        alias: {
-            "vis-network": "vis-network/standalone",
-        },
     },
     output: {
         filename: "bundle.js",
         path: build,
     },
     plugins: [
-        new FilterWebpackOutput(/(vendors-)?node_modules_monaco-editor/), // You can also pass as array of RegExp
-    ],
+        new CopyPlugin({
+          patterns: [
+            { from: "node_modules/oxidd-viz-rust/oxidd_viz_rust_bg.wasm.map", to: "" },
+          ],
+        }),
+      ],
 });
