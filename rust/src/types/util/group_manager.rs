@@ -678,7 +678,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
                 }
 
                 split.insert(child);
-                if self.get_nodes_of_group(self.get_group(child)).len() == 1 {
+                let group_id = self.get_group(child);
+                if self.get_nodes_of_group(group_id).len() == 1 && group_id != 0 {
                     continue;
                 }
 

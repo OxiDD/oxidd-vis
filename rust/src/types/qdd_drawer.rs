@@ -73,6 +73,7 @@ use super::util::drawing::layouts::layer_group_sorting::average_group_alignment:
 use super::util::drawing::layouts::layer_group_sorting::ordering_group_alignment::OrderingGroupAlignment;
 use super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaOrdering;
 use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
+use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning_corrected::BrandesKopfPositioningCorrected;
 use super::util::drawing::layouts::layer_positionings::dummy_layer_positioning::DummyLayerPositioning;
 use super::util::drawing::layouts::layered_layout::LayeredLayout;
 use super::util::drawing::layouts::layered_layout_traits::WidthLabel;
@@ -280,7 +281,8 @@ where
             SugiyamaOrdering::new(2, 2),
             // AverageGroupAlignment,
             OrderingGroupAlignment,
-            BrandesKopfPositioning,
+            // BrandesKopfPositioning,
+            BrandesKopfPositioningCorrected,
             // DummyLayerPositioning,
             0.3,
         );

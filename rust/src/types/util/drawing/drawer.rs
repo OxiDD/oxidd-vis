@@ -125,6 +125,7 @@ impl<
             .map(|(&group_id, _)| group_id);
         groups
             .flat_map(|group_id| {
+                console::log!("Selected group: {}", group_id);
                 self.graph
                     .read()
                     .get_nodes_of_group(group_id)

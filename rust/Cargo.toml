@@ -101,8 +101,8 @@ features = [
 wasm-bindgen-test = "0.3.34"
 wasm-pack = "0.13.0"
 
-[package.metadata.wasm-pack.profile.dev.wasm-bindgen]
-dwarf-debug-info = true
+# [package.metadata.wasm-pack.profile.dev.wasm-bindgen]
+# dwarf-debug-info = true
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.
