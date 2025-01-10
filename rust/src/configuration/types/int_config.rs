@@ -39,6 +39,15 @@ impl IntConfig {
             }),
         }
     }
+    pub fn new_min_max(val: isize, min: Option<isize>, max: Option<isize>) -> IntConfig {
+        IntConfig {
+            data: ConfigurationObject::new(IntValue {
+                value: val,
+                min,
+                max,
+            }),
+        }
+    }
 
     pub fn get(&self) -> isize {
         self.data.with_value(|v| v.value)

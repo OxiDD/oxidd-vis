@@ -77,6 +77,9 @@ impl<
             level_label: PhantomData,
         }
     }
+    pub fn get_layout_rules(&mut self) -> &mut L {
+        &mut self.layout
+    }
 }
 
 #[derive(Clone)]

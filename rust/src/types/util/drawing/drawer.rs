@@ -80,6 +80,10 @@ impl<
         }
     }
 
+    pub fn get_layout_rules(&mut self) -> &mut L {
+        &mut self.layout_rules
+    }
+
     pub fn get_current_layout(&self) -> DiagramLayout<T, S, LS> {
         self.layout.clone()
     }

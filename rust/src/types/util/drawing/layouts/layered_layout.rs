@@ -84,6 +84,16 @@ impl<
             group_edge_weight: 1000, // TODO: make configurable
         }
     }
+
+    pub fn get_ordering(&mut self) -> &mut O {
+        &mut self.ordering
+    }
+    pub fn get_group_aligning(&mut self) -> &mut G {
+        &mut self.group_aligning
+    }
+    pub fn get_positioning_aligning(&mut self) -> &mut P {
+        &mut self.positioning
+    }
 }
 
 pub fn is_group_dummy(

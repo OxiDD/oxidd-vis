@@ -20,7 +20,7 @@ use super::{
 
 pub struct OxiddGraphStructure<DT: DrawTag, F: Function, T, S: Fn(&T) -> String>
 where
-    for<'id> F::Manager<'id>: Manager<EdgeTag = DT>,
+    for<'id> F::Manager<'id>: Manager<EdgeTag = DT, Terminal = T>,
 {
     roots: Vec<F>,
     node_by_id: HashMap<NodeID, F>,

@@ -702,7 +702,12 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 
     fn get_all_groups(&self) -> Vec<NodeGroupID> {
-        self.group_by_id.keys().into_iter().map(|&id| id).collect()
+        self.group_by_id
+            .keys()
+            .into_iter()
+            .map(|&id| id)
+            .sorted()
+            .collect()
     }
 
     fn get_hidden(&self) -> Vec<NodeGroupID> {
@@ -733,6 +738,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                             EdgeCountData::new(to, from_level, to_level, edge_type, count)
                         },
                     )
+                    .sorted()
                     .collect::<Vec<EdgeCountData<T>>>()
             },
         )

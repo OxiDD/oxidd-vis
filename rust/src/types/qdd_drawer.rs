@@ -19,11 +19,13 @@ use web_sys::console::log;
 use crate::configuration::configuration::Configuration;
 use crate::configuration::configuration_object::AbstractConfigurationObject;
 use crate::configuration::configuration_object::Abstractable;
+use crate::configuration::configuration_object::ConfigObjectGetter;
 use crate::configuration::observe_configuration::after_configuration_change;
 use crate::configuration::observe_configuration::on_configuration_change;
 use crate::configuration::types::button_config::ButtonConfig;
 use crate::configuration::types::choice_config::Choice;
 use crate::configuration::types::choice_config::ChoiceConfig;
+use crate::configuration::types::composite_config;
 use crate::configuration::types::composite_config::CompositeConfig;
 use crate::configuration::types::int_config::IntConfig;
 use crate::configuration::types::label_config::LabelConfig;
@@ -71,6 +73,9 @@ use super::util::drawing::drawer::Drawer;
 use super::util::drawing::layout_rules::LayoutRules;
 use super::util::drawing::layouts::layer_group_sorting::average_group_alignment::AverageGroupAlignment;
 use super::util::drawing::layouts::layer_group_sorting::ordering_group_alignment::OrderingGroupAlignment;
+use super::util::drawing::layouts::layer_orderings::combinators::sequence_ordering::SequenceOrdering;
+use super::util::drawing::layouts::layer_orderings::pseudo_random_layer_ordering::PseudoRandomLayerOrdering;
+use super::util::drawing::layouts::layer_orderings::random_layer_ordering::RandomLayerOrdering;
 use super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaOrdering;
 use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
 use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning_corrected::BrandesKopfPositioningCorrected;
@@ -278,7 +283,11 @@ where
         )
         .unwrap();
         let layout = LayeredLayout::new(
-            SugiyamaOrdering::new(2, 2),
+            // SugiyamaOrdering::new(2, 2),
+            SequenceOrdering::new(
+                PseudoRandomLayerOrdering::new(2, 0),
+                SugiyamaOrdering::new(2, 2),
+            ),
             // AverageGroupAlignment,
             OrderingGroupAlignment,
             // BrandesKopfPositioning,
@@ -290,10 +299,51 @@ where
         let graph = OxiddGraphStructure::new(
             self.roots.iter().cloned().collect(),
             self.levels.clone(),
-            |t| t.to_string(),
+            terminal_to_string,
         );
         let diagram = QDDDiagramDrawer::new(graph, renderer, layout, font);
         Box::new(diagram)
+    }
+}
+
+fn terminal_to_string<T: ToString>(terminal: &T) -> String {
+    terminal.to_string()
+}
+
+trait LayoutEditing {
+    fn set_seed(&mut self, seed: usize) -> ();
+}
+impl<
+        T: ToString + Clone + 'static,
+        E: Edge<Tag = ()> + 'static,
+        N: InnerNode<E> + HasLevel + 'static,
+        R: DiagramRules<E, N, T> + 'static,
+        F: Function + 'static,
+        S: Fn(&T) -> String,
+    > LayoutEditing
+    for TransitionLayout<
+        (),
+        NodeData,
+        LayerData,
+        GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
+        LayeredLayout<
+            (),
+            NodeData,
+            LayerData,
+            SequenceOrdering<(), NodeData, LayerData, PseudoRandomLayerOrdering, SugiyamaOrdering>,
+            OrderingGroupAlignment,
+            BrandesKopfPositioningCorrected,
+        >,
+    >
+where
+    for<'id> F::Manager<'id>:
+        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
+{
+    fn set_seed(&mut self, seed: usize) -> () {
+        self.get_layout_rules()
+            .get_ordering()
+            .get_ordering1()
+            .set_seed(seed);
     }
 }
 
@@ -396,8 +446,11 @@ pub struct QDDDiagramDrawer<
         CompositeConfig<(
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
+            LabelConfig<IntConfig>,
+            ButtonConfig,
             ButtonConfig,
             TextOutputConfig,
+            ButtonConfig,
         )>,
     >,
 }
@@ -428,7 +481,7 @@ impl<
         T: DrawTag + Serializable<T> + 'static,
         G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
         R: Renderer<T, NodeData, LayerData> + 'static,
-        L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>> + 'static,
+        L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>> + LayoutEditing + 'static,
     > QDDDiagramDrawer<T, G, R, L>
 {
     pub fn new(graph: G, renderer: R, layout: L, font: Rc<Font>) -> QDDDiagramDrawer<T, G, R, L> {
@@ -510,7 +563,7 @@ impl<
         ));
         grouped_graph.hide(0);
 
-        let terminal_config = CompositeConfig::new(
+        let composite_config = CompositeConfig::new(
             (
                 LabelConfig::new("False terminal", {
                     let mut c = ChoiceConfig::new([
@@ -529,19 +582,25 @@ impl<
                         Choice::new(PresenceRemainder::Hide, "hide"),
                     ]),
                 ),
+                LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
+                ButtonConfig::new_labeled("Change seed"),
                 ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
+                ButtonConfig::new_labeled("Expand all"),
             ),
-            |(f1, f2, f3, f4)| {
+            |(f1, f2, f3, f4, f5, f6, f7)| {
                 vec![
                     Box::new(f1.clone()),
                     Box::new(f2.clone()),
                     Box::new(f3.clone()),
                     Box::new(f4.clone()),
+                    Box::new(f5.clone()),
+                    Box::new(f6.clone()),
+                    Box::new(f7.clone()),
                 ]
             },
         );
-        let config = Configuration::new(terminal_config.clone());
+        let config = Configuration::new(composite_config.clone());
 
         let mut out = QDDDiagramDrawer {
             group_manager,
@@ -557,14 +616,35 @@ impl<
         };
 
         let drawer = out.drawer.clone();
+        let mut seed = composite_config.2.clone();
+        composite_config.3.clone().add_press_listener(move || {
+            let new_seed = seed.get() + 1;
+            seed.set(new_seed).commit();
+        });
+        let seed = composite_config.2.clone();
+        let seed2 = seed.clone();
+        on_configuration_change(&seed, move || {
+            drawer
+                .get()
+                .get_layout_rules()
+                .set_seed(seed2.get() as usize);
+        });
+
+        let drawer = out.drawer.clone();
         let mut latex_renderer = LatexRenderer::new();
-        let mut output = terminal_config.3.clone();
-        terminal_config.2.clone().add_press_listener(move || {
+        let mut output = composite_config.5.clone();
+        composite_config.4.clone().add_press_listener(move || {
             latex_renderer.update_layout(&drawer.get().get_current_layout());
             latex_renderer.render(u32::MAX);
             let out = latex_renderer.get_output();
             output.set(out.into()).commit();
         });
+
+        let group_manager = out.group_manager.clone();
+        composite_config
+            .6
+            .clone()
+            .add_press_listener(move || reveal_all(&group_manager, 0, 10_000_000));
 
         // let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         for root in roots {
@@ -604,38 +684,47 @@ impl<
 
             adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(presence));
         }
-        let false_config = terminal_config.0.clone();
+        let false_config = composite_config.0.clone();
         let false_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&terminal_config.0, move || {
+        let _ = on_configuration_change(&composite_config.0, move || {
             set_terminal_presence(&false_presence_adjuster, "F".into(), false_config.get());
         });
-        let true_config = terminal_config.1.clone();
+        let true_config = composite_config.1.clone();
         let true_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&terminal_config.1, move || {
+        let _ = on_configuration_change(&composite_config.1, move || {
             set_terminal_presence(&true_presence_adjuster, "T".into(), true_config.get());
         });
-        let _ = after_configuration_change(&terminal_config, move || {
+        let _ = after_configuration_change(&composite_config, move || {
             drawer.get().layout(*time.get());
         });
 
         out
     }
+}
 
-    pub fn reveal_all(&mut self, from_id: NodeGroupID, limit: usize) {
-        let nodes = {
-            let explored_group =
-                self.create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
-            self.group_manager.read().get_nodes_of_group(explored_group)
-        };
-        let mut count = 0;
-        for node_id in nodes.into_iter().rev() {
-            // console::log!("{node_id}");
-            self.create_group(vec![TargetID(TargetIDType::NodeID, node_id)]);
+fn reveal_all<
+    T: DrawTag + Serializable<T> + 'static,
+    G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
+>(
+    group_manager: &MutRcRefCell<GM<T, G>>,
+    from_id: NodeGroupID,
+    limit: usize,
+) {
+    let nodes = {
+        let explored_group = group_manager
+            .get()
+            .create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
+        group_manager.read().get_nodes_of_group(explored_group)
+    };
+    let mut count = 0;
+    let mut group_manager = group_manager.get();
+    for node_id in nodes.into_iter().rev() {
+        // console::log!("{node_id}");
+        group_manager.create_group(vec![TargetID(TargetIDType::NodeID, node_id)]);
 
-            count = count + 1;
-            if limit > 0 && count >= limit {
-                break;
-            }
+        count = count + 1;
+        if limit > 0 && count >= limit {
+            break;
         }
     }
 }
