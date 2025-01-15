@@ -278,10 +278,9 @@ impl DummyFunction {
                             continue;
                         };
 
-                        console::log!("{} {} {} {}", id, level, false_branch, true_branch);
                         manager.add_node_level(id, level, None);
-                        manager.add_edge(id, false_branch, manager_ref.clone());
                         manager.add_edge(id, true_branch, manager_ref.clone());
+                        manager.add_edge(id, false_branch, manager_ref.clone());
 
                         if level > max_level {
                             max_level = level;
