@@ -89,7 +89,6 @@ export const BuddySelectionModal: FC<{
                     />
                     <TextField
                         onChange={selectText}
-                        readOnly
                         multiline
                         label="optional variable names"
                         rows={selected == "text" ? 5 : 2}

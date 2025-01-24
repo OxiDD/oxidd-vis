@@ -235,10 +235,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 }
                 Change::NodeRemoval { node } => {
                     for node_copy in self.get_all_copies(node) {
-                        self.event_writer
-                            .write(Change::NodeRemoval { node: node_copy });
                         if let Either::Right(copy_id) = to_sourced(node_copy) {
                             self.delete_replacement(copy_id);
+                        } else {
+                            self.event_writer
+                                .write(Change::NodeRemoval { node: node_copy });
                         }
                     }
                 }
@@ -341,7 +342,8 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 
     fn delete_replacement(&mut self, node: NodeID) {
-        let parents = self.get_known_parents(from_sourced(Either::Right(node)));
+        let out_node_id = from_sourced(Either::Right(node));
+        let parents = self.get_known_parents(out_node_id);
         let Some(&source) = self.sources.get(&node) else {
             return;
         };
@@ -350,7 +352,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             let r1 = self
                 .replacements
                 .remove(&(parent, EdgeConstraint::Exact(edge), source));
-            let r2 = self
+            let _r2 = self
                 .replacements
                 .remove(&(parent, EdgeConstraint::Any, source));
         }
@@ -366,6 +368,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         self.parent_nodes.remove(&node);
         self.known_parents.remove(&node);
         self.free_id.make_available(node);
+
+        self.event_writer
+            .write(Change::NodeRemoval { node: out_node_id });
     }
 
     fn update_parents(&mut self, right_node_id: NodeID) {
@@ -402,7 +407,28 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             }
         }
 
+        if let Some(old_known_parents) = self.known_parents.get(&right_node_id) {
+            let mut remove_any_edges = HashSet::new();
+            for &(edge, parent) in old_known_parents {
+                if out_parents.contains(&(edge, parent)) {
+                    remove_any_edges.remove(&parent);
+                    continue;
+                }
+
+                self.replacements
+                    .remove(&(parent, EdgeConstraint::Exact(edge), source_id));
+            }
+            for parent in remove_any_edges {
+                self.replacements
+                    .remove(&(parent, EdgeConstraint::Any, source_id));
+            }
+        }
+
+        let has_no_parents = out_parents.len() == 0;
         self.known_parents.insert(right_node_id, out_parents);
+        if has_no_parents {
+            self.delete_replacement(right_node_id);
+        }
     }
 
     fn update_children(&mut self, out_node_id: NodeID) {
@@ -460,7 +486,6 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                 )),
             }
         }
-
         self.children.insert(out_node_id, out);
     }
 

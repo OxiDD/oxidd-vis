@@ -72,7 +72,7 @@ impl<T: DrawTag> WebglRenderer<T> {
 
         let screen_height = screen_texture.get_size().1;
         let font_settings = TextRendererSettings::new()
-            .resolution(1.5)
+            .resolution(2.0)
             .sample_distance(35.)
             .scale_factor_group_size(3.0)
             .scale_cache_size(10) // Very large, mostly for testing

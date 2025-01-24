@@ -297,7 +297,7 @@ impl TextRenderer {
                 context,
                 "position",
                 &group
-                    .flat_map(|(outline, (pos, min, index))| {
+                    .flat_map(|(outline, (pos, min, _index))| {
                         let offset = pos.pos() - *min;
 
                         let triangles = triangulate(outline.path().commands(), distance_per_sample);
@@ -527,7 +527,7 @@ impl TextRenderer {
         });
 
         let p1 = transform.mul_vec3((0., 0., 0.));
-        let p2 = transform.mul_vec3((1., 0., 0.));
+        let p2 = transform.mul_vec3((0., 1., 0.));
 
         let exact_scale = Point { x: p1.0, y: p1.1 }
             .distance(&Point { x: p2.0, y: p2.1 })
@@ -607,7 +607,7 @@ type CharDataMap = HashMap<u16, ((f32, f32), Outline)>;
 
 #[derive(Clone)]
 pub struct TextRendererSettings {
-    /// The screen height to base the atlas resolution on
+    /// The relative resolution to use for the atlas (going for ~2 is good for some anti-aliasing)
     pub resolution: f32,
     /// The base of the range of scales that use the same rendering quality: scale in [scale_step^i..scale_step^{i+1})
     pub scale_factor_group_size: f32,
@@ -632,7 +632,7 @@ pub struct TextRendererSettings {
 impl TextRendererSettings {
     pub fn new() -> TextRendererSettings {
         TextRendererSettings {
-            resolution: 1080.,
+            resolution: 2.,
             scale_factor_group_size: 2.0,
             sample_distance: 25.,
             max_scale: 1.0,

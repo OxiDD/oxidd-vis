@@ -34,6 +34,7 @@ use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
 use crate::types::util::drawing::renderers::webgl_renderer::WebglLayerStyle;
+use crate::types::util::graph_structure::graph_manipulators::edge_to_adjuster::EdgeToAdjuster;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceGroups;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder;
 use crate::types::util::graph_structure::oxidd_graph_structure::NodeType;
@@ -67,49 +68,51 @@ use oxidd_core::{util::DropWith, Tag};
 use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
-use super::util::drawing::diagram_layout::LayerStyle;
-use super::util::drawing::diagram_layout::NodeStyle;
-use super::util::drawing::drawer::Drawer;
-use super::util::drawing::layout_rules::LayoutRules;
-use super::util::drawing::layouts::layer_group_sorting::average_group_alignment::AverageGroupAlignment;
-use super::util::drawing::layouts::layer_group_sorting::ordering_group_alignment::OrderingGroupAlignment;
-use super::util::drawing::layouts::layer_orderings::combinators::sequence_ordering::SequenceOrdering;
-use super::util::drawing::layouts::layer_orderings::pseudo_random_layer_ordering::PseudoRandomLayerOrdering;
-use super::util::drawing::layouts::layer_orderings::random_layer_ordering::RandomLayerOrdering;
-use super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaOrdering;
-use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
-use super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning_corrected::BrandesKopfPositioningCorrected;
-use super::util::drawing::layouts::layer_positionings::dummy_layer_positioning::DummyLayerPositioning;
-use super::util::drawing::layouts::layered_layout::LayeredLayout;
-use super::util::drawing::layouts::layered_layout_traits::WidthLabel;
-use super::util::drawing::layouts::random_test_layout::RandomTestLayout;
-use super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
-use super::util::drawing::layouts::toggle_layout::ToggleLayout;
-use super::util::drawing::layouts::transition::transition_layout::TransitionLayout;
-use super::util::drawing::renderer::Renderer;
-use super::util::drawing::renderers::latex_renderer::LatexLayerStyle;
-use super::util::drawing::renderers::latex_renderer::LatexNodeStyle;
-use super::util::drawing::renderers::latex_renderer::LatexRenderer;
-use super::util::drawing::renderers::util::Font::Font;
-use super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
-use super::util::drawing::renderers::webgl::node_renderer::NodeRenderingColorConfig;
-use super::util::drawing::renderers::webgl_renderer::WebglNodeStyle;
-use super::util::drawing::renderers::webgl_renderer::WebglRenderer;
-use super::util::graph_structure::graph_manipulators::group_presence_adjuster::GroupPresenceAdjuster;
-use super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
-use super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
-use super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
-use super::util::graph_structure::graph_manipulators::pointer_node_adjuster::PointerLabel;
-use super::util::graph_structure::graph_manipulators::pointer_node_adjuster::PointerNodeAdjuster;
-use super::util::graph_structure::graph_manipulators::rc_graph::RCGraph;
-use super::util::graph_structure::graph_manipulators::terminal_level_adjuster::TerminalLevelAdjuster;
-use super::util::graph_structure::graph_structure::{DrawTag, EdgeType, GraphStructure};
-use super::util::graph_structure::grouped_graph_structure::GroupedGraphStructure;
-use super::util::graph_structure::oxidd_graph_structure::NodeLabel;
-use super::util::graph_structure::oxidd_graph_structure::OxiddGraphStructure;
-use super::util::group_manager::GroupManager;
-use super::util::storage::state_storage::Serializable;
-use super::util::storage::state_storage::StateStorage;
+use super::super::util::drawing::diagram_layout::LayerStyle;
+use super::super::util::drawing::diagram_layout::NodeStyle;
+use super::super::util::drawing::drawer::Drawer;
+use super::super::util::drawing::layout_rules::LayoutRules;
+use super::super::util::drawing::layouts::layer_group_sorting::average_group_alignment::AverageGroupAlignment;
+use super::super::util::drawing::layouts::layer_group_sorting::ordering_group_alignment::OrderingGroupAlignment;
+use super::super::util::drawing::layouts::layer_orderings::combinators::sequence_ordering::SequenceOrdering;
+use super::super::util::drawing::layouts::layer_orderings::pseudo_random_layer_ordering::PseudoRandomLayerOrdering;
+use super::super::util::drawing::layouts::layer_orderings::random_layer_ordering::RandomLayerOrdering;
+use super::super::util::drawing::layouts::layer_orderings::sugiyama_ordering::SugiyamaOrdering;
+use super::super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning::BrandesKopfPositioning;
+use super::super::util::drawing::layouts::layer_positionings::brandes_kopf_positioning_corrected::BrandesKopfPositioningCorrected;
+use super::super::util::drawing::layouts::layer_positionings::dummy_layer_positioning::DummyLayerPositioning;
+use super::super::util::drawing::layouts::layered_layout::LayeredLayout;
+use super::super::util::drawing::layouts::layered_layout_traits::WidthLabel;
+use super::super::util::drawing::layouts::random_test_layout::RandomTestLayout;
+use super::super::util::drawing::layouts::sugiyama_lib_layout::SugiyamaLibLayout;
+use super::super::util::drawing::layouts::toggle_layout::IndexedSelect;
+use super::super::util::drawing::layouts::toggle_layout::ToggleLayout;
+use super::super::util::drawing::layouts::toggle_layout::ToggleLayoutUnit;
+use super::super::util::drawing::layouts::transition::transition_layout::TransitionLayout;
+use super::super::util::drawing::renderer::Renderer;
+use super::super::util::drawing::renderers::latex_renderer::LatexLayerStyle;
+use super::super::util::drawing::renderers::latex_renderer::LatexNodeStyle;
+use super::super::util::drawing::renderers::latex_renderer::LatexRenderer;
+use super::super::util::drawing::renderers::util::Font::Font;
+use super::super::util::drawing::renderers::webgl::edge_renderer::EdgeRenderingType;
+use super::super::util::drawing::renderers::webgl::node_renderer::NodeRenderingColorConfig;
+use super::super::util::drawing::renderers::webgl_renderer::WebglNodeStyle;
+use super::super::util::drawing::renderers::webgl_renderer::WebglRenderer;
+use super::super::util::graph_structure::graph_manipulators::group_presence_adjuster::GroupPresenceAdjuster;
+use super::super::util::graph_structure::graph_manipulators::label_adjusters::group_label_adjuster::GroupLabelAdjuster;
+use super::super::util::graph_structure::graph_manipulators::node_presence_adjuster::NodePresenceAdjuster;
+use super::super::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceLabel;
+use super::super::util::graph_structure::graph_manipulators::pointer_node_adjuster::PointerLabel;
+use super::super::util::graph_structure::graph_manipulators::pointer_node_adjuster::PointerNodeAdjuster;
+use super::super::util::graph_structure::graph_manipulators::rc_graph::RCGraph;
+use super::super::util::graph_structure::graph_manipulators::terminal_level_adjuster::TerminalLevelAdjuster;
+use super::super::util::graph_structure::graph_structure::{DrawTag, EdgeType, GraphStructure};
+use super::super::util::graph_structure::grouped_graph_structure::GroupedGraphStructure;
+use super::super::util::graph_structure::oxidd_graph_structure::NodeLabel;
+use super::super::util::graph_structure::oxidd_graph_structure::OxiddGraphStructure;
+use super::super::util::group_manager::GroupManager;
+use super::super::util::storage::state_storage::Serializable;
+use super::super::util::storage::state_storage::StateStorage;
 
 pub struct QDDDiagram<MR: ManagerRef>
 where
@@ -221,7 +224,7 @@ where
         let partial_hover_color = (Color(1.0, 0.0, 0.8), 0.2);
 
         let font = Rc::new(Font::new(
-            include_bytes!("../../resources/Roboto-Bold.ttf").to_vec(),
+            include_bytes!("../../../resources/Roboto-Bold.ttf").to_vec(),
             1.0,
         ));
         let renderer = WebglRenderer::from_canvas(
@@ -282,18 +285,33 @@ where
             font.clone(),
         )
         .unwrap();
-        let layout = LayeredLayout::new(
-            // SugiyamaOrdering::new(2, 2),
-            SequenceOrdering::new(
-                PseudoRandomLayerOrdering::new(2, 0),
-                SugiyamaOrdering::new(2, 2),
+        let layout = ToggleLayout::new(
+            LayeredLayout::new(
+                // SugiyamaOrdering::new(2, 2),
+                SequenceOrdering::new(
+                    PseudoRandomLayerOrdering::new(2, 0),
+                    SugiyamaOrdering::new(2, 2),
+                ),
+                // AverageGroupAlignment,
+                OrderingGroupAlignment,
+                // BrandesKopfPositioning,
+                BrandesKopfPositioningCorrected,
+                // DummyLayerPositioning,
+                0.3,
             ),
-            // AverageGroupAlignment,
-            OrderingGroupAlignment,
-            // BrandesKopfPositioning,
-            BrandesKopfPositioningCorrected,
-            // DummyLayerPositioning,
-            0.3,
+            ToggleLayoutUnit::new(LayeredLayout::new(
+                // SugiyamaOrdering::new(2, 2),
+                SequenceOrdering::new(
+                    PseudoRandomLayerOrdering::new(2, 0),
+                    SugiyamaOrdering::new(2, 2),
+                ),
+                // AverageGroupAlignment,
+                OrderingGroupAlignment,
+                // BrandesKopfPositioning,
+                BrandesKopfPositioning,
+                // DummyLayerPositioning,
+                0.1,
+            )),
         );
         let layout = TransitionLayout::new(layout);
         let graph = OxiddGraphStructure::new(
@@ -312,6 +330,7 @@ fn terminal_to_string<T: ToString>(terminal: &T) -> String {
 
 trait LayoutEditing {
     fn set_seed(&mut self, seed: usize) -> ();
+    fn select_layout(&mut self, layout: usize) -> ();
 }
 impl<
         T: ToString + Clone + 'static,
@@ -326,13 +345,45 @@ impl<
         NodeData,
         LayerData,
         GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
-        LayeredLayout<
+        ToggleLayout<
             (),
             NodeData,
             LayerData,
-            SequenceOrdering<(), NodeData, LayerData, PseudoRandomLayerOrdering, SugiyamaOrdering>,
-            OrderingGroupAlignment,
-            BrandesKopfPositioningCorrected,
+            GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
+            LayeredLayout<
+                (),
+                NodeData,
+                LayerData,
+                SequenceOrdering<
+                    (),
+                    NodeData,
+                    LayerData,
+                    PseudoRandomLayerOrdering,
+                    SugiyamaOrdering,
+                >,
+                OrderingGroupAlignment,
+                BrandesKopfPositioningCorrected,
+            >,
+            ToggleLayoutUnit<
+                (),
+                NodeData,
+                LayerData,
+                GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
+                LayeredLayout<
+                    (),
+                    NodeData,
+                    LayerData,
+                    SequenceOrdering<
+                        (),
+                        NodeData,
+                        LayerData,
+                        PseudoRandomLayerOrdering,
+                        SugiyamaOrdering,
+                    >,
+                    OrderingGroupAlignment,
+                    BrandesKopfPositioning,
+                >,
+            >,
         >,
     >
 where
@@ -341,9 +392,19 @@ where
 {
     fn set_seed(&mut self, seed: usize) -> () {
         self.get_layout_rules()
+            .get_layout_rules1()
             .get_ordering()
             .get_ordering1()
             .set_seed(seed);
+        self.get_layout_rules()
+            .get_layout_rules2()
+            .get_layout_rules()
+            .get_ordering()
+            .get_ordering1()
+            .set_seed(seed);
+    }
+    fn select_layout(&mut self, layout: usize) -> () {
+        self.get_layout_rules().select_layout(layout);
     }
 }
 
@@ -444,8 +505,10 @@ pub struct QDDDiagramDrawer<
     drawer: MutRcRefCell<Drawer<T, NodeData, LayerData, R, L, GMGraph<T, G>>>,
     config: Configuration<
         CompositeConfig<(
+            LabelConfig<ChoiceConfig<usize>>,
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
+            LabelConfig<ChoiceConfig<bool>>,
             LabelConfig<IntConfig>,
             ButtonConfig,
             ButtonConfig,
@@ -467,7 +530,13 @@ type MPresenceAdjuster<T, G> = RCGraph<
     T,
     GraphLabel,
     String,
-    NodePresenceAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
+    NodePresenceAdjuster<T, PointerLabel<NodeLabel<String>>, String, MEdgeToAdjuster<T, G>>,
+>;
+type MEdgeToAdjuster<T, G> = RCGraph<
+    T,
+    PointerLabel<NodeLabel<String>>,
+    String,
+    EdgeToAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
 >;
 type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, G>;
 type GMGraph<T, G> = GroupPresenceAdjuster<
@@ -495,7 +564,8 @@ impl<
             true,
             "".to_string(),
         );
-        let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(pointer_adjuster));
+        let edge_to_adjuster = RCGraph::new(EdgeToAdjuster::new(pointer_adjuster));
+        let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(edge_to_adjuster.clone()));
         let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
         let roots = modified_graph.get_roots();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
@@ -565,6 +635,10 @@ impl<
 
         let composite_config = CompositeConfig::new(
             (
+                LabelConfig::new(
+                    "Layout",
+                    ChoiceConfig::new([Choice::new(0, "1"), Choice::new(1, "2")]),
+                ),
                 LabelConfig::new("False terminal", {
                     let mut c = ChoiceConfig::new([
                         Choice::new(PresenceRemainder::Show, "show"),
@@ -582,13 +656,19 @@ impl<
                         Choice::new(PresenceRemainder::Hide, "hide"),
                     ]),
                 ),
+                LabelConfig::new("Hide shared true", {
+                    let mut c =
+                        ChoiceConfig::new([Choice::new(false, "show"), Choice::new(true, "hide")]);
+                    c.set_index(1).commit();
+                    c
+                }),
                 LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
                 ButtonConfig::new_labeled("Change seed"),
                 ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
                 ButtonConfig::new_labeled("Expand all"),
             ),
-            |(f1, f2, f3, f4, f5, f6, f7)| {
+            |(f1, f2, f3, f4, f5, f6, f7, f8, f9)| {
                 vec![
                     Box::new(f1.clone()),
                     Box::new(f2.clone()),
@@ -597,6 +677,8 @@ impl<
                     Box::new(f5.clone()),
                     Box::new(f6.clone()),
                     Box::new(f7.clone()),
+                    Box::new(f8.clone()),
+                    Box::new(f9.clone()),
                 ]
             },
         );
@@ -616,14 +698,23 @@ impl<
         };
 
         let drawer = out.drawer.clone();
-        let mut seed = composite_config.2.clone();
-        composite_config.3.clone().add_press_listener(move || {
+        let false_config = composite_config.0.clone();
+        let _ = on_configuration_change(&composite_config.0, move || {
+            drawer
+                .get()
+                .get_layout_rules()
+                .select_layout(false_config.get());
+        });
+
+        let drawer = out.drawer.clone();
+        let mut seed = composite_config.4.clone();
+        composite_config.5.clone().add_press_listener(move || {
             let new_seed = seed.get() + 1;
             seed.set(new_seed).commit();
         });
-        let seed = composite_config.2.clone();
+        let seed = composite_config.4.clone();
         let seed2 = seed.clone();
-        on_configuration_change(&seed, move || {
+        let _ = on_configuration_change(&seed, move || {
             drawer
                 .get()
                 .get_layout_rules()
@@ -632,29 +723,30 @@ impl<
 
         let drawer = out.drawer.clone();
         let mut latex_renderer = LatexRenderer::new();
-        let mut output = composite_config.5.clone();
-        composite_config.4.clone().add_press_listener(move || {
+        let mut output = composite_config.7.clone();
+        composite_config.6.clone().add_press_listener(move || {
             latex_renderer.update_layout(&drawer.get().get_current_layout());
             latex_renderer.render(u32::MAX);
             let out = latex_renderer.get_output();
             output.set(out.into()).commit();
         });
 
-        let group_manager = out.group_manager.clone();
-        composite_config
-            .6
-            .clone()
-            .add_press_listener(move || reveal_all(&group_manager, 0, 10_000_000));
-
-        // let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+        let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         for root in roots {
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         }
 
-        // let max = 500;
-        // if out.group_manager.read().get_nodes_of_group(from).len() < max {
-        //     out.reveal_all(from, max);
-        // }
+        let max = 500;
+        // let from = 0;
+        if out.group_manager.read().get_nodes_of_group(from).len() < max {
+            reveal_all(&out.group_manager, from, max);
+        }
+
+        let group_manager = out.group_manager.clone();
+        composite_config
+            .8
+            .clone()
+            .add_press_listener(move || reveal_all(&group_manager, from, 10_000_000));
 
         // Connect the config
         let drawer = out.drawer.clone();
@@ -684,15 +776,38 @@ impl<
 
             adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(presence));
         }
-        let false_config = composite_config.0.clone();
+        let false_config = composite_config.1.clone();
         let false_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&composite_config.0, move || {
+        let _ = on_configuration_change(&composite_config.1, move || {
             set_terminal_presence(&false_presence_adjuster, "F".into(), false_config.get());
         });
-        let true_config = composite_config.1.clone();
+        let true_config = composite_config.2.clone();
         let true_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&composite_config.1, move || {
+        let _ = on_configuration_change(&composite_config.2, move || {
             set_terminal_presence(&true_presence_adjuster, "T".into(), true_config.get());
+        });
+
+        let hide_shared_true_config = composite_config.3.clone();
+        let _ = on_configuration_change(&composite_config.3, move || {
+            if hide_shared_true_config.get() {
+                let hide_edges = edge_to_adjuster
+                    .get_terminals()
+                    .into_iter()
+                    .filter_map(|node| match edge_to_adjuster.get_node_label(node) {
+                        PointerLabel::Node(NodeLabel {
+                            pointers: _,
+                            kind: NodeType::Terminal(t),
+                        }) if t == "T" => Some((node, EdgeType::new(T::default(), 2))),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter();
+                edge_to_adjuster.get().set_remove_to_edges(hide_edges);
+            } else {
+                edge_to_adjuster
+                    .get()
+                    .set_remove_to_edges(HashSet::new().into_iter());
+            }
         });
         let _ = after_configuration_change(&composite_config, move || {
             drawer.get().layout(*time.get());

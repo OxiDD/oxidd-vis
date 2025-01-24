@@ -3,6 +3,7 @@ use std::{
     iter::FromIterator,
 };
 
+use itertools::Itertools;
 use oxidd::LevelNo;
 use oxidd_core::Tag;
 
@@ -145,6 +146,7 @@ fn balanced_layout(
 
     let left_down_layout = shift_layout(&compact_horizontally(
         layers,
+        &left_down_edges,
         &left_up_edges,
         node_widths,
         dummy_group_start_id,
@@ -154,6 +156,7 @@ fn balanced_layout(
     ));
     let left_up_layout = shift_layout(&compact_horizontally(
         &up_layers,
+        &left_up_edges,
         &left_down_edges,
         node_widths,
         dummy_group_start_id,
@@ -164,6 +167,7 @@ fn balanced_layout(
 
     let right_down_layout = shift_layout(&compact_horizontally(
         &right_layers,
+        &right_down_edges,
         &right_up_edges,
         node_widths,
         dummy_group_start_id,
@@ -176,6 +180,7 @@ fn balanced_layout(
     .collect::<HashMap<NodeGroupID, f32>>();
     let right_up_layout = shift_layout(&compact_horizontally(
         &right_up_layers,
+        &left_up_edges,
         &right_down_edges,
         node_widths,
         dummy_group_start_id,
@@ -228,6 +233,7 @@ fn get_reverse_layers(layers: &Vec<Order>) -> Vec<Order> {
 
 fn compact_horizontally(
     layers: &Vec<Order>,
+    forward_edges: &OrderedEdgeMap,
     reverse_edges: &OrderedEdgeMap,
     node_widths: &HashMap<NodeGroupID, f32>,
     dummy_group_start_id: NodeGroupID,
@@ -242,13 +248,14 @@ fn compact_horizontally(
     let alignment = align_vertical(
         layers,
         &layer_seqs,
+        forward_edges,
         reverse_edges,
         dummy_group_start_id,
         dummy_edge_start_id,
         owners,
     );
 
-    let all_nodes = layers.iter().flat_map(|layer| layer.keys());
+    let all_nodes = layers.iter().flat_map(|layer| layer.keys().sorted());
     let pred = HashMap::from_iter(layer_seqs.iter().flat_map(|layer| {
         let node_seq = layer.iter().map(|node| *node);
         node_seq.clone().skip(1).zip(node_seq)
@@ -353,6 +360,7 @@ struct VerticalAlignment {
 fn align_vertical(
     layers: &Vec<Order>,
     layer_seqs: &Vec<Vec<NodeGroupID>>,
+    forward_edges: &OrderedEdgeMap,
     reverse_edges: &OrderedEdgeMap,
     dummy_group_start_id: NodeGroupID,
     dummy_edge_start_id: NodeGroupID,
@@ -361,6 +369,7 @@ fn align_vertical(
     let conflicts = get_type1_conflicts(
         layers,
         &layer_seqs,
+        forward_edges,
         reverse_edges,
         dummy_group_start_id,
         dummy_edge_start_id,
@@ -411,6 +420,7 @@ fn align_vertical(
 fn get_type1_conflicts(
     layers: &Vec<Order>,
     layer_seqs: &Vec<Vec<NodeGroupID>>,
+    forward_edges: &OrderedEdgeMap,
     reverse_edges: &OrderedEdgeMap,
     dummy_group_start_id: NodeGroupID,
     dummy_edge_start_id: NodeGroupID,
@@ -441,14 +451,26 @@ fn get_type1_conflicts(
                         .find(|&to| owners.get(&node) == owners.get(to))
                         .is_some()
                 });
+
+            let straight_edge_segment = reverse_edges
+                .get(&node)
+                .and_then(|tos| {
+                    if tos.len() != 1 {
+                        return None;
+                    }
+                    let to = tos[0];
+                    return forward_edges.get(&to).map(|from| from.len() == 1);
+                })
+                .unwrap_or(false);
+
             let last = l1 == layer_len - 1;
-            if last || incident_inner_segment || incident_group_segment {
+            if last || incident_inner_segment || incident_group_segment || straight_edge_segment {
                 let inner_edge_node = node;
                 if prev_layer_seq.len() == 0 {
                     continue;
                 }
                 let mut k1 = prev_layer_seq.len() - 1; // Currently considered inner segment at layer i (or the default last node place holder to correctly finish processing the previous inner segment)
-                if incident_inner_segment || incident_group_segment {
+                if incident_inner_segment || incident_group_segment || straight_edge_segment {
                     let upper_neighbors = reverse_edges.get(&inner_edge_node).unwrap();
                     assert!(upper_neighbors.len() == 1); // Otherwise it's not an inner edge
                     k1 = *prev_layer

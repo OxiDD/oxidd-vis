@@ -16,7 +16,7 @@ use web_sys::{Document, Element, HtmlElement, Window};
 
 use configuration::configuration_object::ConfigurationObject;
 use oxidd::{bdd::BDDFunction, util::AllocResult, BooleanFunction};
-use types::qdd_drawer::QDDDiagram;
+use types::qdd::qdd_drawer::QDDDiagram;
 
 use swash::{
     proxy::{CharmapProxy, MetricsProxy},

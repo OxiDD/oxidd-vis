@@ -3,6 +3,7 @@ use std::{
     iter::FromIterator,
 };
 
+use itertools::Itertools;
 use oxidd::LevelNo;
 use oxidd_core::Tag;
 
@@ -254,7 +255,7 @@ fn compact_horizontally(
         owners,
     );
 
-    let all_nodes = layers.iter().flat_map(|layer| layer.keys());
+    let all_nodes = layers.iter().flat_map(|layer| layer.keys().sorted());
     let pred = HashMap::from_iter(layer_seqs.iter().flat_map(|layer| {
         let node_seq = layer.iter().cloned();
         node_seq.clone().skip(1).zip(node_seq)
