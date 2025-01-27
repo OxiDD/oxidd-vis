@@ -538,7 +538,8 @@ type MEdgeToAdjuster<T, G> = RCGraph<
     String,
     EdgeToAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
 >;
-type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, G>;
+type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, MBaseGraph<T, G>>;
+type MBaseGraph<T, G> = TerminalLevelAdjuster<T, NodeLabel<String>, String, G>;
 type GMGraph<T, G> = GroupPresenceAdjuster<
     T,
     NodeData,
@@ -555,8 +556,9 @@ impl<
 {
     pub fn new(graph: G, renderer: R, layout: L, font: Rc<Font>) -> QDDDiagramDrawer<T, G, R, L> {
         let original_roots = graph.get_roots().clone();
+        let base_graph = TerminalLevelAdjuster::new(graph); // Make sure that terminal levels make sense before possibly adding pointers to these terminals
         let pointer_adjuster = PointerNodeAdjuster::new(
-            graph,
+            base_graph,
             EdgeType {
                 tag: T::default(),
                 index: 2,
@@ -732,12 +734,12 @@ impl<
         });
 
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+        // let from = 0;
         for root in roots {
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         }
 
         let max = 500;
-        // let from = 0;
         if out.group_manager.read().get_nodes_of_group(from).len() < max {
             reveal_all(&out.group_manager, from, max);
         }

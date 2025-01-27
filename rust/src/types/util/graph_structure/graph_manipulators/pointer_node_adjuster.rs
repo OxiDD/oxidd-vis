@@ -353,7 +353,16 @@ impl<
         match to_sourced(node) {
             Either::Left(node) => self.graph.get_level(node) + 1,
             Either::Right(node) => match self.pointers.get(&node) {
-                Some(pointer) => self.graph.get_level(pointer.pointer_for),
+                Some(pointer) => {
+                    let l = self.graph.get_level(pointer.pointer_for);
+                    if self.graph.get_terminals().contains(&pointer.pointer_for) && l > u32::MAX / 2
+                    {
+                        // Terminals are often initialized to the biggest possible layer, which can cause problems, so in this case we just put the label on layer 0
+                        0
+                    } else {
+                        l
+                    }
+                }
                 None => 0,
             },
         }

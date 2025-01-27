@@ -359,6 +359,10 @@ fn remove_group_crossings(
     edges: &mut EdgeMap,
     dummy_owners: &HashMap<NodeGroupID, NodeGroupID>,
 ) {
+    if layers.len() == 0 {
+        return;
+    }
+
     let layer_order = layers.iter().map(get_sequence).collect_vec();
     let all_layer_group_indices = layers
         .iter()

@@ -100,6 +100,10 @@ pub fn get_edge_index_sequence<'a, I: Iterator<Item = (&'a NodeID, &'a usize)>>(
 }
 pub fn get_ordered_edge_map(edge_map: &EdgeMap, orders: &Vec<Order>) -> OrderedEdgeMap {
     let mut out: OrderedEdgeMap = HashMap::new();
+
+    if orders.len() == 0 {
+        return out;
+    }
     for i in 0..orders.len() - 1 {
         let layer = &orders[i];
         let next_layer = &orders[i + 1];

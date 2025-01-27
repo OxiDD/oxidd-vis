@@ -167,13 +167,14 @@ where
                 let tag = edge.tag();
                 let internal_node = manager.get_node(edge);
                 if let Node::Inner(node) = internal_node {
-                    return Some(Vec::from_iter(
+                    Some(Vec::from_iter(
                         R::cofactors(tag, node)
                             .map(|f| F::from_edge_ref(manager, &f))
                             .enumerate(),
-                    ));
+                    ))
+                } else {
+                    None
                 }
-                return None;
             });
             if let Some(cofactors) = cofactors {
                 let out = cofactors.iter().map(|(i, f)| {
