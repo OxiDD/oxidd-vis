@@ -45,10 +45,10 @@ module.exports = env => ({
         path: build,
     },
     plugins: [
-        new CopyPlugin({
-          patterns: [
-            { from: "node_modules/oxidd-viz-rust/oxidd_viz_rust_bg.wasm.map", to: "" },
-          ],
-        }),
+        // new CopyPlugin({
+        //   patterns: [
+        //     { from: "node_modules/oxidd-viz-rust/oxidd_viz_rust_bg.wasm.map", to: "" },
+        //   ],
+        // }),
       ],
 });
