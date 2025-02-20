@@ -55,6 +55,9 @@ fn get_barycenter(node: NodeID, other_layer: &Order, edges: &EdgeMap) -> Ratio<u
             total_weights += weight;
         }
     }
+    if total_weights == 0 {
+        return Ratio::new(0, 1);
+    }
     Ratio::new(sum, total_weights)
 }
 

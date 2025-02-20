@@ -1,4 +1,5 @@
 pub mod abstracted_graph;
+pub mod child_edge_adjuster;
 pub mod edge_to_adjuster;
 pub mod group_presence_adjuster;
 pub mod label_adjusters;

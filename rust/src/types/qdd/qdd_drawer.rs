@@ -34,6 +34,7 @@ use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
 use crate::types::util::drawing::renderers::webgl_renderer::WebglLayerStyle;
+use crate::types::util::graph_structure::graph_manipulators::child_edge_adjuster::ChildEdgeAdjuster;
 use crate::types::util::graph_structure::graph_manipulators::edge_to_adjuster::EdgeToAdjuster;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceGroups;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder;
@@ -509,6 +510,7 @@ pub struct QDDDiagramDrawer<
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
             LabelConfig<ChoiceConfig<bool>>,
+            LabelConfig<ChoiceConfig<bool>>,
             LabelConfig<IntConfig>,
             ButtonConfig,
             ButtonConfig,
@@ -536,7 +538,13 @@ type MEdgeToAdjuster<T, G> = RCGraph<
     T,
     PointerLabel<NodeLabel<String>>,
     String,
-    EdgeToAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
+    EdgeToAdjuster<T, PointerLabel<NodeLabel<String>>, String, MChildEdgeAdjuster<T, G>>,
+>;
+type MChildEdgeAdjuster<T, G> = RCGraph<
+    T,
+    PointerLabel<NodeLabel<String>>,
+    String,
+    ChildEdgeAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
 >;
 type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, MBaseGraph<T, G>>;
 type MBaseGraph<T, G> = TerminalLevelAdjuster<T, NodeLabel<String>, String, G>;
@@ -546,6 +554,48 @@ type GMGraph<T, G> = GroupPresenceAdjuster<
     LayerData,
     GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData, LayerData>,
 >;
+
+fn move_shared_edge<T: DrawTag + 'static>(
+    children: Vec<(EdgeType<T>, NodeID, PointerLabel<NodeLabel<String>>)>,
+) -> Option<Vec<(EdgeType<T>, NodeID)>> {
+    if children.len() != 3 {
+        return None;
+    }
+    let edges = children
+        .into_iter()
+        .map(|(edge, to, label)| {
+            if let PointerLabel::Node(NodeLabel {
+                pointers: _,
+                kind: NodeType::Terminal(t),
+            }) = label
+            {
+                (t.clone(), (edge, to))
+            } else {
+                ("inner".to_string(), (edge, to))
+            }
+        })
+        .collect::<HashMap<_, _>>();
+    let Some((to_true_edge, true_node)) = edges.get("T") else {
+        return None;
+    };
+    let Some((to_false_edge, false_node)) = edges.get("F") else {
+        return None;
+    };
+    let Some((to_inner_edge, rest_node)) = edges.get("inner") else {
+        return None;
+    };
+
+    if to_true_edge.index == 2 {
+        return None;
+    }
+
+    return Some(vec![
+        (to_true_edge.clone(), *rest_node),
+        (to_inner_edge.clone(), *true_node),
+        (to_false_edge.clone(), *false_node),
+    ]);
+    // return Some(vec![]);
+}
 
 impl<
         T: DrawTag + Serializable<T> + 'static,
@@ -566,7 +616,9 @@ impl<
             true,
             "".to_string(),
         );
-        let edge_to_adjuster = RCGraph::new(EdgeToAdjuster::new(pointer_adjuster));
+        let child_edge_adjuster =
+            RCGraph::new(ChildEdgeAdjuster::new(pointer_adjuster, move_shared_edge));
+        let edge_to_adjuster = RCGraph::new(EdgeToAdjuster::new(child_edge_adjuster.clone()));
         let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(edge_to_adjuster.clone()));
         let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
         let roots = modified_graph.get_roots();
@@ -576,7 +628,7 @@ impl<
             group_manager.clone(),
             move |nodes| {
                 // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
-
+                console::log!("Get group data");
                 let (is_terminal, is_group, color) = match (nodes.get(0), nodes.get(1)) {
                     (
                         Some(&PresenceLabel {
@@ -664,13 +716,20 @@ impl<
                     c.set_index(1).commit();
                     c
                 }),
+                LabelConfig::new("Move shared", {
+                    let mut c = ChoiceConfig::new([
+                        Choice::new(true, "enabled"),
+                        Choice::new(false, "disabled"),
+                    ]);
+                    c
+                }),
                 LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
                 ButtonConfig::new_labeled("Change seed"),
                 ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
                 ButtonConfig::new_labeled("Expand all"),
             ),
-            |(f1, f2, f3, f4, f5, f6, f7, f8, f9)| {
+            |(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)| {
                 vec![
                     Box::new(f1.clone()),
                     Box::new(f2.clone()),
@@ -681,6 +740,7 @@ impl<
                     Box::new(f7.clone()),
                     Box::new(f8.clone()),
                     Box::new(f9.clone()),
+                    Box::new(f10.clone()),
                 ]
             },
         );
@@ -709,12 +769,12 @@ impl<
         });
 
         let drawer = out.drawer.clone();
-        let mut seed = composite_config.4.clone();
-        composite_config.5.clone().add_press_listener(move || {
+        let mut seed = composite_config.5.clone();
+        composite_config.6.clone().add_press_listener(move || {
             let new_seed = seed.get() + 1;
             seed.set(new_seed).commit();
         });
-        let seed = composite_config.4.clone();
+        let seed = composite_config.5.clone();
         let seed2 = seed.clone();
         let _ = on_configuration_change(&seed, move || {
             drawer
@@ -725,8 +785,8 @@ impl<
 
         let drawer = out.drawer.clone();
         let mut latex_renderer = LatexRenderer::new();
-        let mut output = composite_config.7.clone();
-        composite_config.6.clone().add_press_listener(move || {
+        let mut output = composite_config.8.clone();
+        composite_config.7.clone().add_press_listener(move || {
             latex_renderer.update_layout(&drawer.get().get_current_layout());
             latex_renderer.render(u32::MAX);
             let out = latex_renderer.get_output();
@@ -746,7 +806,7 @@ impl<
 
         let group_manager = out.group_manager.clone();
         composite_config
-            .8
+            .9
             .clone()
             .add_press_listener(move || reveal_all(&group_manager, from, 10_000_000));
 
@@ -811,6 +871,14 @@ impl<
                     .set_remove_to_edges(HashSet::new().into_iter());
             }
         });
+
+        let move_shared_config = composite_config.4.clone();
+        on_configuration_change(&composite_config.4, move || {
+            child_edge_adjuster
+                .get()
+                .set_enabled(move_shared_config.get());
+        });
+
         let _ = after_configuration_change(&composite_config, move || {
             drawer.get().layout(*time.get());
         });
