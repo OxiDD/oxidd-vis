@@ -69,10 +69,10 @@ impl<T: DrawTag, S: LatexNodeStyle, LS: LatexLayerStyle> Renderer<T, S, LS>
 
                 let x = pos.x;
                 let y = pos.y + 0.5 * size.y;
-                if let Some(terminal_type) = style.is_terminal() {
+                if let Some((terminal_type, terminal_label)) = style.is_terminal() {
                     Some(format!(
-                        "\\node[{}] (n{}) at ({}, {}) {{\\pgfkeysvalueof{{/tikz/{}/label}}}};",
-                        terminal_type, id, x, y, terminal_type
+                        "\\node[{}] (n{}) at ({}, {}) {};",
+                        terminal_type, id, x, y, terminal_label.unwrap_or_else(|| format!("\\pgfkeysvalueof{{/tikz/{}/label}}", terminal_type))
                     ))
                 } else if style.is_group() {
                     Some(format!(
@@ -270,7 +270,8 @@ fn sanitize(text: String) -> String {
 }
 
 pub trait LatexNodeStyle: NodeStyle {
-    fn is_terminal(&self) -> Option<String>;
+    /// Retrieves whether the given node is a terminal, and if so: retrieves the terminal type, and optionally a label
+    fn is_terminal(&self) -> Option<(String, Option<String>)>;
     fn is_group(&self) -> bool;
     fn get_label(&self) -> Option<String>;
 }

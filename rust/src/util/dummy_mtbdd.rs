@@ -29,22 +29,24 @@ use oxidd_core::{BroadcastContext, HasLevel};
 
 use crate::util::logging::console;
 
+type Term = i32;
+
 // #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(Clone, PartialEq, Eq)]
-pub struct DummyBDDManagerRef(Rc<RefCell<DummyBDDManager>>);
+pub struct DummyMTBDDManagerRef(Rc<RefCell<DummyMTBDDManager>>);
 
-impl Hash for DummyBDDManagerRef {
+impl Hash for DummyMTBDDManagerRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.borrow().hash(state);
     }
 }
-impl<'a> From<&'a DummyBDDManager> for DummyBDDManagerRef {
-    fn from(value: &'a DummyBDDManager) -> Self {
-        DummyBDDManagerRef(Rc::new(RefCell::new(value.clone())))
+impl<'a> From<&'a DummyMTBDDManager> for DummyMTBDDManagerRef {
+    fn from(value: &'a DummyMTBDDManager) -> Self {
+        DummyMTBDDManagerRef(Rc::new(RefCell::new(value.clone())))
     }
 }
-impl ManagerRef for DummyBDDManagerRef {
-    type Manager<'id> = DummyBDDManager;
+impl ManagerRef for DummyMTBDDManagerRef {
+    type Manager<'id> = DummyMTBDDManager;
 
     fn with_manager_shared<F, T>(&self, f: F) -> T
     where
@@ -62,47 +64,12 @@ impl ManagerRef for DummyBDDManagerRef {
 }
 
 #[derive(Hash, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct DummyBDDFunction(pub DummyBDDEdge);
-impl DummyBDDFunction {
-    pub fn from(manager_ref: &mut DummyBDDManagerRef, data: &str) -> DummyBDDFunction {
-        manager_ref.with_manager_exclusive(|manager| {
-            let mut root = Option::None;
-            let transition_texts = data.split(",");
-            let edges = transition_texts.flat_map(|item| {
-                let trans = item.split(">");
-                let mut out = Vec::new();
-                let mut prev_node = Option::None;
-                for node in trans {
-                    let node: NodeID = node.trim().parse().unwrap();
-
-                    if let Some(prev) = prev_node {
-                        out.push((prev, node.clone()));
-                    }
-                    prev_node = Some(node);
-                }
-                out
-            });
-            for (from, to) in edges.clone() {
-                if root == None {
-                    root = Some(from.clone());
-                }
-                manager.add_node(from);
-                manager.add_node(to);
-            }
-            for (from, to) in edges {
-                manager.add_edge(from, to, manager_ref.clone());
-            }
-
-            DummyBDDFunction(DummyBDDEdge::new(
-                Arc::new(root.unwrap()),
-                manager_ref.clone(),
-            ))
-        })
-    }
+pub struct DummyMTBDDFunction(pub DummyMTBDDEdge);
+impl DummyMTBDDFunction {
     pub fn from_dddmp(
-        manager_ref: &mut DummyBDDManagerRef,
+        manager_ref: &mut DummyMTBDDManagerRef,
         data: &str,
-    ) -> (Vec<(DummyBDDFunction, Vec<String>)>, Vec<String>) {
+    ) -> (Vec<(DummyMTBDDFunction, Vec<String>)>, Vec<String>) {
         manager_ref.with_manager_exclusive(|manager| {
             let mut terminals = HashMap::new();
 
@@ -155,24 +122,26 @@ impl DummyBDDFunction {
 
             for (id, level, children) in nodes_data.clone() {
                 let level_num = level.parse();
+                let term_num = level_num.clone().map(|v| v as i32);
+                let is_terminal = children[0] == 0;
                 manager.add_node_level(
                     id.clone(),
-                    if let Ok(level) = level_num {
-                        level
-                    } else {
+                    if is_terminal {
                         max_level + 1 // Terminal nodes don't define a level, we have to assign it
-                    },
-                    if level_num.is_ok() {
-                        None
                     } else {
-                        Some(level.to_string())
+                        level_num.clone().unwrap()
+                    },
+                    if is_terminal {
+                        term_num.clone().ok()
+                    } else {
+                        None
                     },
                 );
 
-                if level_num.is_err() {
+                if is_terminal {
                     terminals.insert(
-                        level.to_string(),
-                        DummyBDDEdge::new(Arc::new(id), manager_ref.clone()),
+                        term_num.unwrap(),
+                        DummyMTBDDEdge::new(Arc::new(id), manager_ref.clone()),
                     );
                 }
             }
@@ -198,13 +167,13 @@ impl DummyBDDFunction {
 
             manager.init_terminals(terminals);
 
-            let mut func_map = HashMap::<NodeID, (DummyBDDFunction, Vec<String>)>::new();
+            let mut func_map = HashMap::<NodeID, (DummyMTBDDFunction, Vec<String>)>::new();
             for (root, name) in roots.into_iter().zip(root_names.into_iter()) {
                 func_map
                     .entry(root)
                     .or_insert_with(|| {
                         (
-                            DummyBDDFunction(DummyBDDEdge::new(
+                            DummyMTBDDFunction(DummyMTBDDEdge::new(
                                 Arc::new(root),
                                 manager_ref.clone(),
                             )),
@@ -229,122 +198,17 @@ impl DummyBDDFunction {
             (funcs, var_names)
         })
     }
-    pub fn from_buddy(
-        manager_ref: &mut DummyBDDManagerRef,
-        data: &str,
-        var_data: Option<&str>,
-    ) -> (Vec<(DummyBDDFunction, Vec<String>)>, Vec<String>) {
-        manager_ref.with_manager_exclusive(|manager| {
-            let mut variables = Vec::new();
-            let mut layer_levels = Vec::<usize>::new(); // Specifies per "layer", what level it should have. Variable names and nodes refer to layers, not levels.
-            let mut referenced = HashSet::<usize>::new();
-            let mut defined = HashSet::<usize>::new();
-            let mut root = None;
-            let mut max_level = 0;
-            for (line, text) in data.split("\n").enumerate() {
-                match line {
-                    0 => {}
-                    1 => {
-                        layer_levels = text
-                            .trim()
-                            .split(" ")
-                            .filter_map(|v| v.parse::<usize>().ok())
-                            .collect();
-                        let mut order = vec![0; layer_levels.len()];
-                        for (layer, &index) in layer_levels.iter().enumerate() {
-                            order[index] = layer;
-                        }
-
-                        variables = match var_data {
-                            Some(vars) => {
-                                let var_names =
-                                    vars.split("\n").map(|v| v.trim().to_string()).collect_vec();
-                                order.iter().map(|&i| var_names[i].clone()).collect()
-                            }
-                            _ => order.iter().map(|v| format!("{}", v)).collect(),
-                        };
-                    }
-                    _ => {
-                        let parts = text.trim().split(" ").collect_vec();
-                        if parts.len() != 4 {
-                            continue;
-                        }
-
-                        let Ok(id) = parts[0].parse::<usize>() else {
-                            continue;
-                        };
-                        let Ok(layer) = parts[1].parse::<usize>() else {
-                            continue;
-                        };
-                        let level = layer_levels.get(layer).cloned().unwrap_or(0) as u32;
-                        let Ok(false_branch) = parts[2].parse::<usize>() else {
-                            continue;
-                        };
-                        let Ok(true_branch) = parts[3].parse::<usize>() else {
-                            continue;
-                        };
-
-                        manager.add_node_level(id, level, None);
-                        manager.add_edge(id, true_branch, manager_ref.clone());
-                        manager.add_edge(id, false_branch, manager_ref.clone());
-
-                        if level > max_level {
-                            max_level = level;
-                        }
-                        defined.insert(id);
-                        referenced.insert(false_branch);
-                        referenced.insert(true_branch);
-                        root = Some(id);
-                    }
-                }
-            }
-
-            let terminals = referenced
-                .difference(&defined)
-                .sorted()
-                .zip_longest(vec!["F", "T"])
-                .filter_map(|id_and_name| match id_and_name {
-                    EitherOrBoth::Both(&id, name) => {
-                        manager.add_node_level(id, max_level + 1, Some(name.to_string()));
-                        Some((
-                            name.to_string(),
-                            DummyBDDEdge::new(Arc::new(id), manager_ref.clone()),
-                        ))
-                    }
-                    EitherOrBoth::Left(&id) => {
-                        let name = format!("{}", id);
-                        manager.add_node_level(id, max_level + 1, Some(name.clone()));
-                        Some((name, DummyBDDEdge::new(Arc::new(id), manager_ref.clone())))
-                    }
-                    EitherOrBoth::Right(_) => None,
-                })
-                .collect();
-            manager.init_terminals(terminals);
-
-            (
-                root.map(|root| {
-                    (
-                        DummyBDDFunction(DummyBDDEdge::new(Arc::new(root), manager_ref.clone())),
-                        vec!["f".to_string()],
-                    )
-                })
-                .into_iter()
-                .collect(),
-                variables,
-            )
-        })
-    }
 }
 
-unsafe impl Function for DummyBDDFunction {
-    type Manager<'id> = DummyBDDManager;
+unsafe impl Function for DummyMTBDDFunction {
+    type Manager<'id> = DummyMTBDDManager;
 
-    type ManagerRef = DummyBDDManagerRef;
+    type ManagerRef = DummyMTBDDManagerRef;
     fn from_edge<'id>(
         manager: &Self::Manager<'id>,
         edge: oxidd_core::function::EdgeOfFunc<'id, Self>,
     ) -> Self {
-        DummyBDDFunction(edge)
+        DummyMTBDDFunction(edge)
     }
 
     fn as_edge<'id>(
@@ -392,31 +256,31 @@ unsafe impl Function for DummyBDDFunction {
 /// The implementation is very limited but perfectly fine to test e.g. an apply
 /// cache.
 #[derive(Clone)]
-pub struct DummyBDDEdge(Arc<NodeID>, DummyBDDManagerRef);
+pub struct DummyMTBDDEdge(Arc<NodeID>, DummyMTBDDManagerRef);
 
-impl PartialEq for DummyBDDEdge {
+impl PartialEq for DummyMTBDDEdge {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
 }
-impl Eq for DummyBDDEdge {}
-impl PartialOrd for DummyBDDEdge {
+impl Eq for DummyMTBDDEdge {}
+impl PartialOrd for DummyMTBDDEdge {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
-impl Ord for DummyBDDEdge {
+impl Ord for DummyMTBDDEdge {
     fn cmp(&self, other: &Self) -> Ordering {
         Arc::as_ptr(&self.0).cmp(&Arc::as_ptr(&other.0))
     }
 }
-impl Hash for DummyBDDEdge {
+impl Hash for DummyMTBDDEdge {
     fn hash<H: Hasher>(&self, state: &mut H) {
         Arc::as_ptr(&self.0).hash(state);
     }
 }
 
-impl Drop for DummyBDDEdge {
+impl Drop for DummyMTBDDEdge {
     fn drop(&mut self) {
         eprintln!(
             "Edges must not be dropped. Use Manager::drop_edge(). Backtrace:\n{}",
@@ -425,23 +289,29 @@ impl Drop for DummyBDDEdge {
     }
 }
 
-impl DummyBDDEdge {
+impl DummyMTBDDEdge {
     /// Create a new `DummyEdge`
-    pub fn new(to: Arc<NodeID>, mr: DummyBDDManagerRef) -> Self {
-        DummyBDDEdge(to, mr.clone())
+    pub fn new(to: Arc<NodeID>, mr: DummyMTBDDManagerRef) -> Self {
+        DummyMTBDDEdge(to, mr.clone())
     }
 }
 
-impl Edge for DummyBDDEdge {
+impl Edge for DummyMTBDDEdge {
     type Tag = ();
 
     fn borrowed(&self) -> Borrowed<'_, Self> {
         let ptr = Arc::as_ptr(&self.0);
-        Borrowed::new(DummyBDDEdge(unsafe { Arc::from_raw(ptr) }, self.1.clone()))
+        Borrowed::new(DummyMTBDDEdge(
+            unsafe { Arc::from_raw(ptr) },
+            self.1.clone(),
+        ))
     }
     fn with_tag(&self, _tag: ()) -> Borrowed<'_, Self> {
         let ptr = Arc::as_ptr(&self.0);
-        Borrowed::new(DummyBDDEdge(unsafe { Arc::from_raw(ptr) }, self.1.clone()))
+        Borrowed::new(DummyMTBDDEdge(
+            unsafe { Arc::from_raw(ptr) },
+            self.1.clone(),
+        ))
     }
     fn with_tag_owned(self, _tag: ()) -> Self {
         self
@@ -457,71 +327,71 @@ impl Edge for DummyBDDEdge {
 /// clone and drop edges.
 // #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(Clone, PartialEq, Eq)]
-pub struct DummyBDDManager(
-    BTreeMap<NodeID, DummyBDDNode>,
-    HashMap<String, DummyBDDEdge>,
+pub struct DummyMTBDDManager(
+    BTreeMap<NodeID, DummyMTBDDNode>,
+    HashMap<Term, DummyMTBDDEdge>,
 );
-impl DummyBDDManager {
-    pub fn new() -> DummyBDDManager {
-        DummyBDDManager(BTreeMap::new(), HashMap::new())
+impl DummyMTBDDManager {
+    pub fn new() -> DummyMTBDDManager {
+        DummyMTBDDManager(BTreeMap::new(), HashMap::new())
     }
-    fn init_terminals(&mut self, terminals: HashMap<String, DummyBDDEdge>) {
+    fn init_terminals(&mut self, terminals: HashMap<Term, DummyMTBDDEdge>) {
         self.1.extend(terminals);
     }
 }
-impl Hash for DummyBDDManager {
+impl Hash for DummyMTBDDManager {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }
 
 /// Dummy diagram rules
-pub struct DummyBDDRules;
-impl DiagramRules<DummyBDDEdge, DummyBDDNode, String> for DummyBDDRules {
+pub struct DummyMTBDDRules;
+impl DiagramRules<DummyMTBDDEdge, DummyMTBDDNode, Term> for DummyMTBDDRules {
     // type Cofactors<'a> = Iter<'a, Borrowed<'a, DummyEdge>>;
     type Cofactors<'a>
-        = <DummyBDDNode as InnerNode<DummyBDDEdge>>::ChildrenIter<'a>
+        = <DummyMTBDDNode as InnerNode<DummyMTBDDEdge>>::ChildrenIter<'a>
     where
-        DummyBDDNode: 'a,
-        DummyBDDEdge: 'a;
+        DummyMTBDDNode: 'a,
+        DummyMTBDDEdge: 'a;
 
     fn reduce<M>(
         _manager: &M,
         level: LevelNo,
-        children: impl IntoIterator<Item = DummyBDDEdge>,
-    ) -> ReducedOrNew<DummyBDDEdge, DummyBDDNode>
+        children: impl IntoIterator<Item = DummyMTBDDEdge>,
+    ) -> ReducedOrNew<DummyMTBDDEdge, DummyMTBDDNode>
     where
-        M: Manager<Edge = DummyBDDEdge, InnerNode = DummyBDDNode>,
+        M: Manager<Edge = DummyMTBDDEdge, InnerNode = DummyMTBDDNode>,
     {
-        ReducedOrNew::New(DummyBDDNode::new(level, children), ())
+        ReducedOrNew::New(DummyMTBDDNode::new(level, children), ())
     }
 
-    fn cofactors(_tag: (), node: &DummyBDDNode) -> Self::Cofactors<'_> {
+    fn cofactors(_tag: (), node: &DummyMTBDDNode) -> Self::Cofactors<'_> {
         node.children()
     }
 }
 
-impl DummyBDDManager {
+impl DummyMTBDDManager {
     fn add_node_level(
         &mut self,
         from: NodeID,
         level: LevelNo,
-        terminal: Option<String>,
-    ) -> &mut DummyBDDNode {
+        terminal: Option<Term>,
+    ) -> &mut DummyMTBDDNode {
         self.0.entry(from).or_insert_with(|| {
             if terminal.is_some() {
-                DummyBDDNode(level, Vec::new(), terminal)
+                DummyMTBDDNode(level, Vec::new(), terminal)
             } else {
-                DummyBDDNode::new(level, Vec::new())
+                DummyMTBDDNode::new(level, Vec::new())
             }
         })
     }
-    fn add_node(&mut self, from: NodeID) -> &mut DummyBDDNode {
+    fn add_node(&mut self, from: NodeID) -> &mut DummyMTBDDNode {
         self.add_node_level(from, from.try_into().unwrap(), None)
     }
-    fn add_edge(&mut self, from: NodeID, to: NodeID, mr: DummyBDDManagerRef) {
+    fn add_edge(&mut self, from: NodeID, to: NodeID, mr: DummyMTBDDManagerRef) {
         let from_children = &mut self.0.get_mut(&from).unwrap().1;
-        let edge = DummyBDDEdge::new(Arc::new(to), mr);
+        let edge = DummyMTBDDEdge::new(Arc::new(to), mr);
         from_children.push(edge);
     }
     fn has_edges(&self, node: NodeID) -> bool {
@@ -530,24 +400,24 @@ impl DummyBDDManager {
     }
 }
 
-unsafe impl Manager for DummyBDDManager {
-    type Edge = DummyBDDEdge;
+unsafe impl Manager for DummyMTBDDManager {
+    type Edge = DummyMTBDDEdge;
     type EdgeTag = ();
-    type InnerNode = DummyBDDNode;
-    type Terminal = String;
-    type TerminalRef<'a> = &'a String;
+    type InnerNode = DummyMTBDDNode;
+    type Terminal = Term;
+    type TerminalRef<'a> = &'a Term;
     type TerminalIterator<'a>
-        = Cloned<std::collections::hash_map::Values<'a, String, DummyBDDEdge>>
+        = Cloned<std::collections::hash_map::Values<'a, Term, DummyMTBDDEdge>>
     where
         Self: 'a;
-    type Rules = DummyBDDRules;
+    type Rules = DummyMTBDDRules;
     type NodeSet = HashSet<NodeID>;
     type LevelView<'a>
-        = DummyBDDLevelView
+        = DummyMTBDDLevelView
     where
         Self: 'a;
     type LevelIterator<'a>
-        = std::iter::Empty<DummyBDDLevelView>
+        = std::iter::Empty<DummyMTBDDLevelView>
     where
         Self: 'a;
 
@@ -564,7 +434,7 @@ unsafe impl Manager for DummyBDDManager {
     }
 
     fn clone_edge(&self, edge: &Self::Edge) -> Self::Edge {
-        DummyBDDEdge(edge.0.clone(), edge.1.clone())
+        DummyMTBDDEdge(edge.0.clone(), edge.1.clone())
     }
 
     fn drop_edge(&self, edge: Self::Edge) {
@@ -628,14 +498,14 @@ unsafe impl Manager for DummyBDDManager {
 }
 
 /// Dummy level view (not constructible)
-pub struct DummyBDDLevelView;
+pub struct DummyMTBDDLevelView;
 
-unsafe impl LevelView<DummyBDDEdge, DummyBDDNode> for DummyBDDLevelView {
+unsafe impl LevelView<DummyMTBDDEdge, DummyMTBDDNode> for DummyMTBDDLevelView {
     type Iterator<'a>
-        = std::iter::Empty<&'a DummyBDDEdge>
+        = std::iter::Empty<&'a DummyMTBDDEdge>
     where
         Self: 'a,
-        DummyBDDEdge: 'a;
+        DummyMTBDDEdge: 'a;
 
     type Taken = Self;
 
@@ -651,15 +521,15 @@ unsafe impl LevelView<DummyBDDEdge, DummyBDDNode> for DummyBDDLevelView {
         unreachable!()
     }
 
-    fn get(&self, _node: &DummyBDDNode) -> Option<&DummyBDDEdge> {
+    fn get(&self, _node: &DummyMTBDDNode) -> Option<&DummyMTBDDEdge> {
         unreachable!()
     }
 
-    fn insert(&mut self, _edge: DummyBDDEdge) -> bool {
+    fn insert(&mut self, _edge: DummyMTBDDEdge) -> bool {
         unreachable!()
     }
 
-    fn get_or_insert(&mut self, _node: DummyBDDNode) -> AllocResult<DummyBDDEdge> {
+    fn get_or_insert(&mut self, _node: DummyMTBDDNode) -> AllocResult<DummyMTBDDEdge> {
         unreachable!()
     }
 
@@ -667,7 +537,7 @@ unsafe impl LevelView<DummyBDDEdge, DummyBDDNode> for DummyBDDLevelView {
         unreachable!()
     }
 
-    unsafe fn remove(&mut self, _node: &DummyBDDNode) -> bool {
+    unsafe fn remove(&mut self, _node: &DummyMTBDDNode) -> bool {
         unreachable!()
     }
 
@@ -686,15 +556,15 @@ unsafe impl LevelView<DummyBDDEdge, DummyBDDNode> for DummyBDDLevelView {
 
 /// Dummy node
 #[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
-pub struct DummyBDDNode(LevelNo, Vec<DummyBDDEdge>, Option<String>);
+pub struct DummyMTBDDNode(LevelNo, Vec<DummyMTBDDEdge>, Option<Term>);
 
-impl DropWith<DummyBDDEdge> for DummyBDDNode {
-    fn drop_with(self, _drop_edge: impl Fn(DummyBDDEdge)) {
+impl DropWith<DummyMTBDDEdge> for DummyMTBDDNode {
+    fn drop_with(self, _drop_edge: impl Fn(DummyMTBDDEdge)) {
         unimplemented!()
     }
 }
 
-unsafe impl HasLevel for DummyBDDNode {
+unsafe impl HasLevel for DummyMTBDDNode {
     fn level(&self) -> LevelNo {
         self.0
     }
@@ -704,19 +574,19 @@ unsafe impl HasLevel for DummyBDDNode {
     }
 }
 
-impl InnerNode<DummyBDDEdge> for DummyBDDNode {
+impl InnerNode<DummyMTBDDEdge> for DummyMTBDDNode {
     const ARITY: usize = 0;
 
     // type ChildrenIter<'a> = std::iter::Empty<Borrowed<'a, DummyEdge>>
     // where
     //     Self: 'a;
     type ChildrenIter<'a>
-        = BorrowedEdgeIter<'a, DummyBDDEdge, Iter<'a, DummyBDDEdge>>
+        = BorrowedEdgeIter<'a, DummyMTBDDEdge, Iter<'a, DummyMTBDDEdge>>
     where
         Self: 'a;
 
-    fn new(level: LevelNo, children: impl IntoIterator<Item = DummyBDDEdge>) -> Self {
-        DummyBDDNode(level, children.into_iter().collect(), None)
+    fn new(level: LevelNo, children: impl IntoIterator<Item = DummyMTBDDEdge>) -> Self {
+        DummyMTBDDNode(level, children.into_iter().collect(), None)
     }
 
     fn check_level(&self, _check: impl FnOnce(LevelNo) -> bool) -> bool {
@@ -727,47 +597,15 @@ impl InnerNode<DummyBDDEdge> for DummyBDDNode {
         BorrowedEdgeIter::from(self.1.iter())
     }
 
-    fn child(&self, _n: usize) -> Borrowed<DummyBDDEdge> {
+    fn child(&self, _n: usize) -> Borrowed<DummyMTBDDEdge> {
         unimplemented!()
     }
 
-    unsafe fn set_child(&self, _n: usize, _child: DummyBDDEdge) -> DummyBDDEdge {
+    unsafe fn set_child(&self, _n: usize, _child: DummyMTBDDEdge) -> DummyMTBDDEdge {
         unimplemented!()
     }
 
     fn ref_count(&self) -> usize {
         unimplemented!()
     }
-}
-
-/// Assert that the reference counts of edges match
-///
-/// # Example
-///
-/// ```
-/// # use oxidd_core::{Edge, Manager};
-/// # use oxidd_test_utils::assert_ref_counts;
-/// # use oxidd_test_utils::edge::{DummyEdge, DummyManager};
-/// let e1 = DummyEdge::new();
-/// let e2 = DummyManager.clone_edge(&e1);
-/// let e3 = DummyEdge::new();
-/// assert_ref_counts!(e1, e2 = 2; e3 = 1);
-/// # DummyManager.drop_edge(e1);
-/// # DummyManager.drop_edge(e2);
-/// # DummyManager.drop_edge(e3);
-/// ```
-#[macro_export]
-macro_rules! assert_ref_counts {
-    ($edge:ident = $count:literal) => {
-        assert_eq!($edge.ref_count(), $count);
-    };
-    ($edge:ident, $($edges:ident),+ = $count:literal) => {
-        assert_ref_counts!($edge = $count);
-        assert_ref_counts!($($edges),+ = $count);
-    };
-    // spell-checker:ignore edgess
-    ($($edges:ident),+ = $count:literal; $($($edgess:ident),+ = $counts:literal);+) => {
-        assert_ref_counts!($($edges),+ = $count);
-        assert_ref_counts!($($($edgess),+ = $counts);+);
-    };
 }

@@ -42,10 +42,10 @@ use crate::types::util::graph_structure::graph_manipulators::node_presence_adjus
 use crate::types::util::graph_structure::oxidd_graph_structure::NodeType;
 use crate::util::color::Color;
 use crate::util::color::TransparentColor;
-use crate::util::dummy_bdd::DummyEdge;
-use crate::util::dummy_bdd::DummyFunction;
-use crate::util::dummy_bdd::DummyManager;
-use crate::util::dummy_bdd::DummyManagerRef;
+use crate::util::dummy_bdd::DummyBDDEdge;
+use crate::util::dummy_bdd::DummyBDDFunction;
+use crate::util::dummy_bdd::DummyBDDManager;
+use crate::util::dummy_bdd::DummyBDDManagerRef;
 use crate::util::free_id_manager::FreeIdManager;
 use crate::util::logging::console;
 use crate::util::rc_refcell::MutRcRefCell;
@@ -122,16 +122,16 @@ where
 {
     manager_ref: MR,
 }
-impl QDDDiagram<DummyManagerRef> {
-    pub fn new() -> QDDDiagram<DummyManagerRef> {
-        let manager_ref = DummyManagerRef::from(&DummyManager::new());
+impl QDDDiagram<DummyBDDManagerRef> {
+    pub fn new() -> QDDDiagram<DummyBDDManagerRef> {
+        let manager_ref = DummyBDDManagerRef::from(&DummyBDDManager::new());
         QDDDiagram { manager_ref }
     }
 }
 
-impl Diagram for QDDDiagram<DummyManagerRef> {
+impl Diagram for QDDDiagram<DummyBDDManagerRef> {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
-        let (roots, levels) = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp);
+        let (roots, levels) = DummyBDDFunction::from_dddmp(&mut self.manager_ref, &dddmp);
         Some(Box::new(QDDDiagramSection::new(roots, levels)))
     }
     fn create_section_from_buddy(
@@ -140,7 +140,7 @@ impl Diagram for QDDDiagram<DummyManagerRef> {
         vars: Option<String>,
     ) -> Option<Box<dyn DiagramSection>> {
         let (roots, levels) =
-            DummyFunction::from_buddy(&mut self.manager_ref, &data, vars.as_deref());
+            DummyBDDFunction::from_buddy(&mut self.manager_ref, &data, vars.as_deref());
         Some(Box::new(QDDDiagramSection::new(roots, levels)))
     }
     fn create_section_from_ids(
@@ -151,9 +151,9 @@ impl Diagram for QDDDiagram<DummyManagerRef> {
         let roots = sources
             .iter()
             .map(|&(id, section)| {
-                let root_edge = DummyEdge::new(Arc::new(id), self.manager_ref.clone());
+                let root_edge = DummyBDDEdge::new(Arc::new(id), self.manager_ref.clone());
                 levels = section.get_level_labels();
-                (DummyFunction(root_edge), section.get_node_labels(id))
+                (DummyBDDFunction(root_edge), section.get_node_labels(id))
             })
             .collect_vec();
         Some(Box::new(QDDDiagramSection::new(roots, levels)))
@@ -199,15 +199,14 @@ where
 }
 
 impl<
-        T: ToString + Clone + 'static,
         E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
-        R: DiagramRules<E, N, T> + 'static,
+        R: DiagramRules<E, N, String> + 'static,
         F: Function + 'static,
     > DiagramSection for QDDDiagramSection<F>
 where
     for<'id> F::Manager<'id>:
-        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
+        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = String>,
 {
     fn get_level_labels(&self) -> Vec<String> {
         self.levels.clone()
@@ -335,23 +334,22 @@ trait LayoutEditing {
     fn select_layout(&mut self, layout: usize) -> ();
 }
 impl<
-        T: ToString + Clone + 'static,
         E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
-        R: DiagramRules<E, N, T> + 'static,
+        R: DiagramRules<E, N, String> + 'static,
         F: Function + 'static,
-        S: Fn(&T) -> String,
+        S: Fn(&String) -> String,
     > LayoutEditing
     for TransitionLayout<
         (),
         NodeData,
         LayerData,
-        GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
+        GMGraph<(), OxiddGraphStructure<(), F, String, S>>,
         ToggleLayout<
             (),
             NodeData,
             LayerData,
-            GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
+            GMGraph<(), OxiddGraphStructure<(), F, String, S>>,
             LayeredLayout<
                 (),
                 NodeData,
@@ -370,7 +368,7 @@ impl<
                 (),
                 NodeData,
                 LayerData,
-                GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
+                GMGraph<(), OxiddGraphStructure<(), F, String, S>>,
                 LayeredLayout<
                     (),
                     NodeData,
@@ -390,7 +388,7 @@ impl<
     >
 where
     for<'id> F::Manager<'id>:
-        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
+        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = String>,
 {
     fn set_seed(&mut self, seed: usize) -> () {
         self.get_layout_rules()
@@ -433,8 +431,8 @@ impl Interpolatable for NodeData {
     }
 }
 impl LatexNodeStyle for NodeData {
-    fn is_terminal(&self) -> Option<String> {
-        self.is_terminal.map(|v| format!("terminal{}", v))
+    fn is_terminal(&self) -> Option<(String, Option<String>)> {
+        self.is_terminal.map(|v| (format!("terminal{}", v), None))
     }
 
     fn is_group(&self) -> bool {

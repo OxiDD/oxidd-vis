@@ -1,6 +1,7 @@
 pub mod color;
 pub mod convert_file;
 pub mod dummy_bdd;
+pub mod dummy_mtbdd;
 pub mod free_id_manager;
 pub mod logging;
 pub mod matrix4;
