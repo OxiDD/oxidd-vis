@@ -35,7 +35,7 @@ module.exports = env => ({
         historyApiFallback: true,
     },
     watchOptions: {
-      aggregateTimeout: 1200,
+        aggregateTimeout: 2000,
     },
     resolve: {
         extensions: [".tsx", ".ts", ".js", ".txt"],
@@ -50,5 +50,5 @@ module.exports = env => ({
         //     { from: "node_modules/oxidd-viz-rust/oxidd_viz_rust_bg.wasm.map", to: "" },
         //   ],
         // }),
-      ],
+    ],
 });

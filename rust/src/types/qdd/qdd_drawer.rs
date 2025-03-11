@@ -33,6 +33,7 @@ use crate::configuration::types::text_output_config::TextOutputConfig;
 use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
+use crate::types::util::drawing::layouts::layer_orderings::edge_layer_ordering::EdgeLayerOrdering;
 use crate::types::util::drawing::renderers::webgl_renderer::WebglLayerStyle;
 use crate::types::util::graph_structure::graph_manipulators::child_edge_adjuster::ChildEdgeAdjuster;
 use crate::types::util::graph_structure::graph_manipulators::edge_to_adjuster::EdgeToAdjuster;
@@ -291,7 +292,7 @@ where
                 // SugiyamaOrdering::new(2, 2),
                 SequenceOrdering::new(
                     PseudoRandomLayerOrdering::new(2, 0),
-                    SugiyamaOrdering::new(2, 2),
+                    SequenceOrdering::new(EdgeLayerOrdering, SugiyamaOrdering::new(2, 2)),
                 ),
                 // AverageGroupAlignment,
                 OrderingGroupAlignment,
@@ -360,7 +361,7 @@ impl<
                     NodeData,
                     LayerData,
                     PseudoRandomLayerOrdering,
-                    SugiyamaOrdering,
+                    SequenceOrdering<(), NodeData, LayerData, EdgeLayerOrdering, SugiyamaOrdering>,
                 >,
                 OrderingGroupAlignment,
                 BrandesKopfPositioningCorrected,

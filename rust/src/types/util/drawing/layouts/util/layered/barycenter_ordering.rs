@@ -1,12 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
-use num_rational::Ratio;
 
 use crate::{util::logging::console, wasm_interface::NodeID};
 
 use super::layer_orderer::{
-    count_crossings, get_sequence, swap_edges, EdgeMap, LayerOrderer, Order,
+    count_crossings, get_sequence, swap_edges, EdgeLayoutData, EdgeMap, LayerOrderer, Order,
 };
 
 pub struct BarycenterOrdering;
@@ -42,17 +41,19 @@ fn apply_single_barycenter_order(layer: &Order, next_layer: &Order, edges: &Edge
         .collect()
 }
 
-fn get_barycenter(node: NodeID, other_layer: &Order, edges: &EdgeMap) -> Ratio<usize> {
+fn get_barycenter(node: NodeID, other_layer: &Order, edges: &EdgeMap) -> Ratio {
     let mut sum = 0;
     let Some(edges) = edges.get(&node) else {
         return Ratio::new(0, 1);
     };
 
     let mut total_weights = 0;
-    for (to, weight) in edges {
+    let mut total_order_sum = 1;
+    for (to, EdgeLayoutData { weight, order }) in edges {
         if let Some(node_pos) = other_layer.get(to) {
             sum += *node_pos * weight;
             total_weights += weight;
+            total_order_sum += order;
         }
     }
     if total_weights == 0 {
@@ -66,7 +67,7 @@ fn get_equal_barycenter_groups(
     next_layer: &Order,
     edges: &EdgeMap,
 ) -> Vec<Vec<NodeID>> {
-    let mut equal_groups: HashMap<Ratio<usize>, Vec<NodeID>> = HashMap::new();
+    let mut equal_groups: HashMap<Ratio, Vec<NodeID>> = HashMap::new();
     for node in get_sequence(layer) {
         let barycenter = get_barycenter(node, next_layer, edges);
         equal_groups
@@ -212,4 +213,28 @@ fn are_barycenters_increasing(layer: &Order, other_layer: &Order, edges: &EdgeMa
     }
 
     true
+}
+
+#[derive(PartialEq, Eq, Ord, Hash, Clone, Copy)]
+struct Ratio {
+    enumerator: usize,
+    denominator: usize,
+}
+impl Ratio {
+    pub fn new(enumerator: usize, denominator: usize) -> Ratio {
+        Ratio {
+            enumerator,
+            denominator,
+        }
+    }
+}
+
+impl PartialOrd for Ratio {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        //      a/b < c/d
+        // <=>  d*a/b < c
+        // <=>  d*a < c*b
+        Some((self.enumerator * other.denominator).cmp(&(other.enumerator * self.denominator)))
+        // TODO: deal with overflow
+    }
 }

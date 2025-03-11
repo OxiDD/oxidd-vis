@@ -24,7 +24,13 @@ pub trait LayerOrderer {
 }
 
 pub type Order = HashMap<NodeID, usize>; // A mapping from node id to index in the order, hence this map should be a bijection from some X subset of NodeID, to the set of [0..|X|-1]
-pub type EdgeMap = HashMap<NodeID, HashMap<NodeID, usize>>; // A mapping from node to node, with a given weight
+pub type EdgeMap = HashMap<NodeID, HashMap<NodeID, EdgeLayoutData>>; // A mapping from node to node, with some edge data
+
+#[derive(Clone, Copy)]
+pub struct EdgeLayoutData {
+    pub weight: usize,
+    pub order: i32, // Number used for ordering
+}
 
 pub type OrderedEdgeMap = HashMap<NodeID, Vec<NodeID>>;
 
@@ -39,7 +45,12 @@ pub fn count_crossings(order: (&Order, &Order), edges: &EdgeMap) -> usize {
                 *node,
                 edges
                     .get(node)
-                    .map(|weights| get_edge_index_sequence(weights.iter(), &order.1))
+                    .map(|weights| {
+                        get_edge_index_sequence(
+                            weights.iter().map(|(n, d)| (n, &d.weight)),
+                            &order.1,
+                        )
+                    })
                     .unwrap_or_else(|| Vec::new()),
             )
         })
@@ -64,10 +75,10 @@ pub fn count_crossings(order: (&Order, &Order), edges: &EdgeMap) -> usize {
 pub fn swap_edges(edges: &EdgeMap) -> EdgeMap {
     let mut out = HashMap::new();
     for (from, node_edges) in edges {
-        for (to, &weight) in node_edges {
+        for (to, &data) in node_edges {
             out.entry(*to)
                 .or_insert_with(|| HashMap::new())
-                .insert(*from, weight);
+                .insert(*from, data);
         }
     }
     out
