@@ -74,14 +74,9 @@ export abstract class ViewState {
     ]);
 
     /** The groups of views that should be shown together whenever possible */
-    public readonly groups: IWatchable<
-        {
-            /** The sources for which interaction should automatically focus the targets (default to the targets) */
-            sources?: string[];
-            /** The targets that should be revealed */
-            targets: string[];
-        }[]
-    > = new Derived(watch => watch(this.children).flatMap(child => watch(child.groups)));
+    public readonly groups: IWatchable<IViewGroup[]> = new Derived(watch =>
+        watch(this.children).flatMap(child => watch(child.groups))
+    );
 
     /**
      * A callback for when the UI for this view is fully closed
@@ -196,3 +191,10 @@ function getStateDataPanels(state: IPanelData): IPanelData[] {
         ];
     return [state];
 }
+
+export type IViewGroup = {
+    /** The sources for which interaction should automatically focus the targets (default to the targets) */
+    sources?: string[];
+    /** The targets that should be revealed */
+    targets: string[];
+};

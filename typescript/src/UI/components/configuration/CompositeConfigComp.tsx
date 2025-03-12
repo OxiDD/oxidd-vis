@@ -9,9 +9,10 @@ export const CompositeConfigComp: FC<{
     ChildComp: FC<{value: IConfigObjectType}>;
 }> = ({value, ChildComp}) => {
     const watch = useWatch();
+    const isHorizontal = watch(value.isHorizontal);
     const theme = useTheme();
     return (
-        <Stack tokens={{childrenGap: theme.spacing.s1}}>
+        <Stack tokens={{childrenGap: theme.spacing.s1}} horizontal={isHorizontal}>
             {watch(value.children).map((child, i) => (
                 <ChildComp key={i} value={child} />
             ))}

@@ -31,6 +31,8 @@ import {Toolbar} from "./UI/views/toolbar/Toolbar";
 import {CenteredContainer} from "./UI/components/layout/CenteredContainer";
 import {HttpDiagramCollectionTargetState} from "./state/diagrams/collections/HttpDiagramCollectionState";
 import {DiagramCollectionTarget} from "./UI/views/diagramCollection/types/util/DiagramCollectionTarget";
+import {PanelConfigViewState} from "./state/configuration/types/PanelConfig";
+import {PanelConfigView} from "./UI/components/configuration/PanelConfigComp";
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -81,6 +83,7 @@ const Component: IViewComponent = ({view}) => {
     if (view instanceof DiagramVisualizationState)
         return <DiagramVisualization visualization={view} />;
     if (view instanceof ToolbarState) return <Toolbar toolbar={view} />;
+    if (view instanceof PanelConfigViewState) return <PanelConfigView state={view} />;
 
     return <ViewContainer>Not found</ViewContainer>;
 };

@@ -1,5 +1,5 @@
 import {DiagramBox, DiagramSectionDrawerBox, PresenceRemainder} from "oxidd-viz-rust";
-import {ViewState} from "../views/ViewState";
+import {IViewGroup, ViewState} from "../views/ViewState";
 import {IPoint} from "../../utils/_types/IPoint";
 import {DerivedField} from "../../utils/DerivedField";
 import {Field} from "../../watchables/Field";
@@ -17,6 +17,7 @@ import {binaryToString, stringToBinary} from "../../utils/binarySerialization";
 import {ITerminalState} from "./_types/ITerminalState";
 import {Mutator} from "../../watchables/mutator/Mutator";
 import {getConfigurationObjectWrapper} from "../configuration/getConfigurationObjectWrapper";
+import {IWatchable} from "../../watchables/_types/IWatchable";
 
 /** The state of a single visualization of a diagram */
 export class DiagramVisualizationState extends ViewState {
@@ -25,7 +26,10 @@ export class DiagramVisualizationState extends ViewState {
 
     /** The configuration object to change settings of this visualization */
     public readonly config = new Derived(() =>
-        getConfigurationObjectWrapper(this.drawer.get_configuration())
+        getConfigurationObjectWrapper({
+            owner: this.name,
+            config: this.drawer.get_configuration(),
+        })
     );
 
     /** The diagram drawer */
@@ -50,6 +54,16 @@ export class DiagramVisualizationState extends ViewState {
         selected: Uint32Array;
         highlight: Uint32Array;
     }>;
+
+    /** @override */
+    public readonly children: IWatchable<ViewState[]> = new Derived(watch =>
+        watch(watch(this.config).descendantViews)
+    );
+
+    /** @override */
+    public readonly groups: IWatchable<IViewGroup[]> = new Derived(watch => [
+        {targets: [this.ID, ...watch(this.descendants).map(group => group.ID)]},
+    ]);
 
     /**
      * Creates a new diagram visualization

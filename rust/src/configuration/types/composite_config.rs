@@ -18,7 +18,16 @@ pub struct CompositeConfig<C> {
     readonly_data: Rc<C>,
 }
 
-struct CompositeValue(Vec<Box<dyn Abstractable>>);
+struct CompositeValue {
+    children: Vec<Box<dyn Abstractable>>,
+    style: CompositeDirection,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum CompositeDirection {
+    Vertical = 0,
+    Horizontal = 1,
+}
 
 impl<C: 'static> CompositeConfig<C> {
     pub fn new<F: Fn(&C) -> Vec<Box<dyn Abstractable>>>(
@@ -26,7 +35,22 @@ impl<C: 'static> CompositeConfig<C> {
         children: F,
     ) -> CompositeConfig<C> {
         CompositeConfig {
-            config: ConfigurationObject::new(CompositeValue(children(&data))),
+            config: ConfigurationObject::new(CompositeValue {
+                children: children(&data),
+                style: CompositeDirection::Vertical,
+            }),
+            readonly_data: Rc::new(data),
+        }
+    }
+    pub fn new_horizontal<F: Fn(&C) -> Vec<Box<dyn Abstractable>>>(
+        data: C,
+        children: F,
+    ) -> CompositeConfig<C> {
+        CompositeConfig {
+            config: ConfigurationObject::new(CompositeValue {
+                children: children(&data),
+                style: CompositeDirection::Horizontal,
+            }),
             readonly_data: Rc::new(data),
         }
     }
@@ -51,11 +75,11 @@ impl<C: 'static> Abstractable for CompositeConfig<C> {
 
 impl<C> ValueMapping<CompositeValue> for CompositeConfig<C> {
     fn to_js_value(val: &CompositeValue) -> JsValue {
-        JsValue::null()
+        JsValue::from_bool(val.style == CompositeDirection::Horizontal)
     }
 
     fn get_children(val: &CompositeValue) -> Option<Vec<AbstractConfigurationObject>> {
-        Some(val.0.iter().map(|a| a.get_abstract()).collect_vec())
+        Some(val.children.iter().map(|a| a.get_abstract()).collect_vec())
     }
 
     fn from_js_value(js_val: JsValue, cur_val: &CompositeValue) -> Option<CompositeValue> {

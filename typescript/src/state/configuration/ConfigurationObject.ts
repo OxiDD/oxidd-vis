@@ -8,6 +8,8 @@ import {IConfigObjectSerialization} from "./_types/IConfigObjectSerialization";
 import {IConfigObjectType} from "./_types/IConfigObjectType";
 import {getConfigurationObjectWrapper} from "./getConfigurationObjectWrapper";
 import {chain} from "../../watchables/mutator/chain";
+import {ViewState} from "../views/ViewState";
+import {Constant} from "../../watchables/Constant";
 
 /**
  * A configuration object that interacts with the AbstractConfigurationObject code in rust
@@ -18,7 +20,9 @@ export class ConfigurationObject<V> {
     protected readonly type: ConfigurationObjectType;
     protected readonly _value: Derived<V>;
     protected readonly _children: Derived<IConfigObjectType[]>;
-    public constructor(object: AbstractConfigurationObject) {
+    public constructor(ownedConfig: IOwnedAbstractConfig) {
+        const object = ownedConfig.config;
+        const owner = ownedConfig.owner;
         this.object = object;
         this.type = object.get_type();
 
@@ -60,7 +64,7 @@ export class ConfigurationObject<V> {
                     child.free();
                     return map.get(id)!;
                 } else {
-                    const wrapper = getConfigurationObjectWrapper(child);
+                    const wrapper = getConfigurationObjectWrapper({owner, config: child});
                     map.set(id, wrapper);
                     return wrapper;
                 }
@@ -134,4 +138,19 @@ export class ConfigurationObject<V> {
     public deserializeValue(value: V): IMutator {
         return this.setValue(value);
     }
+
+    /** The views of this config */
+    public readonly views: IWatchable<ViewState[]> = new Constant([]);
+
+    /** All the descendant views of this config (including this config's views) */
+    public readonly descendantViews: IWatchable<ViewState[]> = new Derived(watch => [
+        ...watch(this.views),
+        ...watch(this._children).flatMap(child => watch(child.descendantViews)),
+    ]);
 }
+
+export type IConfigOwner = string;
+export type IOwnedAbstractConfig = {
+    owner: IWatchable<IConfigOwner>;
+    config: AbstractConfigurationObject;
+};

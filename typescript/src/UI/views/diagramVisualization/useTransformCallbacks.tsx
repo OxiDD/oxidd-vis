@@ -47,6 +47,7 @@ export function useTransformCallbacks(
             }, 100).cancel;
         }, []),
         onMouseDown: useCallback(e => {
+            if (e.button == 0) return;
             // We register listeners on the window, such that dragging works even when leaving the canvas
             const moveListener = (e: MouseEvent) => {
                 if ((e.buttons & 3) != 0) {

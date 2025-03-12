@@ -1,6 +1,6 @@
 import {AbstractConfigurationObject} from "oxidd-viz-rust";
 import {Derived} from "../../../watchables/Derived";
-import {ConfigurationObject} from "../ConfigurationObject";
+import {ConfigurationObject, IOwnedAbstractConfig} from "../ConfigurationObject";
 
 export class TextOutputConfig extends ConfigurationObject<{
     output?: string;
@@ -21,7 +21,7 @@ export class TextOutputConfig extends ConfigurationObject<{
      * Creates a new text output config object
      * @param object The rust configuration object that represents a text output
      */
-    public constructor(object: AbstractConfigurationObject) {
+    public constructor(object: IOwnedAbstractConfig) {
         super(object);
     }
 }

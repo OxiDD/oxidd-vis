@@ -1,6 +1,6 @@
 import {AbstractConfigurationObject} from "oxidd-viz-rust";
 import {IWatchable} from "../../../watchables/_types/IWatchable";
-import {ConfigurationObject} from "../ConfigurationObject";
+import {ConfigurationObject, IOwnedAbstractConfig} from "../ConfigurationObject";
 import {Derived} from "../../../watchables/Derived";
 import {IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {chain} from "../../../watchables/mutator/chain";
@@ -31,7 +31,7 @@ export class ChoiceConfig
      * Creates a new config object
      * @param object The rust configuration that represents a choice
      */
-    public constructor(object: AbstractConfigurationObject) {
+    public constructor(object: IOwnedAbstractConfig) {
         super(object);
     }
 

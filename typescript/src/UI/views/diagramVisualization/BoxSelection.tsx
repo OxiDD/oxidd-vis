@@ -23,7 +23,7 @@ export const BoxSelection: FC<{
         const frame = containerRef.current?.getBoundingClientRect();
         if (!frame) return;
         event.preventDefault();
-        event.stopPropagation();
+        // event.stopPropagation();
 
         const start = {
             x: event.clientX - frame.left,

@@ -115,8 +115,8 @@ export const TabTargetWithClick = forwardRef<
         if (!el) return;
         if (!onClick) return;
 
-        el.addEventListener("click", onClick);
-        return () => el.removeEventListener("click", onClick);
+        el.addEventListener("mousedown", onClick);
+        return () => el.removeEventListener("mousedown", onClick);
     }, [lRef]);
     return <TabTarget {...rest} ref={mergeRefs([lRef, fRef])} />;
 });

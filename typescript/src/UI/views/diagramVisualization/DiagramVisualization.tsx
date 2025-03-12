@@ -50,6 +50,8 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
             };
         }
     }, []);
+
+    // Prevent dragging the window when clicking a button
     const preventDrag = useCallback((e: React.MouseEvent) => {
         e.stopPropagation();
     }, []);

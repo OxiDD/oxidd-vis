@@ -8,6 +8,7 @@ import {GithubIcon} from "./components/GithubIcon";
 import {AppState} from "../state/AppState";
 import {useWatch} from "../watchables/react/useWatch";
 import {ViewState} from "../state/views/ViewState";
+import {StyledIconButton} from "./components/StyledIconButton";
 
 const size = 50;
 export const Sidebar: FC<{state: AppState; projectUrl: string}> = ({
@@ -42,7 +43,8 @@ export const Sidebar: FC<{state: AppState; projectUrl: string}> = ({
                     content={`Enable ${darkMode ? "light" : "dark"} mode`}
                     directionalHint={DirectionalHint.rightCenter}
                     id={themeId}>
-                    <IconEl
+                    <StyledIconButton
+                        size={size}
                         tooltipId={themeId}
                         name="dark mode"
                         icon={darkMode ? "ClearNight" : "Sunny"}
@@ -95,7 +97,6 @@ export const SidebarButton: FC<{
     view: ViewState;
     appState: AppState;
 }> = ({name, icon, view, appState}) => {
-    const theme = useTheme();
     const tooltipId = useId(name);
     const watch = useWatch();
     const views = appState.views;
@@ -106,7 +107,8 @@ export const SidebarButton: FC<{
     const isVisible = watch(views.isVisible(view));
 
     const iconEl = (
-        <IconEl
+        <StyledIconButton
+            size={size}
             tooltipId={tooltipId}
             isVisible={isVisible}
             name={name}
@@ -137,31 +139,5 @@ export const SidebarButton: FC<{
             id={tooltipId}>
             <div ref={ref}>{iconEl}</div>
         </StyledTooltipHost>
-    );
-};
-
-const IconEl: FC<{
-    tooltipId: string;
-    isVisible?: boolean;
-    name: string;
-    icon: string;
-    onClick: () => void;
-}> = ({tooltipId, isVisible = false, name, icon, onClick}) => {
-    const theme = useTheme();
-    return (
-        <IconButton
-            aria-describedby={tooltipId}
-            className={css({
-                width: size,
-                height: size,
-                color: theme.palette.neutralPrimary,
-                backgroundColor: isVisible
-                    ? theme.palette.neutralLighterAlt
-                    : theme.palette.neutralLight,
-            })}
-            iconProps={{iconName: icon, style: {fontSize: size * 0.5}}}
-            aria-label={name}
-            onClick={onClick}
-        />
     );
 };

@@ -1,6 +1,6 @@
 import {AbstractConfigurationObject} from "oxidd-viz-rust";
 import {IWatchable} from "../../../watchables/_types/IWatchable";
-import {ConfigurationObject} from "../ConfigurationObject";
+import {ConfigurationObject, IOwnedAbstractConfig} from "../ConfigurationObject";
 import {Derived} from "../../../watchables/Derived";
 import {IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {chain} from "../../../watchables/mutator/chain";
@@ -24,7 +24,7 @@ export class IntConfig
      * Creates a new int config object
      * @param object The rust configuration that represents an integer
      */
-    public constructor(object: AbstractConfigurationObject) {
+    public constructor(object: IOwnedAbstractConfig) {
         super(object);
     }
 

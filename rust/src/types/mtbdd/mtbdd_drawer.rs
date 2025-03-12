@@ -10,7 +10,9 @@ use crate::{
         configuration::Configuration,
         configuration_object::{AbstractConfigurationObject, Abstractable},
         types::{
-            button_config::ButtonConfig, composite_config::CompositeConfig,
+            button_config::{ButtonConfig, ButtonStyle},
+            composite_config::CompositeConfig,
+            panel_config::PanelConfig,
             text_output_config::TextOutputConfig,
         },
     },
@@ -366,7 +368,9 @@ pub struct MTBDDDiagramDrawer<
     group_manager: MutRcRefCell<GM<T, G>>,
     time: MutRcRefCell<u32>,
     drawer: MutRcRefCell<Drawer<T, NodeData, LayerData, R, L, GMGraph<T, G>>>,
-    config: Configuration<CompositeConfig<(ButtonConfig, TextOutputConfig, ButtonConfig)>>,
+    config: Configuration<
+        PanelConfig<CompositeConfig<(ButtonConfig, TextOutputConfig, PanelConfig<ButtonConfig>)>>,
+    >,
 }
 
 type GraphLabel = PointerLabel<NodeLabel<i32>>;
@@ -444,11 +448,16 @@ impl<
         ));
         grouped_graph.hide(0);
 
-        let composite_config = CompositeConfig::new(
+        let composite_config = CompositeConfig::new_horizontal(
             (
                 ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
-                ButtonConfig::new_labeled("Expand all"),
+                // ButtonConfig::new_labeled("Expand all"),
+                PanelConfig::new(
+                    ButtonStyle::Text("Expand".into()),
+                    "Expand",
+                    ButtonConfig::new_icon("MaximumValue", "Expand all"),
+                ),
             ),
             |(f1, f2, f3)| {
                 vec![
@@ -458,7 +467,14 @@ impl<
                 ]
             },
         );
-        let config = Configuration::new(composite_config.clone());
+        let config = Configuration::new(PanelConfig::new(
+            ButtonStyle::Icon {
+                name: "Settings".into(),
+                description: "Visualization settings".into(),
+            },
+            "settings",
+            composite_config.clone(),
+        ));
 
         let mut out = MTBDDDiagramDrawer {
             group_manager,

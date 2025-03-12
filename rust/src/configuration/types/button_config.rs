@@ -20,7 +20,19 @@ pub struct ButtonConfig {
 #[derive(Clone)]
 struct ButtonValue {
     press_count: usize,
-    text: Option<String>,
+    style: ButtonStyle,
+}
+
+#[derive(Clone)]
+pub enum ButtonStyle {
+    Text(String),
+    Plain(),
+    Icon {
+        /// The name of the icon, available in https://uifabricicons.azurewebsites.net/
+        name: String,
+        /// A custom hover description based on the use case of the button
+        description: String,
+    },
 }
 
 impl ButtonConfig {
@@ -28,7 +40,26 @@ impl ButtonConfig {
         ButtonConfig {
             data: ConfigurationObject::new(ButtonValue {
                 press_count: 0,
-                text: Some(text.to_string()),
+                style: ButtonStyle::Text(text.to_string()),
+            }),
+        }
+    }
+    pub fn new_plain() -> ButtonConfig {
+        ButtonConfig {
+            data: ConfigurationObject::new(ButtonValue {
+                press_count: 0,
+                style: ButtonStyle::Plain(),
+            }),
+        }
+    }
+    pub fn new_icon(icon: &str, description: &str) -> ButtonConfig {
+        ButtonConfig {
+            data: ConfigurationObject::new(ButtonValue {
+                press_count: 0,
+                style: ButtonStyle::Icon {
+                    name: icon.to_string(),
+                    description: description.to_string(),
+                },
             }),
         }
     }
@@ -70,10 +101,15 @@ impl ConfigObjectGetter<ButtonConfig, ButtonValue> for ButtonConfig {
 
 impl ValueMapping<ButtonValue> for ButtonConfig {
     fn to_js_value(val: &ButtonValue) -> JsValue {
-        JsObject::new()
-            .set("text", val.text.clone().unwrap_or_else(|| "".to_string()))
-            .set("pressCount", val.press_count)
-            .into()
+        let obj = JsObject::new().set("pressCount", val.press_count);
+        let obj = match &val.style {
+            ButtonStyle::Text(text) => obj.set("text", text),
+            ButtonStyle::Icon { name, description } => {
+                obj.set("icon", name).set("text", description)
+            }
+            _ => obj,
+        };
+        obj.into()
     }
     fn from_js_value(js_val: JsValue, cur: &ButtonValue) -> Option<ButtonValue> {
         let obj = JsObject::load(js_val);
@@ -81,7 +117,8 @@ impl ValueMapping<ButtonValue> for ButtonConfig {
             .get("pressCount")
             .and_then(|v| v.as_f64().map(|f| f as usize))
             .unwrap_or_default();
-        let text = obj.get("text").and_then(|v| v.as_string());
+        // let text = obj.get("text").and_then(|v| v.as_string());
+        // let icon = obj.get("icon").and_then(|v| v.as_string());
         Some(ButtonValue {
             press_count,
             // text,

@@ -6,28 +6,33 @@ import {CompositeConfig} from "./types/CompositeConfig";
 import {ChoiceConfig} from "./types/ChoiceConfig";
 import {ButtonConfig} from "./types/ButtonConfig";
 import {TextOutputConfig} from "./types/TextOutputConfig";
+import {PanelConfig} from "./types/PanelConfig";
+import {IWatchable} from "../../watchables/_types/IWatchable";
+import {IOwnedAbstractConfig} from "./ConfigurationObject";
 
 /**
  * Creates the configuration object wrapper from the given abstract configuration object
- * @param object The object for which to create the wrapper
+ * @param ownedConfig The object for which to create the wrapper
  * @returns The object wrapper
  */
 export function getConfigurationObjectWrapper(
-    object: AbstractConfigurationObject
+    ownedConfig: IOwnedAbstractConfig
 ): IConfigObjectType {
-    const type = object.get_type();
+    const type = ownedConfig.config.get_type();
     if (type == ConfigurationObjectType.Int) {
-        return new IntConfig(object);
+        return new IntConfig(ownedConfig);
     } else if (type == ConfigurationObjectType.Label) {
-        return new LabelConfig(object);
+        return new LabelConfig(ownedConfig);
     } else if (type == ConfigurationObjectType.Composite) {
-        return new CompositeConfig(object);
+        return new CompositeConfig(ownedConfig);
     } else if (type == ConfigurationObjectType.Choice) {
-        return new ChoiceConfig(object);
+        return new ChoiceConfig(ownedConfig);
     } else if (type == ConfigurationObjectType.Button) {
-        return new ButtonConfig(object);
+        return new ButtonConfig(ownedConfig);
     } else if (type == ConfigurationObjectType.TextOutput) {
-        return new TextOutputConfig(object);
+        return new TextOutputConfig(ownedConfig);
+    } else if (type == ConfigurationObjectType.Panel) {
+        return new PanelConfig(ownedConfig);
     }
     return null as never;
 }

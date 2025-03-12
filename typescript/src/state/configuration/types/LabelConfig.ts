@@ -1,7 +1,7 @@
 import {AbstractConfigurationObject} from "oxidd-viz-rust";
 import {Derived} from "../../../watchables/Derived";
 import {IConfigObjectType} from "../_types/IConfigObjectType";
-import {ConfigurationObject} from "../ConfigurationObject";
+import {ConfigurationObject, IOwnedAbstractConfig} from "../ConfigurationObject";
 import {getConfigurationObjectWrapper} from "../getConfigurationObjectWrapper";
 
 export class LabelConfig extends ConfigurationObject<{label: string; style: number}> {
@@ -19,7 +19,7 @@ export class LabelConfig extends ConfigurationObject<{label: string; style: numb
      * Creates a new label config object
      * @param object The rust configuration object that represents a label
      */
-    public constructor(object: AbstractConfigurationObject) {
+    public constructor(object: IOwnedAbstractConfig) {
         super(object);
     }
 }
