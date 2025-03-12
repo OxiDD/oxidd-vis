@@ -45,6 +45,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> EdgeToAdjus
         &mut self,
         edges: impl Iterator<Item = (NodeID, EdgeType<T>)>,
     ) -> () {
+        self.process_graph_changes();
         let remove_edges = self.remove_edges.clone();
         for node in self.get_affected_nodes(remove_edges) {
             self.event_writer
@@ -101,6 +102,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
     }
 
     fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+        self.process_graph_changes();
         let parents = self.graph.get_known_parents(node);
         if self.remove_edges.len() == 0 {
             return parents;
@@ -113,6 +115,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
     }
 
     fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+        self.process_graph_changes();
         let children = self.graph.get_children(node);
         if self.remove_edges.len() == 0 {
             return children;

@@ -1,17 +1,17 @@
-import React, {FC, useCallback, useState} from "react";
-import {ManualDiagramCollectionState} from "../../../../state/diagrams/collections/ManualDiagramCollectionState";
-import {useWatch} from "../../../../watchables/react/useWatch";
-import {DefaultButton, Stack, useTheme} from "@fluentui/react";
-import {CenteredContainer} from "../../../components/layout/CenteredContainer";
-import {DiagramSummary} from "../DiagramSummary";
-import {DiagramCollection} from "../DiagramCollection";
-import {DiagramCollectionContainer} from "./util/DiagramCollectionContainer";
-import {DiagramCollectionHostModal} from "../modals/DiagramCollectionHostModal";
+import React, { FC, useCallback, useState } from "react";
+import { ManualDiagramCollectionState } from "../../../../state/diagrams/collections/ManualDiagramCollectionState";
+import { useWatch } from "../../../../watchables/react/useWatch";
+import { DefaultButton, Stack, useTheme } from "@fluentui/react";
+import { CenteredContainer } from "../../../components/layout/CenteredContainer";
+import { DiagramSummary } from "../DiagramSummary";
+import { DiagramCollection } from "../DiagramCollection";
+import { DiagramCollectionContainer } from "./util/DiagramCollectionContainer";
+import { DiagramCollectionHostModal } from "../modals/DiagramCollectionHostModal";
 
 export const ManualDiagramCollection: FC<{
     collection: ManualDiagramCollectionState;
     onDelete?: () => void;
-}> = ({collection, onDelete}) => {
+}> = ({ collection, onDelete }) => {
     const watch = useWatch();
     const theme = useTheme();
 
@@ -38,7 +38,7 @@ export const ManualDiagramCollection: FC<{
             onDelete={onDelete}
             hideFrame={!onDelete}
             status={collection.status}>
-            <Stack tokens={{childrenGap: theme.spacing.m}}>
+            <Stack tokens={{ childrenGap: theme.spacing.m }}>
                 {watch(collection.diagrams).map(diagram => (
                     <Stack.Item align="stretch" key={diagram.ID}>
                         <DiagramSummary
@@ -50,19 +50,22 @@ export const ManualDiagramCollection: FC<{
             </Stack>
             <Stack
                 horizontal
-                tokens={{childrenGap: theme.spacing.m}}
-                style={{marginTop: theme.spacing.m}}>
+                tokens={{ childrenGap: theme.spacing.m }}
+                style={{ marginTop: theme.spacing.m }}>
                 <AddDiagramButton onClick={() => collection.addDiagram("QDD").commit()}>
-                    Add local DD
+                    Add local BDD
+                </AddDiagramButton>
+                <AddDiagramButton onClick={() => collection.addDiagram("MTBDD").commit()}>
+                    Add local MTBDD
                 </AddDiagramButton>
             </Stack>
 
-            <Stack style={{paddingLeft: theme.spacing.m, paddingRight: theme.spacing.m}}>
+            <Stack style={{ paddingLeft: theme.spacing.m, paddingRight: theme.spacing.m }}>
                 {watch(collection.collections).map(subCollection => (
                     <Stack.Item
                         align="stretch"
                         key={subCollection.ID}
-                        style={{marginTop: theme.spacing.m}}>
+                        style={{ marginTop: theme.spacing.m }}>
                         <DiagramCollection
                             collection={subCollection}
                             onDelete={() =>
@@ -74,8 +77,8 @@ export const ManualDiagramCollection: FC<{
             </Stack>
             <Stack
                 horizontal
-                tokens={{childrenGap: theme.spacing.m}}
-                style={{marginTop: theme.spacing.m}}>
+                tokens={{ childrenGap: theme.spacing.m }}
+                style={{ marginTop: theme.spacing.m }}>
                 {/* TODO: add modal for selecting the host to use + store this in settings as the default host */}
                 <AddDiagramButton onClick={onShowHostModal}>
                     Add diagram source
@@ -90,7 +93,7 @@ export const ManualDiagramCollection: FC<{
     );
 };
 
-const AddDiagramButton: FC<{onClick: () => void}> = ({onClick, children}) => (
+const AddDiagramButton: FC<{ onClick: () => void }> = ({ onClick, children }) => (
     <DefaultButton
         onClick={onClick}
         children={children}

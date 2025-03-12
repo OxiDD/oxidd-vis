@@ -34,12 +34,15 @@ multimap = "0.10.0"
 byteorder = "1.4"
 seeded-random = "0.6.0"
 
+
+
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
 # all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
-wasm2map = "0.1.0"
+# wasm2map = "0.1.0"
+
 
 [dependencies.uuid]
 version = "1.10.0"

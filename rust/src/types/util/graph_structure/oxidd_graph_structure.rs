@@ -131,7 +131,7 @@ impl<
         R: DiagramRules<E, N, T> + 'static,
         F: Function + 'static,
         S: Fn(&T) -> String,
-    > GraphStructure<ET, NodeLabel<String>, String> for OxiddGraphStructure<ET, F, T, S>
+    > GraphStructure<ET, NodeLabel<T>, String> for OxiddGraphStructure<ET, F, T, S>
 where
     for<'id> F::Manager<'id>:
         Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
@@ -167,13 +167,14 @@ where
                 let tag = edge.tag();
                 let internal_node = manager.get_node(edge);
                 if let Node::Inner(node) = internal_node {
-                    return Some(Vec::from_iter(
+                    Some(Vec::from_iter(
                         R::cofactors(tag, node)
                             .map(|f| F::from_edge_ref(manager, &f))
                             .enumerate(),
-                    ));
+                    ))
+                } else {
+                    None
                 }
-                return None;
             });
             if let Some(cofactors) = cofactors {
                 let out = cofactors.iter().map(|(i, f)| {
@@ -206,11 +207,11 @@ where
             .unwrap_or("".to_string())
     }
 
-    fn get_node_label(&self, node: NodeID) -> NodeLabel<String> {
+    fn get_node_label(&self, node: NodeID) -> NodeLabel<T> {
         let kind = if let Some(node) = self.get_node_by_id(node) {
             node.with_manager_shared(|manager, edge| match manager.get_node(edge) {
                 Node::Inner(n) => NodeType::Inner(edge.node_id().to_string()),
-                Node::Terminal(t) => NodeType::Terminal((&self.terminal_to_string)(t.borrow())),
+                Node::Terminal(t) => NodeType::Terminal(t.borrow().clone()),
             })
         } else {
             NodeType::Inner("Not found".to_string())

@@ -33,17 +33,19 @@ use crate::configuration::types::text_output_config::TextOutputConfig;
 use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
+use crate::types::util::drawing::layouts::layer_orderings::edge_layer_ordering::EdgeLayerOrdering;
 use crate::types::util::drawing::renderers::webgl_renderer::WebglLayerStyle;
+use crate::types::util::graph_structure::graph_manipulators::child_edge_adjuster::ChildEdgeAdjuster;
 use crate::types::util::graph_structure::graph_manipulators::edge_to_adjuster::EdgeToAdjuster;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceGroups;
 use crate::types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder;
 use crate::types::util::graph_structure::oxidd_graph_structure::NodeType;
 use crate::util::color::Color;
 use crate::util::color::TransparentColor;
-use crate::util::dummy_bdd::DummyEdge;
-use crate::util::dummy_bdd::DummyFunction;
-use crate::util::dummy_bdd::DummyManager;
-use crate::util::dummy_bdd::DummyManagerRef;
+use crate::util::dummy_bdd::DummyBDDEdge;
+use crate::util::dummy_bdd::DummyBDDFunction;
+use crate::util::dummy_bdd::DummyBDDManager;
+use crate::util::dummy_bdd::DummyBDDManagerRef;
 use crate::util::free_id_manager::FreeIdManager;
 use crate::util::logging::console;
 use crate::util::rc_refcell::MutRcRefCell;
@@ -120,16 +122,16 @@ where
 {
     manager_ref: MR,
 }
-impl QDDDiagram<DummyManagerRef> {
-    pub fn new() -> QDDDiagram<DummyManagerRef> {
-        let manager_ref = DummyManagerRef::from(&DummyManager::new());
+impl QDDDiagram<DummyBDDManagerRef> {
+    pub fn new() -> QDDDiagram<DummyBDDManagerRef> {
+        let manager_ref = DummyBDDManagerRef::from(&DummyBDDManager::new());
         QDDDiagram { manager_ref }
     }
 }
 
-impl Diagram for QDDDiagram<DummyManagerRef> {
+impl Diagram for QDDDiagram<DummyBDDManagerRef> {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
-        let (roots, levels) = DummyFunction::from_dddmp(&mut self.manager_ref, &dddmp);
+        let (roots, levels) = DummyBDDFunction::from_dddmp(&mut self.manager_ref, &dddmp);
         Some(Box::new(QDDDiagramSection::new(roots, levels)))
     }
     fn create_section_from_buddy(
@@ -138,7 +140,7 @@ impl Diagram for QDDDiagram<DummyManagerRef> {
         vars: Option<String>,
     ) -> Option<Box<dyn DiagramSection>> {
         let (roots, levels) =
-            DummyFunction::from_buddy(&mut self.manager_ref, &data, vars.as_deref());
+            DummyBDDFunction::from_buddy(&mut self.manager_ref, &data, vars.as_deref());
         Some(Box::new(QDDDiagramSection::new(roots, levels)))
     }
     fn create_section_from_ids(
@@ -149,9 +151,9 @@ impl Diagram for QDDDiagram<DummyManagerRef> {
         let roots = sources
             .iter()
             .map(|&(id, section)| {
-                let root_edge = DummyEdge::new(Arc::new(id), self.manager_ref.clone());
+                let root_edge = DummyBDDEdge::new(Arc::new(id), self.manager_ref.clone());
                 levels = section.get_level_labels();
-                (DummyFunction(root_edge), section.get_node_labels(id))
+                (DummyBDDFunction(root_edge), section.get_node_labels(id))
             })
             .collect_vec();
         Some(Box::new(QDDDiagramSection::new(roots, levels)))
@@ -197,15 +199,14 @@ where
 }
 
 impl<
-        T: ToString + Clone + 'static,
         E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
-        R: DiagramRules<E, N, T> + 'static,
+        R: DiagramRules<E, N, String> + 'static,
         F: Function + 'static,
     > DiagramSection for QDDDiagramSection<F>
 where
     for<'id> F::Manager<'id>:
-        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
+        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = String>,
 {
     fn get_level_labels(&self) -> Vec<String> {
         self.levels.clone()
@@ -290,7 +291,7 @@ where
                 // SugiyamaOrdering::new(2, 2),
                 SequenceOrdering::new(
                     PseudoRandomLayerOrdering::new(2, 0),
-                    SugiyamaOrdering::new(2, 2),
+                    SequenceOrdering::new(EdgeLayerOrdering, SugiyamaOrdering::new(2, 2)),
                 ),
                 // AverageGroupAlignment,
                 OrderingGroupAlignment,
@@ -333,23 +334,22 @@ trait LayoutEditing {
     fn select_layout(&mut self, layout: usize) -> ();
 }
 impl<
-        T: ToString + Clone + 'static,
         E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
-        R: DiagramRules<E, N, T> + 'static,
+        R: DiagramRules<E, N, String> + 'static,
         F: Function + 'static,
-        S: Fn(&T) -> String,
+        S: Fn(&String) -> String,
     > LayoutEditing
     for TransitionLayout<
         (),
         NodeData,
         LayerData,
-        GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
+        GMGraph<(), OxiddGraphStructure<(), F, String, S>>,
         ToggleLayout<
             (),
             NodeData,
             LayerData,
-            GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
+            GMGraph<(), OxiddGraphStructure<(), F, String, S>>,
             LayeredLayout<
                 (),
                 NodeData,
@@ -359,7 +359,7 @@ impl<
                     NodeData,
                     LayerData,
                     PseudoRandomLayerOrdering,
-                    SugiyamaOrdering,
+                    SequenceOrdering<(), NodeData, LayerData, EdgeLayerOrdering, SugiyamaOrdering>,
                 >,
                 OrderingGroupAlignment,
                 BrandesKopfPositioningCorrected,
@@ -368,7 +368,7 @@ impl<
                 (),
                 NodeData,
                 LayerData,
-                GMGraph<(), OxiddGraphStructure<(), F, T, S>>,
+                GMGraph<(), OxiddGraphStructure<(), F, String, S>>,
                 LayeredLayout<
                     (),
                     NodeData,
@@ -388,7 +388,7 @@ impl<
     >
 where
     for<'id> F::Manager<'id>:
-        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = T>,
+        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = String>,
 {
     fn set_seed(&mut self, seed: usize) -> () {
         self.get_layout_rules()
@@ -431,8 +431,8 @@ impl Interpolatable for NodeData {
     }
 }
 impl LatexNodeStyle for NodeData {
-    fn is_terminal(&self) -> Option<String> {
-        self.is_terminal.map(|v| format!("terminal{}", v))
+    fn is_terminal(&self) -> Option<(String, Option<String>)> {
+        self.is_terminal.map(|v| (format!("terminal{}", v), None))
     }
 
     fn is_group(&self) -> bool {
@@ -509,6 +509,7 @@ pub struct QDDDiagramDrawer<
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
             LabelConfig<ChoiceConfig<PresenceRemainder>>,
             LabelConfig<ChoiceConfig<bool>>,
+            LabelConfig<ChoiceConfig<bool>>,
             LabelConfig<IntConfig>,
             ButtonConfig,
             ButtonConfig,
@@ -536,15 +537,64 @@ type MEdgeToAdjuster<T, G> = RCGraph<
     T,
     PointerLabel<NodeLabel<String>>,
     String,
-    EdgeToAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
+    EdgeToAdjuster<T, PointerLabel<NodeLabel<String>>, String, MChildEdgeAdjuster<T, G>>,
 >;
-type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, G>;
+type MChildEdgeAdjuster<T, G> = RCGraph<
+    T,
+    PointerLabel<NodeLabel<String>>,
+    String,
+    ChildEdgeAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
+>;
+type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, MBaseGraph<T, G>>;
+type MBaseGraph<T, G> = TerminalLevelAdjuster<T, NodeLabel<String>, String, G>;
 type GMGraph<T, G> = GroupPresenceAdjuster<
     T,
     NodeData,
     LayerData,
     GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData, LayerData>,
 >;
+
+fn move_shared_edge<T: DrawTag + 'static>(
+    children: Vec<(EdgeType<T>, NodeID, PointerLabel<NodeLabel<String>>)>,
+) -> Option<Vec<(EdgeType<T>, NodeID)>> {
+    if children.len() != 3 {
+        return None;
+    }
+    let edges = children
+        .into_iter()
+        .map(|(edge, to, label)| {
+            if let PointerLabel::Node(NodeLabel {
+                pointers: _,
+                kind: NodeType::Terminal(t),
+            }) = label
+            {
+                (t.clone(), (edge, to))
+            } else {
+                ("inner".to_string(), (edge, to))
+            }
+        })
+        .collect::<HashMap<_, _>>();
+    let Some((to_true_edge, true_node)) = edges.get("T") else {
+        return None;
+    };
+    let Some((to_false_edge, false_node)) = edges.get("F") else {
+        return None;
+    };
+    let Some((to_inner_edge, rest_node)) = edges.get("inner") else {
+        return None;
+    };
+
+    if to_true_edge.index == 2 {
+        return None;
+    }
+
+    return Some(vec![
+        (to_true_edge.clone(), *rest_node),
+        (to_inner_edge.clone(), *true_node),
+        (to_false_edge.clone(), *false_node),
+    ]);
+    // return Some(vec![]);
+}
 
 impl<
         T: DrawTag + Serializable<T> + 'static,
@@ -555,8 +605,9 @@ impl<
 {
     pub fn new(graph: G, renderer: R, layout: L, font: Rc<Font>) -> QDDDiagramDrawer<T, G, R, L> {
         let original_roots = graph.get_roots().clone();
+        let base_graph = TerminalLevelAdjuster::new(graph); // Make sure that terminal levels make sense before possibly adding pointers to these terminals
         let pointer_adjuster = PointerNodeAdjuster::new(
-            graph,
+            base_graph,
             EdgeType {
                 tag: T::default(),
                 index: 2,
@@ -564,7 +615,9 @@ impl<
             true,
             "".to_string(),
         );
-        let edge_to_adjuster = RCGraph::new(EdgeToAdjuster::new(pointer_adjuster));
+        let child_edge_adjuster =
+            RCGraph::new(ChildEdgeAdjuster::new(pointer_adjuster, move_shared_edge));
+        let edge_to_adjuster = RCGraph::new(EdgeToAdjuster::new(child_edge_adjuster.clone()));
         let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(edge_to_adjuster.clone()));
         let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
         let roots = modified_graph.get_roots();
@@ -574,7 +627,7 @@ impl<
             group_manager.clone(),
             move |nodes| {
                 // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
-
+                console::log!("Get group data");
                 let (is_terminal, is_group, color) = match (nodes.get(0), nodes.get(1)) {
                     (
                         Some(&PresenceLabel {
@@ -662,13 +715,20 @@ impl<
                     c.set_index(1).commit();
                     c
                 }),
+                LabelConfig::new("Move shared", {
+                    let mut c = ChoiceConfig::new([
+                        Choice::new(true, "enabled"),
+                        Choice::new(false, "disabled"),
+                    ]);
+                    c
+                }),
                 LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
                 ButtonConfig::new_labeled("Change seed"),
                 ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
                 ButtonConfig::new_labeled("Expand all"),
             ),
-            |(f1, f2, f3, f4, f5, f6, f7, f8, f9)| {
+            |(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)| {
                 vec![
                     Box::new(f1.clone()),
                     Box::new(f2.clone()),
@@ -679,6 +739,7 @@ impl<
                     Box::new(f7.clone()),
                     Box::new(f8.clone()),
                     Box::new(f9.clone()),
+                    Box::new(f10.clone()),
                 ]
             },
         );
@@ -707,12 +768,12 @@ impl<
         });
 
         let drawer = out.drawer.clone();
-        let mut seed = composite_config.4.clone();
-        composite_config.5.clone().add_press_listener(move || {
+        let mut seed = composite_config.5.clone();
+        composite_config.6.clone().add_press_listener(move || {
             let new_seed = seed.get() + 1;
             seed.set(new_seed).commit();
         });
-        let seed = composite_config.4.clone();
+        let seed = composite_config.5.clone();
         let seed2 = seed.clone();
         let _ = on_configuration_change(&seed, move || {
             drawer
@@ -723,8 +784,8 @@ impl<
 
         let drawer = out.drawer.clone();
         let mut latex_renderer = LatexRenderer::new();
-        let mut output = composite_config.7.clone();
-        composite_config.6.clone().add_press_listener(move || {
+        let mut output = composite_config.8.clone();
+        composite_config.7.clone().add_press_listener(move || {
             latex_renderer.update_layout(&drawer.get().get_current_layout());
             latex_renderer.render(u32::MAX);
             let out = latex_renderer.get_output();
@@ -732,19 +793,19 @@ impl<
         });
 
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+        // let from = 0;
         for root in roots {
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         }
 
         let max = 500;
-        // let from = 0;
         if out.group_manager.read().get_nodes_of_group(from).len() < max {
             reveal_all(&out.group_manager, from, max);
         }
 
         let group_manager = out.group_manager.clone();
         composite_config
-            .8
+            .9
             .clone()
             .add_press_listener(move || reveal_all(&group_manager, from, 10_000_000));
 
@@ -809,6 +870,14 @@ impl<
                     .set_remove_to_edges(HashSet::new().into_iter());
             }
         });
+
+        let move_shared_config = composite_config.4.clone();
+        on_configuration_change(&composite_config.4, move || {
+            child_edge_adjuster
+                .get()
+                .set_enabled(move_shared_config.get());
+        });
+
         let _ = after_configuration_change(&composite_config, move || {
             drawer.get().layout(*time.get());
         });

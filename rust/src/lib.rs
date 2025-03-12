@@ -16,7 +16,7 @@ use web_sys::{Document, Element, HtmlElement, Window};
 
 use configuration::configuration_object::ConfigurationObject;
 use oxidd::{bdd::BDDFunction, util::AllocResult, BooleanFunction};
-use types::qdd::qdd_drawer::QDDDiagram;
+use types::{mtbdd::mtbdd_drawer::MTBDDDiagram, qdd::qdd_drawer::QDDDiagram};
 
 use swash::{
     proxy::{CharmapProxy, MetricsProxy},
@@ -26,7 +26,7 @@ use swash::{
 };
 
 use crate::{
-    util::dummy_bdd::{DummyFunction, DummyManager, DummyManagerRef},
+    util::dummy_bdd::{DummyBDDFunction, DummyBDDManager, DummyBDDManagerRef},
     wasm_interface::DiagramBox,
 };
 
@@ -34,4 +34,10 @@ use crate::{
 pub fn create_qdd_diagram() -> Option<DiagramBox> // And some DD type param
 {
     Some(DiagramBox::new(Box::new(QDDDiagram::new())))
+}
+
+#[wasm_bindgen]
+pub fn create_mtbdd_diagram() -> Option<DiagramBox> // And some DD type param
+{
+    Some(DiagramBox::new(Box::new(MTBDDDiagram::new())))
 }

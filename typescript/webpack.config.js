@@ -35,7 +35,7 @@ module.exports = env => ({
         historyApiFallback: true,
     },
     watchOptions: {
-        aggregateTimeout: 1200,
+        aggregateTimeout: 2000,
     },
     resolve: {
         extensions: [".tsx", ".ts", ".js", ".txt"],
