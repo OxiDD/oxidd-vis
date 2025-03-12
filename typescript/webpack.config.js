@@ -1,5 +1,5 @@
 const path = require("path");
-const webpack = require('webpack');
+const webpack = require("webpack");
 const build = path.join(process.cwd(), "build");
 const CopyPlugin = require("copy-webpack-plugin");
 module.exports = env => ({
@@ -20,22 +20,22 @@ module.exports = env => ({
             {
                 test: /\.txt$/i,
                 use: "raw-loader",
-            }
+            },
         ],
     },
     experiments: {
-        asyncWebAssembly: true
+        asyncWebAssembly: true,
     },
     devServer: {
         static: {
-            directory: build
+            directory: build,
         },
         compress: true,
         port: 3000,
         historyApiFallback: true,
     },
     watchOptions: {
-      aggregateTimeout: 1200,
+        aggregateTimeout: 1200,
     },
     resolve: {
         extensions: [".tsx", ".ts", ".js", ".txt"],
@@ -45,10 +45,10 @@ module.exports = env => ({
         path: build,
     },
     plugins: [
-        new CopyPlugin({
-          patterns: [
-            { from: "node_modules/oxidd-viz-rust/oxidd_viz_rust_bg.wasm.map", to: "" },
-          ],
-        }),
-      ],
+        // new CopyPlugin({
+        //   patterns: [
+        //     { from: "node_modules/oxidd-viz-rust/oxidd_viz_rust_bg.wasm.map", to: "" },
+        //   ],
+        // }),
+    ],
 });
