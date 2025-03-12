@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::{collections::HashMap, io::Cursor, rc::Rc};
+use std::{collections::HashMap, io::Cursor, rc::Rc, sync::Arc};
 use web_sys::HtmlCanvasElement;
 
 use oxidd::{Edge, Function, InnerNode, Manager, ManagerRef, NodeID};
@@ -63,7 +63,9 @@ use crate::{
     },
     util::{
         color::{Color, TransparentColor},
-        dummy_mtbdd::{DummyMTBDDFunction, DummyMTBDDManager, DummyMTBDDManagerRef},
+        dummy_mtbdd::{
+            DummyMTBDDEdge, DummyMTBDDFunction, DummyMTBDDManager, DummyMTBDDManagerRef,
+        },
         logging::console,
         rc_refcell::MutRcRefCell,
         rectangle::Rectangle,
@@ -104,9 +106,18 @@ impl Diagram for MTBDDDiagram<DummyMTBDDManagerRef> {
 
     fn create_section_from_ids(
         &self,
-        id: &[(oxidd::NodeID, &Box<dyn crate::traits::DiagramSection>)],
+        sources: &[(oxidd::NodeID, &Box<dyn crate::traits::DiagramSection>)],
     ) -> Option<Box<dyn crate::traits::DiagramSection>> {
-        todo!()
+        let mut levels = Vec::new();
+        let roots = sources
+            .iter()
+            .map(|&(id, section)| {
+                let root_edge = DummyMTBDDEdge::new(Arc::new(id), self.manager_ref.clone());
+                levels = section.get_level_labels();
+                (DummyMTBDDFunction(root_edge), section.get_node_labels(id))
+            })
+            .collect_vec();
+        Some(Box::new(MTBDDDiagramSection::new(roots, levels)))
     }
 }
 
@@ -570,12 +581,14 @@ impl<
     }
     fn serialize_state(&self) -> Vec<u8> {
         let mut out = Vec::new();
-        self.group_manager.read().write(&mut Cursor::new(&mut out));
+        let _ = self.group_manager.read().write(&mut Cursor::new(&mut out));
         out
     }
 
     fn deserialize_state(&mut self, state: Vec<u8>) -> () {
-        self.group_manager.get().read(&mut Cursor::new(&state));
+        let _ = self.group_manager.get().read(&mut Cursor::new(&state));
+        let time = *self.time.get();
+        self.layout(time);
     }
 
     fn get_configuration(&self) -> AbstractConfigurationObject {

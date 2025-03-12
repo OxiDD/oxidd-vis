@@ -627,7 +627,6 @@ impl<
             group_manager.clone(),
             move |nodes| {
                 // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
-                console::log!("Get group data");
                 let (is_terminal, is_group, color) = match (nodes.get(0), nodes.get(1)) {
                     (
                         Some(&PresenceLabel {
@@ -969,12 +968,12 @@ impl<
     }
     fn serialize_state(&self) -> Vec<u8> {
         let mut out = Vec::new();
-        self.group_manager.read().write(&mut Cursor::new(&mut out));
+        let _ = self.group_manager.read().write(&mut Cursor::new(&mut out));
         out
     }
 
     fn deserialize_state(&mut self, state: Vec<u8>) -> () {
-        self.group_manager.get().read(&mut Cursor::new(&state));
+        let _ = self.group_manager.get().read(&mut Cursor::new(&state));
     }
 
     fn get_configuration(&self) -> AbstractConfigurationObject {

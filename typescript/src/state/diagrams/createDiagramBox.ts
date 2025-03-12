@@ -1,5 +1,5 @@
-import { create_mtbdd_diagram, create_qdd_diagram, DiagramBox } from "oxidd-viz-rust";
-import { IDiagramType } from "./_types/IDiagramTypeSerialization";
+import {create_mtbdd_diagram, create_qdd_diagram, DiagramBox} from "oxidd-viz-rust";
+import {IDiagramType} from "./_types/IDiagramTypeSerialization";
 
 /**
  * Creates a new diagram box depending on the passed diagram type
@@ -16,6 +16,5 @@ export function createDiagramBox(type: IDiagramType): DiagramBox {
         const diagramBox = create_qdd_diagram();
         if (!diagramBox) throw Error("Could not create a new DD");
         return diagramBox;
-
     }
 }
