@@ -14,6 +14,8 @@ import {TextOutputConfig} from "../../../state/configuration/types/TextOutputCon
 import {TextOutputConfigComp} from "./TextOutputConfigComp";
 import {PanelConfig} from "../../../state/configuration/types/PanelConfig";
 import {PanelConfigComp} from "./PanelConfigComp";
+import {LocationConfig} from "../../../state/configuration/types/LocationConfig";
+import {LocationConfigComp} from "./LocationConfigComp";
 
 export const ConfigTypeComp: FC<{value: IConfigObjectType}> = ({value}) => {
     if (value instanceof IntConfig) return <IntConfigComp value={value} />;
@@ -25,5 +27,7 @@ export const ConfigTypeComp: FC<{value: IConfigObjectType}> = ({value}) => {
     if (value instanceof ButtonConfig) return <ButtonConfigComp value={value} />;
     if (value instanceof TextOutputConfig) return <TextOutputConfigComp value={value} />;
     if (value instanceof PanelConfig) return <PanelConfigComp value={value} />;
+    if (value instanceof LocationConfig)
+        return <LocationConfigComp value={value} ChildComp={ConfigTypeComp} />;
     return <></>;
 };

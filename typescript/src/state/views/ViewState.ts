@@ -1,17 +1,18 @@
-import {v4 as uuid} from "uuid";
-import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
-import {Field} from "../../watchables/Field";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
-import {all} from "../../watchables/mutator/all";
-import {IWatchable} from "../../watchables/_types/IWatchable";
-import {Derived} from "../../watchables/Derived";
-import {Constant} from "../../watchables/Constant";
-import {chain} from "../../watchables/mutator/chain";
-import {IPanelState} from "../../layout/_types/IPanelState";
-import {IPanelData} from "../../layout/_types/IPanelData";
-import {getStatePanels, panelStateToData} from "../../layout/LayoutState";
-import {ViewManager} from "./ViewManager";
-import {IViewLocationHint} from "../_types/IViewLocationHint";
+import { v4 as uuid } from "uuid";
+import { IBaseViewSerialization } from "../_types/IBaseViewSerialization";
+import { Field } from "../../watchables/Field";
+import { IMutator } from "../../watchables/mutator/_types/IMutator";
+import { all } from "../../watchables/mutator/all";
+import { IWatchable } from "../../watchables/_types/IWatchable";
+import { Derived } from "../../watchables/Derived";
+import { Constant } from "../../watchables/Constant";
+import { chain } from "../../watchables/mutator/chain";
+import { IPanelState } from "../../layout/_types/IPanelState";
+import { IPanelData } from "../../layout/_types/IPanelData";
+import { getStatePanels, panelStateToData } from "../../layout/LayoutState";
+import { ViewManager } from "./ViewManager";
+import { IViewLocationHint } from "../_types/IViewLocationHint";
+import { getNeighborHints } from "./locations/getNeighborLocationHints";
 
 /**
  * The state associated to a single shown view
@@ -21,16 +22,14 @@ export abstract class ViewState {
     public readonly canClose = new Field(true);
     /** The name of this panel */
     public readonly name = new Field("");
+    /** The category of this view */
+    public readonly category = new Field("default");
     /** The ID of this view */
     public readonly ID: string;
 
     /** Data for recovering layout data from the previous time this state was opened */
     protected readonly layoutRecovery = new Field<IPanelData | undefined>(undefined);
 
-    /** Base location hints for when to open this layout */
-    protected readonly baseLocationHints: IWatchable<IViewLocationHint[]> = new Constant(
-        [] as IViewLocationHint[]
-    );
 
     /** Creates a new view */
     public constructor(ID: string = uuid()) {
@@ -46,6 +45,7 @@ export abstract class ViewState {
             ID: this.ID,
             name: this.name.get(),
             closable: this.canClose.get(),
+            category: this.category.get(),
             layoutRecovery: this.layoutRecovery.get(),
         };
     }
@@ -60,6 +60,7 @@ export abstract class ViewState {
             (this as any).ID = data.ID;
             push(this.name.set(data.name));
             push(this.canClose.set(data.closable));
+            push(this.category.set(data.category));
             push(this.layoutRecovery.set(data.layoutRecovery));
         });
     }
@@ -81,115 +82,28 @@ export abstract class ViewState {
     /**
      * A callback for when the UI for this view is fully closed
      * @param oldLayout The layout of the application before the panel was closed
+     * @param oldLayoutData The layout of the application obtained before the panel was closed
      */
-    public onCloseUI(oldLayout: IPanelState): IMutator | void {
-        return this.layoutRecovery.set(panelStateToData(oldLayout));
+    public onCloseUI(oldLayout: IPanelState, oldLayoutData: IPanelData): IMutator | void {
+        return this.layoutRecovery.set(oldLayoutData);
     }
 
-    /** Location hints for when this view is opened again */
-    public readonly openLocationHints: IWatchable<IViewLocationHint[]> = new Derived(
-        watch => {
-            // TODO: can improve hints by using the current layout state, and data such as "being above all these things", to create a hint that satisfies that, even if the original container-ids no longer exist
-            const getNeighborHints = (panel: IPanelData): IViewLocationHint[] => {
-                if (panel.type == "tabs") {
-                    const index = panel.tabs.indexOf(this.ID);
-                    if (index == -1) return [];
 
-                    const hints: IViewLocationHint[] = [{targetId: panel.id}];
-                    for (
-                        let distance = 1;
-                        index - distance >= 0 || index + distance < panel.tabs.length;
-                        distance++
-                    ) {
-                        const tabBefore = panel.tabs[index - distance];
-                        if (tabBefore != undefined)
-                            hints.push({
-                                targetId: tabBefore,
-                                targetType: "view",
-                                tabIndex: {target: tabBefore, position: "after"},
-                            });
-                        const tabAfter = panel.tabs[index + distance];
-                        if (tabAfter != undefined)
-                            hints.push({
-                                targetId: tabAfter,
-                                targetType: "view",
-                                tabIndex: {target: tabAfter, position: "before"},
-                            });
-                    }
-                    return hints;
-                } else {
-                    const childrenHints = panel.panels.map(({content}) =>
-                        getNeighborHints(content)
-                    );
-                    const index = childrenHints.findIndex(hints => hints.length != 0);
-                    if (index == -1) return [];
+    /** Retrieves base location hints for where to open this view in the layout */
+    protected *getBaseLocationHints(): Generator<IViewLocationHint, void, void> {
 
-                    const createId = panel.panels[index].content.id;
-                    const hints: IViewLocationHint[] = [...childrenHints[index]];
-                    for (
-                        let distance = 1;
-                        index - distance >= 0 || index + distance < panel.panels.length;
-                        distance++
-                    ) {
-                        const panelBefore = panel.panels[index - distance]?.content;
-                        if (panelBefore != undefined)
-                            hints.push(
-                                ...getStateDataPanels(panelBefore).map(
-                                    (panelBefore): IViewLocationHint => ({
-                                        targetId: panelBefore.id,
-                                        targetType: "panel",
-                                        createId,
-                                        side:
-                                            panel.direction == "horizontal"
-                                                ? "east"
-                                                : "south",
-                                    })
-                                )
-                            );
-                        const panelAfter = panel.panels[index + distance]?.content;
-                        if (panelAfter != undefined)
-                            hints.push(
-                                ...getStateDataPanels(panelAfter).map(
-                                    (panelAfter): IViewLocationHint => ({
-                                        targetId: panelAfter.id,
-                                        targetType: "panel",
-                                        createId,
-                                        side:
-                                            panel.direction == "horizontal"
-                                                ? "west"
-                                                : "north",
-                                    })
-                                )
-                            );
-                    }
-                    return hints;
-                }
-            };
+    };
 
-            const baseHints = watch(this.baseLocationHints);
-            const recoveryLayout = watch(this.layoutRecovery);
-            if (recoveryLayout) {
-                const neighborHints = getNeighborHints(recoveryLayout);
-                return [...neighborHints, ...baseHints];
-            } else {
-                return baseHints;
-            }
-        }
-    );
-}
-
-/**
- * Retrieves all of the panel IDs that are currently rendered
- * @param state The state to get the content ids from
- * @returns The content ids
- */
-function getStateDataPanels(state: IPanelData): IPanelData[] {
-    if (state.type == "split")
-        return [
-            state,
-            ...state.panels.flatMap(panel => getStateDataPanels(panel.content)),
-        ];
-    return [state];
+    /** Location hints for when this view is opened in the layout */
+    public *getLocationHints(categoryRecovery: Generator<IViewLocationHint, void, void> | undefined): Generator<IViewLocationHint, void, void> {
+        const recoveryLayout = this.layoutRecovery.get();
+        if (recoveryLayout)
+            yield* getNeighborHints(this.ID, recoveryLayout);
+        yield { targetType: "category", targetId: this.category.get() };
+        if(categoryRecovery)
+            yield* categoryRecovery;
+        yield* this.getBaseLocationHints();
+    }
 }
 
 export type IViewGroup = {

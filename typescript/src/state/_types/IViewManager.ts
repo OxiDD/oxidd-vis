@@ -1,13 +1,13 @@
-import {IPanelData} from "../../layout/_types/IPanelData";
-import {TDeepReadonly} from "../../utils/_types/TDeepReadonly";
-import {Field} from "../../watchables/Field";
-import {IWatchable} from "../../watchables/_types/IWatchable";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
-import {ViewState} from "../views/ViewState";
+import { IPanelData } from "../../layout/_types/IPanelData";
+import { TDeepReadonly } from "../../utils/_types/TDeepReadonly";
+import { Field } from "../../watchables/Field";
+import { IWatchable } from "../../watchables/_types/IWatchable";
+import { IMutator } from "../../watchables/mutator/_types/IMutator";
+import { ViewState } from "../views/ViewState";
 
 export type IViewManager = {
     /** The root view that determines all other views */
-    readonly root: ViewState;
+    readonly root: IWatchable<ViewState | undefined>;
 
     /** All of the added views */
     readonly all: IWatchable<Record<string, ViewState>>;
@@ -22,4 +22,9 @@ export type IViewManager = {
 
     /** The current layout assigning views to tabs */
     readonly layout: IWatchable<IPanelData>;
+
+    /** Layout data to recover views based on their assigned category */
+    readonly categoryRecovery: Field<ICategoryRecoveryData>;
 };
+
+export type ICategoryRecoveryData = Record<string, { layout: IPanelData, target: string }>;

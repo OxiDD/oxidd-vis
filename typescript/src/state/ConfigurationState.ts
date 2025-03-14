@@ -1,13 +1,13 @@
-import {TDeepReadonly} from "../utils/_types/TDeepReadonly";
-import {Derived} from "../watchables/Derived";
-import {Field} from "../watchables/Field";
-import {IMutator} from "../watchables/mutator/_types/IMutator";
-import {chain} from "../watchables/mutator/chain";
-import {ViewState} from "./views/ViewState";
-import {IProfile} from "./_types/IProfile";
-import {IStorage} from "./_types/IStorage";
-import {IViewManager} from "./_types/IViewManager";
-import {v4 as uuid} from "uuid";
+import { TDeepReadonly } from "../utils/_types/TDeepReadonly";
+import { Derived } from "../watchables/Derived";
+import { Field } from "../watchables/Field";
+import { IMutator } from "../watchables/mutator/_types/IMutator";
+import { chain } from "../watchables/mutator/chain";
+import { ViewState } from "./views/ViewState";
+import { IProfile } from "./_types/IProfile";
+import { IStorage } from "./_types/IStorage";
+import { IViewManager } from "./_types/IViewManager";
+import { v4 as uuid } from "uuid";
 
 /**
  * The state related to app configuration, allowing users to create different profiles each of which has associated settings and view layouts
@@ -55,7 +55,7 @@ export class ConfigurationState<X> {
         return this._profileName.set(name).chain(() => {
             const id = this._profileId.get();
             const profiles = new Map(this._profiles.get());
-            profiles.set(id, {...profiles.get(id)!, name});
+            profiles.set(id, { ...profiles.get(id)!, name });
             return this._profiles.set(profiles);
         });
     }
@@ -73,7 +73,7 @@ export class ConfigurationState<X> {
             if (this._profileId.get() == id) {
                 const nextProfile = this.profiles
                     .get()
-                    .filter(({id: pid}) => pid != id)[0];
+                    .filter(({ id: pid }) => pid != id)[0];
                 if (!nextProfile) return false;
 
                 push(this.loadProfile(nextProfile));
@@ -108,8 +108,11 @@ export class ConfigurationState<X> {
             push(this._profileName.set(profile.name));
             push(this._profileId.set(profile.id));
 
-            push(this.viewManager.root.deserialize(profile.app));
-            push(this.viewManager.loadLayout(profile.layout));
+            const root = this.viewManager.root.get();
+            if (root)
+                push(root.deserialize(profile.app));
+            push(this.viewManager.loadLayout(profile.layout.current));
+            push(this.viewManager.categoryRecovery.set(profile.layout.recovery));
         });
     }
 
@@ -120,8 +123,11 @@ export class ConfigurationState<X> {
         return {
             name: this._profileName.get(),
             id: this._profileId.get(),
-            layout: this.viewManager.layout.get(),
-            app: this.viewManager.root.serialize(),
+            layout: {
+                current: this.viewManager.layout.get(),
+                recovery: this.viewManager.categoryRecovery.get()
+            },
+            app: this.viewManager.root.get()!.serialize(),
         };
     }
 
@@ -138,6 +144,17 @@ export class ConfigurationState<X> {
             newProfiles.set(profileData.id, profileData);
             push(this._profiles.set(newProfiles));
             this.saveProfilesData();
+        });
+    }
+
+    /**
+     * Clears all profile data from the user
+     */
+    public clearProfiles(): IMutator {
+        return chain(push => {
+            const newProfiles = new Map();
+            push(this._profiles.set(newProfiles));
+            this.storage.save("");
         });
     }
 

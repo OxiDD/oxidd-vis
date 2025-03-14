@@ -1,28 +1,35 @@
-import {IRunnable} from "../../watchables/_types/IRunnable";
-import {IWatchable} from "../../watchables/_types/IWatchable";
-import {AbstractConfigurationObject, ConfigurationObjectType} from "oxidd-viz-rust";
-import {Derived} from "../../watchables/Derived";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
-import {Mutator} from "../../watchables/mutator/Mutator";
-import {IConfigObjectSerialization} from "./_types/IConfigObjectSerialization";
-import {IConfigObjectType} from "./_types/IConfigObjectType";
-import {getConfigurationObjectWrapper} from "./getConfigurationObjectWrapper";
-import {chain} from "../../watchables/mutator/chain";
-import {ViewState} from "../views/ViewState";
-import {Constant} from "../../watchables/Constant";
+import { IRunnable } from "../../watchables/_types/IRunnable";
+import { IWatchable } from "../../watchables/_types/IWatchable";
+import { AbstractConfigurationObject, ConfigurationObjectType } from "oxidd-viz-rust";
+import { Derived } from "../../watchables/Derived";
+import { IMutator } from "../../watchables/mutator/_types/IMutator";
+import { Mutator } from "../../watchables/mutator/Mutator";
+import { IConfigObjectSerialization } from "./_types/IConfigObjectSerialization";
+import { IConfigObjectType } from "./_types/IConfigObjectType";
+import { getConfigurationObjectWrapper } from "./getConfigurationObjectWrapper";
+import { chain } from "../../watchables/mutator/chain";
+import { ViewState } from "../views/ViewState";
+import { Constant } from "../../watchables/Constant";
 
 /**
  * A configuration object that interacts with the AbstractConfigurationObject code in rust
  */
 export class ConfigurationObject<V> {
     protected object: AbstractConfigurationObject;
-    protected destroyed = false;
     protected readonly type: ConfigurationObjectType;
+
+    protected destroyed = false;
+
+    // The owner that children of this config should have (defaults to the owner of this config)
+    protected readonly childOwner: IWatchable<IConfigOwner>;
+
     protected readonly _value: Derived<V>;
     protected readonly _children: Derived<IConfigObjectType[]>;
+
+    
     public constructor(ownedConfig: IOwnedAbstractConfig) {
         const object = ownedConfig.config;
-        const owner = ownedConfig.owner;
+        this.childOwner = ownedConfig.owner;
         this.object = object;
         this.type = object.get_type();
 
@@ -64,7 +71,7 @@ export class ConfigurationObject<V> {
                     child.free();
                     return map.get(id)!;
                 } else {
-                    const wrapper = getConfigurationObjectWrapper({owner, config: child});
+                    const wrapper = getConfigurationObjectWrapper({ owner: this.childOwner, config: child });
                     map.set(id, wrapper);
                     return wrapper;
                 }
@@ -74,7 +81,7 @@ export class ConfigurationObject<V> {
                 map.get(r)?.destroy();
                 map.delete(r);
             }
-            return {map, list: mappedChildren};
+            return { map, list: mappedChildren };
         });
         this._children = new Derived(watch => watch(childData).list);
     }
@@ -140,16 +147,19 @@ export class ConfigurationObject<V> {
     }
 
     /** The views of this config */
-    public readonly views: IWatchable<ViewState[]> = new Constant([]);
+    public readonly ownViews: IWatchable<ViewState[]> = new Constant([]);
 
-    /** All the descendant views of this config (including this config's views) */
-    public readonly descendantViews: IWatchable<ViewState[]> = new Derived(watch => [
-        ...watch(this.views),
-        ...watch(this._children).flatMap(child => watch(child.descendantViews)),
+    /** All the non-nested descendant views of this config (including this config's views) */
+    public readonly nonNestedDescendentViews: IWatchable<ViewState[]> = new Derived(watch => [
+        ...watch(this.ownViews),
+        ...watch(this._children).flatMap(child => watch(child.nonNestedDescendentViews)),
     ]);
 }
 
-export type IConfigOwner = string;
+export type IConfigOwner = {
+    name: string,
+    id: string,
+}[];
 export type IOwnedAbstractConfig = {
     owner: IWatchable<IConfigOwner>;
     config: AbstractConfigurationObject;

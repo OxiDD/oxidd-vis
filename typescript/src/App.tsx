@@ -49,6 +49,7 @@ export const App: FC = () => {
 
         window.addEventListener("beforeunload", () => {
             appState.configuration.saveProfile().commit();
+            // appState.configuration.clearProfiles().commit();
         });
         return appState;
     }, []);

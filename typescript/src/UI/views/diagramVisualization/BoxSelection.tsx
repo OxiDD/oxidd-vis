@@ -1,4 +1,4 @@
-import React, {FC, useCallback, useRef, useState} from "react";
+import React, {FC, ReactChild, ReactNode, useCallback, useRef, useState} from "react";
 import {css} from "@emotion/css";
 import {IRectangle} from "../../../utils/_types/IRectangle";
 import {useTheme} from "@fluentui/react";
@@ -9,7 +9,8 @@ export const BoxSelection: FC<{
     onSelect: (rect: IRectangle, e: MouseEvent) => void;
     onHighlight?: (rect: IRectangle, e: MouseEvent) => void;
     onStart?: (event: React.MouseEvent<HTMLDivElement, MouseEvent>) => boolean;
-}> = ({disabled = false, onSelect, onHighlight, onStart}) => {
+    children?: ReactNode;
+}> = ({disabled = false, onSelect, onHighlight, onStart, children}) => {
     const theme = useTheme();
     const containerRef = useRef<HTMLDivElement>(null);
     const disabledRef = useRef<boolean>(disabled);
@@ -105,6 +106,7 @@ export const BoxSelection: FC<{
                     />
                 </div>
             )}
+            {children}
         </div>
     );
 };

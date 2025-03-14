@@ -56,7 +56,6 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
         e.stopPropagation();
     }, []);
     const moveListeners = useTransformCallbacks(visualization.transform);
-    const modeRef = useRef(0);
     return (
         <ViewContainer
             onContextMenu={e => e.preventDefault()}
@@ -78,27 +77,19 @@ export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}
                         type: "release",
                         event: e,
                     });
-                }}></BoxSelection>
-            <div
-                onMouseDown={preventDrag}
-                className={css({
-                    position: "absolute",
-                    right: theme.spacing.m,
-                    top: theme.spacing.m,
-                    background: theme.palette.neutralLight,
-                })}>
-                <Toolbar toolbar={toolbar} visualization={visualization} />
-            </div>
-            <div
-                onMouseDown={preventDrag}
-                className={css({
-                    position: "absolute",
-                    right: theme.spacing.m,
-                    bottom: theme.spacing.m,
-                    background: theme.palette.neutralLight,
-                })}>
+                }}>
+                <div
+                    onMouseDown={preventDrag}
+                    className={css({
+                        position: "absolute",
+                        right: theme.spacing.m,
+                        top: theme.spacing.m,
+                        background: theme.palette.neutralLight,
+                    })}>
+                    <Toolbar toolbar={toolbar} visualization={visualization} />
+                </div>
                 <ConfigTypeComp value={watch(visualization.config)} />
-            </div>
+            </BoxSelection>
         </ViewContainer>
     );
 };

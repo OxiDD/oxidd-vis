@@ -29,6 +29,10 @@ use crate::configuration::types::composite_config;
 use crate::configuration::types::composite_config::CompositeConfig;
 use crate::configuration::types::int_config::IntConfig;
 use crate::configuration::types::label_config::LabelConfig;
+use crate::configuration::types::location_config::Location;
+use crate::configuration::types::location_config::LocationConfig;
+use crate::configuration::types::panel_config::OpenSide;
+use crate::configuration::types::panel_config::PanelConfig;
 use crate::configuration::types::text_output_config::TextOutputConfig;
 use crate::traits::Diagram;
 use crate::traits::DiagramSection;
@@ -504,18 +508,22 @@ pub struct QDDDiagramDrawer<
     time: MutRcRefCell<u32>,
     drawer: MutRcRefCell<Drawer<T, NodeData, LayerData, R, L, GMGraph<T, G>>>,
     config: Configuration<
-        CompositeConfig<(
-            LabelConfig<ChoiceConfig<usize>>,
-            LabelConfig<ChoiceConfig<PresenceRemainder>>,
-            LabelConfig<ChoiceConfig<PresenceRemainder>>,
-            LabelConfig<ChoiceConfig<bool>>,
-            LabelConfig<ChoiceConfig<bool>>,
-            LabelConfig<IntConfig>,
-            ButtonConfig,
-            ButtonConfig,
-            TextOutputConfig,
-            ButtonConfig,
-        )>,
+        LocationConfig<
+            PanelConfig<
+                CompositeConfig<(
+                    LabelConfig<ChoiceConfig<usize>>,
+                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                    LabelConfig<ChoiceConfig<bool>>,
+                    LabelConfig<ChoiceConfig<bool>>,
+                    LabelConfig<IntConfig>,
+                    ButtonConfig,
+                    ButtonConfig,
+                    TextOutputConfig,
+                    ButtonConfig,
+                )>,
+            >,
+        >,
     >,
 }
 
@@ -742,7 +750,17 @@ impl<
                 ]
             },
         );
-        let config = Configuration::new(composite_config.clone());
+        let config = Configuration::new(LocationConfig::new(
+            Location::BOTTOM_RIGHT,
+            PanelConfig::builder()
+                .set_button_icon("Settings")
+                .set_button_icon_description("Open visualization settings")
+                .set_name("Settings")
+                .set_category("visualization-settings")
+                .set_open_side(OpenSide::Right)
+                .set_open_size(0.3)
+                .build(composite_config.clone()),
+        ));
 
         let mut out = QDDDiagramDrawer {
             group_manager,

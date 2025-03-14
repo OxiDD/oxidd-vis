@@ -1,5 +1,5 @@
 import React from "react";
-import {LayoutState} from "../../layout/LayoutState";
+import {LayoutState, panelStateToData} from "../../layout/LayoutState";
 import {IPanelData} from "../../layout/_types/IPanelData";
 import {TDeepReadonly} from "../../utils/_types/TDeepReadonly";
 import {Derived} from "../../watchables/Derived";
@@ -9,14 +9,17 @@ import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
 import {ViewState} from "./ViewState";
 import {IViewComponent} from "../_types/IViewComponent";
-import {IViewManager} from "../_types/IViewManager";
+import {ICategoryRecoveryData, IViewManager} from "../_types/IViewManager";
 import {IContent} from "../../layout/_types/IContentGetter";
 import {PassiveDerived} from "../../watchables/PassiveDerived";
 import {Constant} from "../../watchables/Constant";
 import {IViewLocationHint} from "../_types/IViewLocationHint";
-import {IPanelState, IPanelTabsState} from "../../layout/_types/IPanelState";
+import {IPanelState, IPanelTabsState, ITabState} from "../../layout/_types/IPanelState";
 import {Observer} from "../../watchables/Observer";
 import {all} from "../../watchables/mutator/all";
+import {dummyMutator} from "../../watchables/mutator/Mutator";
+import {getNeighborHints} from "./locations/getNeighborLocationHints";
+import {ICloseListener} from "../../layout/_types/ICloseListener";
 
 /**
  * The manager of all different views and the layout corresponding to them.
@@ -30,15 +33,20 @@ export class ViewManager implements IViewManager {
     public readonly openAtTargetID = new Field<string | null>(null);
 
     /** The root view */
-    public readonly root: ViewState;
+    public readonly root: IWatchable<ViewState | undefined>;
 
     /** All the views that are available from the root */
-    protected readonly viewStates = new Derived(watch => watch(this.root.descendants));
+    protected readonly viewStates = new Derived(watch => {
+        const root = watch(this.root);
+        return root ? watch(root.descendants) : [];
+    });
 
     /** All the groups that are present in the application, for showing all elements of the group at once */
     protected readonly viewGroups = new Derived(watch => {
-        const groups = watch(this.root.groups);
+        const root = watch(this.root);
         const groupMap = new Map<string, Set<string>[]>();
+        if (!root) return groupMap;
+        const groups = watch(root.groups);
         for (const group of groups) {
             const groupSet = new Set(group.targets);
             for (const ID of group.sources ?? group.targets) {
@@ -49,8 +57,14 @@ export class ViewManager implements IViewManager {
         return groupMap;
     });
 
+    /** Layout data to recover views based on their assigned category */
+    public readonly categoryRecovery = new Field<ICategoryRecoveryData>({});
+
     /** An observer of deleted views */
     protected deletedViewObserver: Observer<ViewState[] | boolean>;
+
+    /** An observer of visible views */
+    protected shownViewObserver: Observer<ViewState[] | boolean>;
 
     /**
      * Creates a new view manager
@@ -59,7 +73,7 @@ export class ViewManager implements IViewManager {
      * @param autoCloseDeleted Whether to automatically close panels of deleted views
      */
     public constructor(
-        root: ViewState,
+        root: IWatchable<ViewState | undefined>,
         closeEmptyPanels: IWatchable<boolean>,
         autoCloseDeleted: IWatchable<boolean>
     ) {
@@ -68,6 +82,7 @@ export class ViewManager implements IViewManager {
         this.layoutState.loadLayout({type: "tabs", tabs: [], id: "default"}).commit();
         this.layout = this.layoutState.layoutData;
 
+        // Setup view deletion listeners
         const viewDeleteSource = new Derived(watch =>
             watch(autoCloseDeleted) ? watch(this.viewStates) : false
         );
@@ -76,9 +91,28 @@ export class ViewManager implements IViewManager {
                 if (typeof newViews == "boolean" || typeof oldViews == "boolean") return;
 
                 const removedViews = new Set(oldViews);
-                for (const ID of newViews) removedViews.delete(ID);
+                for (const view of newViews) removedViews.delete(view);
 
                 all([...removedViews].map(view => this.onDeleteView(view))).commit();
+            }
+        );
+
+        // Setup view visibility listeners, to handle close events of the shown view
+        const openViewsSource = new Derived(watch => {
+            const openTabs = new Set(watch(this.layoutState.allTabs).map(({id}) => id));
+            const views = watch(this.viewStates);
+            return views.filter(view => openTabs.has(view.ID));
+        });
+        this.shownViewObserver = new Observer(openViewsSource).add(
+            (curViews, prevViews) => {
+                const newViews = new Set(curViews);
+                for (const view of prevViews) newViews.delete(view);
+
+                for (const view of newViews)
+                    this.layoutState.addCloseHandler(
+                        view.ID,
+                        this.createTabCloseListener(view)
+                    );
             }
         );
     }
@@ -106,12 +140,6 @@ export class ViewManager implements IViewManager {
     public loadLayout(layout: IPanelData): IMutator {
         return chain(push => {
             push(this.layoutState.loadLayout(layout));
-            for (const view of this.root.descendants.get()) {
-                this.layoutState.addCloseHandler(
-                    view.ID,
-                    this.createTabCloseListener(view)
-                );
-            }
         });
     }
 
@@ -165,18 +193,20 @@ export class ViewManager implements IViewManager {
      */
     public open(
         view: ViewState,
-        locationHintsModifier: (hints: IViewLocationHint[]) => IViewLocationHint[] = h =>
-            h
+        locationHintsModifier: (
+            hints: Generator<IViewLocationHint>
+        ) => Generator<IViewLocationHint> = h => h
     ): IMutator {
-        const locationHints = [
-            ...locationHintsModifier(view.openLocationHints.get()),
-            // The default location if the hints can find no other location
-            {createId: "default"},
-        ]
-            // Make sure that any creation is preceded by checking whether the location exists already
-            .flatMap(hint =>
-                hint.createId ? [{targetId: hint.createId}, hint] : [hint]
-            );
+        const recoveryData = this.categoryRecovery.get();
+        const categoryRecovery = recoveryData[view.category.get()];
+        // Obtain the hints, and pass a hint for recovery based on the category data
+        const hints = locationHintsModifier(
+            view.getLocationHints(
+                categoryRecovery
+                    ? getNeighborHints(categoryRecovery.target, categoryRecovery.layout)
+                    : undefined
+            )
+        );
 
         const layout = this.layoutState;
         const getContainer = (ID: string | null | undefined) =>
@@ -188,28 +218,49 @@ export class ViewManager implements IViewManager {
             if (existingContainer) {
                 push(layout.selectTab(existingContainer.id, viewID));
             } else {
-                // Find the location hinting based on what container can be found
-                const location = locationHints.reduce((cur, hint) => {
-                    if (cur) return cur;
-
-                    if (hint.targetId == undefined) return hint;
-
-                    if (!hint.targetType || hint.targetType == "view") {
-                        const container = this.getTabParent(hint.targetId);
-                        if (container)
-                            return {
-                                ...hint,
-                                targetId: container.id,
-                                targetType: "panel",
-                            };
+                // Add a default fallback
+                const hintsWithFallback = (function* () {
+                    yield* hints;
+                    yield {createId: "default"};
+                })();
+                // Add a check to make sure we do not create duplicate locations
+                const hintsWithCreationCheck = (function* () {
+                    for (const hint of hintsWithFallback) {
+                        if (hint.createId) yield {targetId: hint.createId};
+                        yield hint;
                     }
-                    if (!hint.targetType || hint.targetType == "panel") {
-                        const container = getContainer(hint.targetId);
-                        if (container) return hint;
-                    }
+                })();
+                // Filter out any hints for which no target panel can be found
+                const location = (() => {
+                    for (const hint of hintsWithCreationCheck) {
+                        if (hint.targetId == undefined) return hint;
 
-                    return null;
-                }, null)!;
+                        if (!hint.targetType || hint.targetType == "view") {
+                            const container = this.getTabParent(hint.targetId);
+                            if (container)
+                                return {
+                                    ...hint,
+                                    targetId: container.id,
+                                    targetType: "panel" as const,
+                                };
+                        }
+                        if (!hint.targetType || hint.targetType == "category") {
+                            const containers = this.getTabParentsByCategory(
+                                hint.targetId
+                            );
+                            if (containers.length > 0)
+                                return {
+                                    ...hint,
+                                    targetId: containers[0].id,
+                                };
+                        }
+                        if (!hint.targetType || hint.targetType == "panel") {
+                            const container = getContainer(hint.targetId);
+                            if (container) return hint;
+                        }
+                    }
+                })()!;
+                console.log("Opening using hint", location);
 
                 // Possibly create a new container relative to the target
                 const openSide = location?.side ?? "in";
@@ -250,6 +301,12 @@ export class ViewManager implements IViewManager {
                     let index;
                     if (typeof location.tabIndex.target == "number") {
                         index = location.tabIndex.target;
+                    } else if (location.targetType == "category") {
+                        index = this.getTabsWithCategories(openContainer.tabs)
+                            .get()
+                            .findIndex(
+                                ({category}) => category == location.tabIndex?.target
+                            );
                     } else {
                         index = openContainer.tabs.findIndex(
                             ({id}) => id == location.tabIndex?.target
@@ -264,14 +321,7 @@ export class ViewManager implements IViewManager {
                 }
 
                 // Open and select the tab
-                push(
-                    layout.openTab(
-                        openContainer.id,
-                        viewID,
-                        this.createTabCloseListener(view),
-                        beforeTabID
-                    )
-                );
+                push(layout.openTab(openContainer.id, viewID, undefined, beforeTabID));
                 push(layout.selectTab(openContainer.id, viewID));
             }
         });
@@ -282,16 +332,23 @@ export class ViewManager implements IViewManager {
      * @param view The view to obtain the listener for
      * @returns The created listener
      */
-    protected createTabCloseListener(
-        view: ViewState
-    ): (oldLayout: IPanelState) => IMutator | void {
-        return (oldLayout: IPanelState) => {
+    protected createTabCloseListener(view: ViewState): ICloseListener {
+        return (oldLayout: IPanelState, oldLayoutData: IPanelData) => {
             const stillShown = this.layoutState.allTabs
                 .get()
                 .some(({id}) => id == view.ID);
             if (stillShown) return;
 
-            return view.onCloseUI(oldLayout);
+            return chain(add => {
+                const category = view.category.get();
+                add(
+                    this.categoryRecovery.set({
+                        ...this.categoryRecovery.get(),
+                        [category]: {layout: oldLayoutData, target: view.ID},
+                    })
+                );
+                add(view.onCloseUI(oldLayout, oldLayoutData) ?? dummyMutator());
+            });
         };
     }
 
@@ -305,6 +362,36 @@ export class ViewManager implements IViewManager {
         return this.layoutState.allTabPanels
             .get()
             .find(({tabs}) => tabs.some(({id}) => id == ID));
+    }
+
+    /**
+     * Retrieves the parent container that has a tab with the given category
+     * @param category The category to look for
+     * @returns The container that was found
+     */
+    protected getTabParentsByCategory(category: string): IPanelTabsState[] {
+        return this.layoutState.allTabPanels.get().filter(({tabs}) =>
+            this.getTabsWithCategories(tabs)
+                .get()
+                .some(({category: c}) => c == category)
+        );
+    }
+
+    /**
+     * Retrieves the tabs with their current categories
+     * @param tabs The tabs for which to obtain their categories
+     * @returns The tabs with their current categories
+     */
+    protected getTabsWithCategories(
+        tabs: ITabState[]
+    ): IWatchable<(ITabState & {category: string})[]> {
+        return new PassiveDerived(watch => {
+            const views = watch(this.all);
+            return tabs.map(tab => {
+                const view = (views[tab.id] as ViewState) || undefined;
+                return {category: view ? watch(view.category) : "default", ...tab};
+            });
+        });
     }
 
     /**

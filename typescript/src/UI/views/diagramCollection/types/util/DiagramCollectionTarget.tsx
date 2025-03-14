@@ -1,12 +1,12 @@
-import React, {FC, useEffect} from "react";
-import {HttpDiagramCollectionTargetState} from "../../../../../state/diagrams/collections/HttpDiagramCollectionState";
-import {CenteredContainer} from "../../../../components/layout/CenteredContainer";
-import {useTheme} from "@fluentui/react";
-import {useViewManager} from "../../../../providers/ViewManagerContext";
-import {all} from "../../../../../watchables/mutator/all";
-import {DiagramVisualizationState} from "../../../../../state/diagrams/DiagramVisualizationState";
+import React, { FC, useEffect } from "react";
+import { HttpDiagramCollectionTargetState } from "../../../../../state/diagrams/collections/HttpDiagramCollectionState";
+import { CenteredContainer } from "../../../../components/layout/CenteredContainer";
+import { useTheme } from "@fluentui/react";
+import { useViewManager } from "../../../../providers/ViewManagerContext";
+import { all } from "../../../../../watchables/mutator/all";
+import { DiagramVisualizationState } from "../../../../../state/diagrams/DiagramVisualizationState";
 
-export const DiagramCollectionTarget: FC<{target: HttpDiagramCollectionTargetState}> = ({
+export const DiagramCollectionTarget: FC<{ target: HttpDiagramCollectionTargetState }> = ({
     target,
 }) => {
     const theme = useTheme();
@@ -21,14 +21,14 @@ export const DiagramCollectionTarget: FC<{target: HttpDiagramCollectionTargetSta
                         .filter((vis): vis is DiagramVisualizationState => !!vis)
                         .filter(vis => !viewManager.isOpen(vis).get())
                         .map(vis =>
-                            viewManager.open(vis, hints => [
-                                {
+                            viewManager.open(vis, function* (hints) {
+                                yield {
                                     targetId: target.ID,
                                     targetType: "view",
-                                    tabIndex: {target: target.ID, position: "after"},
-                                },
-                                ...hints,
-                            ])
+                                    tabIndex: { target: target.ID, position: "after" },
+                                };
+                                yield* hints;
+                            })
                         )
                 )
             ),

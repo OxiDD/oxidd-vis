@@ -1,24 +1,23 @@
-import {MessageBarType} from "@fluentui/react";
-import {IWatchable} from "../../../watchables/_types/IWatchable";
-import {IMutator} from "../../../watchables/mutator/_types/IMutator";
-import {ICollectionStatus, IDiagramCollection} from "../_types/IDiagramCollection";
-import {DiagramState} from "../DiagramState";
-import {v4 as uuid} from "uuid";
-import {Derived} from "../../../watchables/Derived";
-import {IHttpDiagramCollectionSerialization} from "./_types/IHttpDiagramCollectionSerialization";
-import {chain} from "../../../watchables/mutator/chain";
-import {dummyMutator} from "../../../watchables/mutator/Mutator";
-import {Field} from "../../../watchables/Field";
-import {Constant} from "../../../watchables/Constant";
-import {createDiagramBox} from "../createDiagramBox";
-import {IDiagramType} from "../_types/IDiagramTypeSerialization";
-import {ViewState} from "../../views/ViewState";
-import {Observer} from "../../../watchables/Observer";
-import {all} from "../../../watchables/mutator/all";
+import { MessageBarType } from "@fluentui/react";
+import { IWatchable } from "../../../watchables/_types/IWatchable";
+import { IMutator } from "../../../watchables/mutator/_types/IMutator";
+import { ICollectionStatus, IDiagramCollection } from "../_types/IDiagramCollection";
+import { DiagramState } from "../DiagramState";
+import { v4 as uuid } from "uuid";
+import { Derived } from "../../../watchables/Derived";
+import { IHttpDiagramCollectionSerialization } from "./_types/IHttpDiagramCollectionSerialization";
+import { chain } from "../../../watchables/mutator/chain";
+import { dummyMutator } from "../../../watchables/mutator/Mutator";
+import { Field } from "../../../watchables/Field";
+import { Constant } from "../../../watchables/Constant";
+import { createDiagramBox } from "../createDiagramBox";
+import { IDiagramType } from "../_types/IDiagramTypeSerialization";
+import { ViewState } from "../../views/ViewState";
+import { Observer } from "../../../watchables/Observer";
+import { all } from "../../../watchables/mutator/all";
 
 export class HttpDiagramCollectionState
-    implements IDiagramCollection<IHttpDiagramCollectionSerialization>
-{
+    implements IDiagramCollection<IHttpDiagramCollectionSerialization> {
     /** @override */
     public readonly ID = uuid();
 
@@ -28,7 +27,7 @@ export class HttpDiagramCollectionState
     });
 
     /** The current status of the collection */
-    public readonly status: IWatchable<{text: string; type: MessageBarType} | undefined> =
+    public readonly status: IWatchable<{ text: string; type: MessageBarType } | undefined> =
         this._status.readonly();
 
     protected readonly _diagrams = new Field<DiagramState[]>([]);
@@ -93,7 +92,7 @@ export class HttpDiagramCollectionState
         } catch (e) {
             console.error(e);
             this._status
-                .set({type: MessageBarType.error, text: "Unable to connect to host"})
+                .set({ type: MessageBarType.error, text: "Unable to connect to host" })
                 .commit();
             return;
         }
@@ -101,7 +100,7 @@ export class HttpDiagramCollectionState
         let diagrams;
         let time;
         try {
-            ({diagrams, time} = (await diagramsText.json()) as {
+            ({ diagrams, time } = (await diagramsText.json()) as {
                 diagrams: {
                     name: string;
                     type: IDiagramType;
@@ -133,12 +132,14 @@ export class HttpDiagramCollectionState
                 });
                 for (const diagram of deletedDiagrams) diagram.dispose();
 
+                let diagramsChanged = diagrams.length != currentDiagrams.length;
                 const newDiagrams = [];
-                for (const {name, type, diagram, state} of diagrams) {
+                for (const { name, type, diagram, state } of diagrams) {
                     const oldDiagramState = currentDiagrams.find(
                         d => d.sourceName.get() == name
                     );
                     if (diagram != false) {
+                        diagramsChanged = true;
                         oldDiagramState?.dispose();
                         const diagramBox = createDiagramBox(type);
                         const diagramState = new DiagramState(diagramBox, type);
@@ -155,8 +156,10 @@ export class HttpDiagramCollectionState
                     }
                 }
 
-                push(this._diagrams.set(newDiagrams));
-                push(this._status.set(undefined));
+                if (diagramsChanged)
+                    push(this._diagrams.set(newDiagrams));
+                if (this._status.get() != undefined)
+                    push(this._status.set(undefined));
             } catch (e) {
                 console.error(e);
                 push(

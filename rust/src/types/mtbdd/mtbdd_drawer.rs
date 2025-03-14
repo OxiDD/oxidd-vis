@@ -12,7 +12,8 @@ use crate::{
         types::{
             button_config::{ButtonConfig, ButtonStyle},
             composite_config::CompositeConfig,
-            panel_config::PanelConfig,
+            location_config::{Location, LocationConfig},
+            panel_config::{OpenSide, PanelConfig},
             text_output_config::TextOutputConfig,
         },
     },
@@ -369,7 +370,11 @@ pub struct MTBDDDiagramDrawer<
     time: MutRcRefCell<u32>,
     drawer: MutRcRefCell<Drawer<T, NodeData, LayerData, R, L, GMGraph<T, G>>>,
     config: Configuration<
-        PanelConfig<CompositeConfig<(ButtonConfig, TextOutputConfig, PanelConfig<ButtonConfig>)>>,
+        LocationConfig<
+            PanelConfig<
+                CompositeConfig<(ButtonConfig, TextOutputConfig, PanelConfig<ButtonConfig>)>,
+            >,
+        >,
     >,
 }
 
@@ -453,11 +458,12 @@ impl<
                 ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
                 // ButtonConfig::new_labeled("Expand all"),
-                PanelConfig::new(
-                    ButtonStyle::Text("Expand".into()),
-                    "Expand",
-                    ButtonConfig::new_icon("MaximumValue", "Expand all"),
-                ),
+                PanelConfig::builder()
+                    .set_button_text("Expand")
+                    .set_name("Expand")
+                    .set_open_side(OpenSide::Below)
+                    .set_open_size(0.3)
+                    .build(ButtonConfig::new_icon("MaximumValue", "Expand all")),
             ),
             |(f1, f2, f3)| {
                 vec![
@@ -467,13 +473,16 @@ impl<
                 ]
             },
         );
-        let config = Configuration::new(PanelConfig::new(
-            ButtonStyle::Icon {
-                name: "Settings".into(),
-                description: "Visualization settings".into(),
-            },
-            "settings",
-            composite_config.clone(),
+        let config = Configuration::new(LocationConfig::new(
+            Location::BOTTOM_RIGHT,
+            PanelConfig::builder()
+                .set_button_icon("Settings")
+                .set_button_icon_description("Open visualization settings")
+                .set_name("Settings")
+                .set_category("visualization-settings")
+                .set_open_side(OpenSide::Right)
+                .set_open_size(0.3)
+                .build(composite_config.clone()),
         ));
 
         let mut out = MTBDDDiagramDrawer {

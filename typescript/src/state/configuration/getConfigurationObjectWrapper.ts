@@ -9,6 +9,7 @@ import {TextOutputConfig} from "./types/TextOutputConfig";
 import {PanelConfig} from "./types/PanelConfig";
 import {IWatchable} from "../../watchables/_types/IWatchable";
 import {IOwnedAbstractConfig} from "./ConfigurationObject";
+import { LocationConfig } from "./types/LocationConfig";
 
 /**
  * Creates the configuration object wrapper from the given abstract configuration object
@@ -33,6 +34,9 @@ export function getConfigurationObjectWrapper(
         return new TextOutputConfig(ownedConfig);
     } else if (type == ConfigurationObjectType.Panel) {
         return new PanelConfig(ownedConfig);
+    } else if (type===ConfigurationObjectType.Location) {
+        return new LocationConfig(ownedConfig);
     }
+    
     return null as never;
 }

@@ -47,6 +47,7 @@ export const PanelConfigComp: FC<{value: PanelConfig}> = ({value}) => {
         const container = layout.allTabPanels
             .get()
             .find(c => c.tabs.some(({id}) => id == view.ID));
+
         layout
             .setDraggingData({
                 position,

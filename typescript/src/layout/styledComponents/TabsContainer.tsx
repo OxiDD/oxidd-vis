@@ -10,6 +10,7 @@ export const TabsContainer: FC<ITabsContainerProps> = ({children}) => (
             position: "relative",
             flexDirection: "column",
             boxSizing: "border-box",
+            overflow: "hidden",
         }}>
         {children}
     </div>

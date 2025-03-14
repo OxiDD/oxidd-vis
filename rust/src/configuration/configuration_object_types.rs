@@ -9,5 +9,6 @@ pub enum ConfigurationObjectType {
     Composite,
     Button,
     Panel,
+    Location,
     TextOutput,
 }

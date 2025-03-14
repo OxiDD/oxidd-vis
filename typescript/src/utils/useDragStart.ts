@@ -24,6 +24,10 @@ export const useDragStart = <T extends HTMLElement = HTMLDivElement>(
         let offset: null | IPoint = null;
         let origin: null | IPoint = null;
         const downListener = (event: MouseEvent) => {
+            if (preventDefault) {
+                event.preventDefault()
+                event.stopImmediatePropagation();
+            };
             origin = event;
             window.addEventListener("mousemove", moveListener);
             const bounds = el.getBoundingClientRect();
@@ -33,8 +37,11 @@ export const useDragStart = <T extends HTMLElement = HTMLDivElement>(
             };
         };
         const moveListener = (event: MouseEvent) => {
-            if (preventDefault) event.preventDefault();
             if (!origin) return;
+            if (preventDefault) {
+                event.preventDefault()
+                event.stopImmediatePropagation();
+            };
             const distance = getDistance(event, origin);
             if (distanceThreshold < distance) {
                 origin = null;

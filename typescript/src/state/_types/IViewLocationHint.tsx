@@ -5,10 +5,10 @@ export type IViewLocationHint = {
     /** The target ID to find, defaults to the first panel/view id */
     targetId?: string;
     /** The type of ID to look for */
-    targetType?: "panel" | "view";
+    targetType?: "panel" | "view" | "category";
     /** The target index of the tab */
     tabIndex?: {
-        /** The tab to target, either by index or by view ID */
+        /** The tab to target, either by index or by view ID/category (based on the target type) */
         target: number | string;
         /** Whether to position before or after this tab */
         position: "before" | "after";
@@ -19,4 +19,6 @@ export type IViewLocationHint = {
     side?: IDropPanelSide;
     /** The ratio for the panel to open (the size it should have in relation to the average panel in this group) */
     weightRatio?: number;
+    /** A way to tag the hint for debugging purposes */
+    tag?: any;
 };
