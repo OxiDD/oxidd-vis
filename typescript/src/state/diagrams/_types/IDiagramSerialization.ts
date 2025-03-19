@@ -3,6 +3,7 @@ import {IDiagramVisualizationSerialization} from "./IDiagramVisualizationSeriali
 import {INodeSelectionSerialization} from "./INodeSelectionSerialization";
 
 export type IDiagramSerialization = IBaseViewSerialization & {
+    sourceName: string;
     sections: IDiagramSectionTypeSerialization[];
     selectedNodes: INodeSelectionSerialization;
     highlightedNodes: INodeSelectionSerialization;

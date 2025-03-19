@@ -2,9 +2,12 @@ import React, {FC, useCallback} from "react";
 import {useWatch} from "../../../../watchables/react/useWatch";
 import {
     DefaultButton,
+    DirectionalHint,
+    Label,
     MessageBar,
     MessageBarType,
     Stack,
+    Toggle,
     useTheme,
 } from "@fluentui/react";
 import {CenteredContainer} from "../../../components/layout/CenteredContainer";
@@ -13,6 +16,9 @@ import {HttpDiagramCollectionState} from "../../../../state/diagrams/collections
 import {DiagramCollectionContainer} from "./util/DiagramCollectionContainer";
 import {useDragStart} from "../../../../utils/useDragStart";
 import {useViewManager} from "../../../providers/ViewManagerContext";
+import {StyledTooltipHost} from "../../../components/StyledToolTipHost";
+import {usePersistentMemo} from "../../../../utils/usePersistentMemo";
+import {v4 as uuid} from "uuid";
 
 export const HttpDiagramCollection: FC<{
     collection: HttpDiagramCollectionState;
@@ -42,6 +48,8 @@ export const HttpDiagramCollection: FC<{
         viewManager.open(autoOpenTarget).commit();
     }, [autoOpenTarget]);
 
+    const replaceDiagramTooltipID = usePersistentMemo(() => uuid(), []);
+    const openDiagramTooltipID = usePersistentMemo(() => uuid(), []);
     const diagrams = watch(collection.diagrams);
     return (
         <DiagramCollectionContainer
@@ -66,21 +74,54 @@ export const HttpDiagramCollection: FC<{
                     Host does not have any diagrams
                 </div>
             )}
-            <div ref={autoOpenRef}>
-                <AutoOpenButton onClick={openAutoOpenTarget} />
-            </div>
+            <Stack horizontal tokens={{childrenGap: theme.spacing.m}}>
+                <div ref={autoOpenRef} style={{flexGrow: 1}}>
+                    <StyledTooltipHost
+                        directionalHint={DirectionalHint.topCenter}
+                        id={openDiagramTooltipID}
+                        content="Select a panel to automatically open the diagrams into">
+                        <AutoOpenButton
+                            aria={openDiagramTooltipID}
+                            onClick={openAutoOpenTarget}
+                        />
+                    </StyledTooltipHost>
+                </div>
+                <div>
+                    <StyledTooltipHost
+                        directionalHint={DirectionalHint.topCenter}
+                        id={replaceDiagramTooltipID}
+                        content="Replace old diagrams when a new diagram with the same name loads">
+                        <Stack
+                            horizontal
+                            tokens={{childrenGap: theme.spacing.s1}}
+                            verticalAlign="center"
+                            style={{height: "100%"}}>
+                            <Label>Replace diagrams</Label>
+                            <Toggle
+                                checked={watch(collection.replaceOld)}
+                                aria-describedby={replaceDiagramTooltipID}
+                                styles={{root: {marginBottom: 0}}}
+                                onChange={(_, c) =>
+                                    collection.replaceOld.set(c!).commit()
+                                }
+                            />
+                        </Stack>
+                    </StyledTooltipHost>
+                </div>
+            </Stack>
         </DiagramCollectionContainer>
     );
 };
 
-const AutoOpenButton: FC<{onClick?: () => void}> = ({onClick}) => {
+const AutoOpenButton: FC<{onClick?: () => void; aria?: string}> = ({onClick, aria}) => {
     return (
         <DefaultButton
             onClick={onClick}
+            aria-describedby={aria}
             style={{
                 width: "100%",
             }}>
-            Automatically open diagrams
+            Open diagram panel
         </DefaultButton>
     );
 };

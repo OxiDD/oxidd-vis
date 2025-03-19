@@ -52,7 +52,7 @@ export class PanelConfig extends ConfigurationObject<IPanelConfigData> {
     protected readonly owner: IWatchable<IConfigOwner>;
     /** The name of the view */
     public readonly panelName = new Derived(
-        watch => watch(this.childOwner).map(({name})=>name).join(" - ") + ": " + watch(this._value).name
+        watch => watch(this.owner).map(({name})=>name).join(" - ") + ": " + watch(this._value).name
     );
 
     /** The view of this configuration panel */

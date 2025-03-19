@@ -40,7 +40,7 @@ export class DiagramState extends ViewState {
     /** The nodes currently highlighted in this diagram */
     public readonly highlightNodes = new NodeSelectionState();
 
-    /** The name of this diagram, nto for display but for synchronization purposes */
+    /** The name of this diagram, not for display but for synchronization purposes */
     public readonly sourceName = new Field<string>("");
 
     /** @override */
@@ -177,6 +177,7 @@ export class DiagramState extends ViewState {
     public serialize(): IDiagramSerialization {
         return {
             ...super.serialize(),
+            sourceName: this.sourceName.get(),
             sections: this.sections.get().map(section => ({
                 type:
                     Object.entries(sourceTypes).find(
@@ -195,6 +196,7 @@ export class DiagramState extends ViewState {
     public deserialize(data: IDiagramSerialization): IMutator<unknown> {
         return chain(push => {
             push(super.deserialize(data));
+            push(this.sourceName.set(data.sourceName));
 
             const sections: {
                 section: IDiagramSection<unknown>;

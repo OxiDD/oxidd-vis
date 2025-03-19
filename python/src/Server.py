@@ -28,15 +28,11 @@ class Server(BaseHTTPRequestHandler):
                     "time": nowTime
                 })
             else: 
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
-                self.send_header( "Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(bytes("<body>Good, this is the API</body>", "utf-8"))
+                self.sendJSON("Unknown route")
         else:
             self.send_response(200)
             self.send_header("Content-type", "text/html")
-            self.send_header( "Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             if self.path == "/": 
                 path = os.path.join(os.getcwd(), "webfiles/index.html")

@@ -24,7 +24,7 @@ export const DiagramCollectionHostModal: FC<{
     onSelect: (host: string) => void;
     onCancel: () => void;
 }> = ({visible, onSelect, onCancel}) => {
-    const [host, _setHost] = useState("localhost:8080");
+    const [host, _setHost] = useState("localhost:4000");
     const theme = useTheme();
     const sitePrefix = "http://";
     const setHost = useCallback((val: string) => {

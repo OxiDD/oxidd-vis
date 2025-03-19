@@ -15,30 +15,17 @@ import { IDiagramType } from "../_types/IDiagramTypeSerialization";
 import { ViewState } from "../../views/ViewState";
 import { Observer } from "../../../watchables/Observer";
 import { all } from "../../../watchables/mutator/all";
+import { ManualDiagramCollectionState } from "./ManualDiagramCollectionState";
+import { DiagramCollectionBaseState } from "./DiagramCollectionBaseState";
 
 export class HttpDiagramCollectionState
-    implements IDiagramCollection<IHttpDiagramCollectionSerialization> {
-    /** @override */
-    public readonly ID = uuid();
+    extends DiagramCollectionBaseState {
 
-    protected readonly _status = new Field<ICollectionStatus>({
-        type: MessageBarType.info,
-        text: "Loading diagrams",
-    });
+    protected readonly _status = new Field<ICollectionStatus>(undefined);
 
     /** The current status of the collection */
     public readonly status: IWatchable<{ text: string; type: MessageBarType } | undefined> =
         this._status.readonly();
-
-    protected readonly _diagrams = new Field<DiagramState[]>([]);
-
-    /** The current diagrams */
-    public readonly diagrams: IWatchable<DiagramState[]> = this._diagrams.readonly();
-
-    /** Sub-collections of diagrams */
-    public readonly collections: IWatchable<IDiagramCollection<unknown>[]> = new Constant(
-        []
-    );
 
     /** All the diagrams that can be reached from this collection */
     public readonly descendentViews = new Derived(watch => [
@@ -50,11 +37,14 @@ export class HttpDiagramCollectionState
     /** The url of the host we are trying to access */
     public readonly host: string;
 
+    /** Whether to replace old diagrams when opening a new diagram with the same name */
+    public readonly replaceOld = new Field<boolean>(true);
+
     /** The id of the poll interval */
     protected pollID: number;
 
-    /** The time that the previous poll was sent */
-    protected prevPollTime = 0;
+    /** The number of polls we have done */
+    protected pollNum: number = 0;
 
     /** A target view to open new diagrams in */
     public readonly autoOpenTarget: HttpDiagramCollectionTargetState;
@@ -64,6 +54,7 @@ export class HttpDiagramCollectionState
      * @param host
      */
     public constructor(host: string) {
+        super();
         this.host = host;
         this.autoOpenTarget = new HttpDiagramCollectionTargetState(host, this._diagrams);
         this.startPoll();
@@ -84,33 +75,28 @@ export class HttpDiagramCollectionState
 
     /** Performs a single poll */
     protected async poll() {
-        let diagramsText;
+        this.pollNum++;
+        // Check if the host can be reached first
         try {
-            diagramsText = await fetch(
-                `${this.host}/api/diagrams?time=${this.prevPollTime}`
-            );
-        } catch (e) {
-            console.error(e);
-            this._status
-                .set({ type: MessageBarType.error, text: "Unable to connect to host" })
-                .commit();
-            return;
+            await fetch(
+                `${this.host}`, { method: 'HEAD', mode: 'no-cors' });
+        } catch (error) {
+            return
         }
 
+        // Obtain the data from the host
         let diagrams;
-        let time;
         try {
-            ({ diagrams, time } = (await diagramsText.json()) as {
-                diagrams: {
+            const diagramsText = await fetch(
+                `${this.host}/diagrams`
+            );
+            ( diagrams = (await diagramsText.json()) as {
                     name: string;
                     type: IDiagramType;
-                    diagram: string | false;
-                    state: string | false;
-                }[];
-                time: number;
-            });
+                    diagram: string;
+                }[]
+            );
         } catch (e) {
-            console.error(e);
             this._status
                 .set({
                     type: MessageBarType.error,
@@ -119,45 +105,25 @@ export class HttpDiagramCollectionState
                 .commit();
             return;
         }
-        this.prevPollTime = time;
 
         chain(push => {
             try {
-                const currentDiagrams = this.diagrams.get();
-                const deletedDiagrams = currentDiagrams.filter(d => {
-                    const stillExists = diagrams.some(
-                        newD => newD.name == d.sourceName.get()
-                    );
-                    return !stillExists;
-                });
-                for (const diagram of deletedDiagrams) diagram.dispose();
-
-                let diagramsChanged = diagrams.length != currentDiagrams.length;
-                const newDiagrams = [];
-                for (const { name, type, diagram, state } of diagrams) {
-                    const oldDiagramState = currentDiagrams.find(
+                for (const { name, type, diagram } of diagrams) {
+                    const oldDiagramState = this.diagrams.get().find(
                         d => d.sourceName.get() == name
                     );
-                    if (diagram != false) {
-                        diagramsChanged = true;
-                        oldDiagramState?.dispose();
-                        const diagramBox = createDiagramBox(type);
-                        const diagramState = new DiagramState(diagramBox, type);
-                        push(diagramState.sourceName.set(name));
-                        push(diagramState.name.set(name + " diagram"));
-                        if (state != false) {
-                            push(diagramState.deserialize(JSON.parse(state)));
-                        } else {
-                            push(diagramState.createSectionFromDDDMP(diagram, name));
-                        }
-                        newDiagrams.push(diagramState);
-                    } else if (oldDiagramState) {
-                        newDiagrams.push(oldDiagramState);
+                    if (oldDiagramState && this.replaceOld.get()) {
+                        push(this.removeDiagram(oldDiagramState));
                     }
+
+                    const diagramBox = createDiagramBox(type);
+                    const diagramState = new DiagramState(diagramBox, type);
+                    push(diagramState.sourceName.set(name));
+                    push(diagramState.name.set(name + " diagram"));
+                    push(diagramState.createSectionFromDDDMP(diagram, name));
+                    push(this._diagrams.set([...this.diagrams.get(), diagramState]));
                 }
 
-                if (diagramsChanged)
-                    push(this._diagrams.set(newDiagrams));
                 if (this._status.get() != undefined)
                     push(this._status.set(undefined));
             } catch (e) {
@@ -172,51 +138,13 @@ export class HttpDiagramCollectionState
         }).commit();
     }
 
-    /** @override */
-    public removeDiagram(diagram: DiagramState): IMutator<boolean> {
-        return chain(push => {
-            const diagrams = this._diagrams.get();
-            const index = diagrams.findIndex(v => v == diagram);
-            if (index == -1) return false;
-            push(
-                this._diagrams.set([
-                    ...diagrams.slice(0, index),
-                    ...diagrams.slice(index + 1),
-                ])
-            );
-            diagram.dispose();
-
-            fetch(`${this.host}/api/diagram?name=${diagram.sourceName.get()}`, {
-                method: "DELETE",
-            });
-            return true;
-        });
-    }
-
-    /** @override */
-    public removeCollection(collection: IDiagramCollection<unknown>): IMutator<boolean> {
-        return dummyMutator().map(() => false);
-    }
-
-    /** @override */
-    public dispose(): void {
-        clearInterval(this.pollID);
-    }
 
     /** @override */
     public serialize(): IHttpDiagramCollectionSerialization {
-        // TODO: serialize diagram state and send over http
-        for (const diagram of this._diagrams.get()) {
-            navigator.sendBeacon(
-                `${this.host}/api/diagramState?name=${diagram.sourceName.get()}`,
-                JSON.stringify(diagram.serialize())
-            );
-            console.log("sent beacon");
-        }
-
         return {
-            ID: this.ID,
+            ...super.serialize(),
             host: this.host,
+            replaceOld: this.replaceOld.get(),
             target: this.autoOpenTarget.serialize(),
         };
     }
@@ -224,8 +152,9 @@ export class HttpDiagramCollectionState
     /** @override */
     public deserialize(data: IHttpDiagramCollectionSerialization): IMutator {
         return chain(push => {
-            (this.ID as any) = data.ID;
+            push(super.deserialize(data));
             (this.host as any) = data.host;
+            push(this.replaceOld.set(data.replaceOld));
             push(this.autoOpenTarget.deserialize(data.target));
         });
     }
