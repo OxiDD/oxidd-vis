@@ -11,3 +11,4 @@ pub mod rc_refcell;
 pub mod rectangle;
 pub mod transformation;
 pub mod transition;
+pub mod watchables;
