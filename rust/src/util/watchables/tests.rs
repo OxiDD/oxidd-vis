@@ -10,7 +10,7 @@ mod tests {
     };
 
     #[test]
-    fn test1() {
+    fn computes_correct_results() {
         let mut field1 = Field::new("hello");
         let mut field2 = Field::new("world");
 
@@ -46,7 +46,7 @@ mod tests {
     }
 
     #[test]
-    fn test2() {
+    fn fires_observers() {
         let mut field1 = Field::new("hello");
         let mut field2 = Field::new("world");
 
@@ -84,7 +84,7 @@ mod tests {
     }
 
     #[test]
-    fn test3() {
+    fn fires_observers_nested_derive() {
         let mut field1 = Field::new("hello");
         let mut field2 = Field::new("world");
 
@@ -125,5 +125,47 @@ mod tests {
 
         assert_eq!(*fire_count.borrow(), 1);
         assert_eq!(&*derived4.get(), text2);
+    }
+
+    #[test]
+    fn fires_observers_once_nested_derive() {
+        let field1 = Field::new("hello");
+        let mut field2 = Field::new("world");
+
+        let start = field1.read();
+        let end = field2.read();
+        let derived = Derived::new(move |t| format!("{} {}", start.watch(t), end.watch(t)));
+
+        let derived2 = derived.map(|v| format!("okay, {}", v));
+        let derived3 =
+            Derived::new(move |t| format!("({})({})", derived2.watch(t), derived2.watch(t)));
+
+        let start = field1.read();
+        let end = field2.read();
+        let derived4 = Derived::new(move |t| {
+            format!("{} {} {}", start.watch(t), derived3.watch(t), end.watch(t))
+        });
+
+        let fire_count = Rc::new(RefCell::new(0));
+        let fire_count_copy = fire_count.clone();
+        let check2 = TestObserver::new(move |state| {
+            if state == DataState::UpToDate {
+                *fire_count_copy.borrow_mut() += 1;
+            }
+        });
+        let _observer = derived4.observe(check2);
+        field2.set("Tar").commit(); // Does not fire listener, since the initial value has not been read
+        assert_eq!(*fire_count.borrow(), 0);
+
+        derived4.get();
+        field2.set("John").commit();
+        assert_eq!(*fire_count.borrow(), 1);
+
+        field2.set("Bob").commit(); // Does not fire listener, since the new value has not been read
+        assert_eq!(*fire_count.borrow(), 1);
+
+        derived4.get();
+        field2.set("Emma").commit();
+        assert_eq!(*fire_count.borrow(), 2);
     }
 }

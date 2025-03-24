@@ -10,8 +10,7 @@ pub struct Derived<X: 'static> {
     compute: Rc<Box<dyn Fn(&DerivedTracker) -> X>>,
     dependents: Rc<Trackers>,
     val: Rc<RefCell<Option<Rc<X>>>>,
-    // listener: Rc<RefCell<DerivedListener>>,
-    dependencies: Rc<RefCell<Vec<Observer>>>,
+    dependencies: Rc<RefCell<Option<Vec<Observer>>>>,
 }
 impl<X> Clone for Derived<X> {
     /// Cloning shares internal state, to make optimal use of caching
@@ -20,7 +19,6 @@ impl<X> Clone for Derived<X> {
             compute: self.compute.clone(),
             dependents: self.dependents.clone(),
             val: self.val.clone(),
-            // listener: self.listener.clone(),
             dependencies: self.dependencies.clone(),
         }
     }
@@ -37,10 +35,10 @@ impl<'a, X: 'static> Derived<X> {
     pub fn new<F: Fn(&DerivedTracker) -> X + 'static>(f: F) -> Derived<X> {
         Derived {
             compute: Rc::new(Box::new(f)),
-            // When there are no more copies of this Derived instance, the dependencies are dropped, stopping observation of the dependencies
-            dependencies: Rc::new(RefCell::new(Vec::new())),
-            dependents: Rc::new(Trackers::new(DataState::UpToDate)),
             val: Rc::new(RefCell::new(None)),
+            dependents: Rc::new(Trackers::new(DataState::UpToDate)),
+            // When there are no more copies of this Derived instance, the dependencies are dropped, stopping observation of the dependencies
+            dependencies: Rc::new(RefCell::new(None)),
         }
     }
 }
@@ -55,20 +53,18 @@ impl<X: 'static> Watchable for Derived<X> {
         }
         drop(val);
 
-        // Remove old dependencies
-        let mut prev_dependencies = self.dependencies.borrow_mut();
-        prev_dependencies.clear(); // Drops the observers, stopping the observation
-        drop(prev_dependencies);
-
         // Define when to invalidate the value
         let val_mut_ref = self.val.clone();
         let dependents_ref = self.dependents.clone();
+        let dependencies_ref = self.dependencies.clone();
         let listener = DerivedListener::new(move |dirty| {
             let new_state = if dirty {
                 DataState::Outdated
             } else {
                 // If all depencies just became clean, force recoompute of the next value
                 *val_mut_ref.borrow_mut() = None;
+                // Drop the dependencies, such that all listeners are removed from the dependencies
+                *dependencies_ref.borrow_mut() = None;
                 DataState::UpToDate
             };
 
@@ -76,19 +72,20 @@ impl<X: 'static> Watchable for Derived<X> {
         });
 
         // Compute new value
-        let dependencies = self.dependencies.clone();
-        let tracker = DerivedTracker {
-            on_observe: Box::new(move |dependency| {
-                let mut listener = listener.clone();
-                listener.init(&**dependency);
-                let observer = dependency.observe(listener);
-                dependencies.borrow_mut().push(observer);
-            }),
+        let mut new_dependencies = Vec::new();
+        let on_observe = &mut |dependency: Box<&dyn Dependency>| {
+            let mut listener = listener.clone();
+            listener.init(&**dependency);
+            let observer = dependency.observe(listener);
+            new_dependencies.push(observer);
         };
-        let val = Rc::new((self.compute)(&tracker));
+        let val = Rc::new((self.compute)(&DerivedTracker {
+            on_observe: RefCell::new(on_observe),
+        }));
 
-        // Stores the value
+        // Store the value and dependencies
         *self.val.borrow_mut() = Some(val.clone());
+        *self.dependencies.borrow_mut() = Some(new_dependencies);
         val
     }
 }
@@ -103,12 +100,12 @@ impl<X: 'static> WatchableState for Derived<X> {
     }
 }
 
-pub struct DerivedTracker {
-    on_observe: Box<dyn Fn(Box<&dyn Dependency>) -> ()>,
+pub struct DerivedTracker<'a> {
+    on_observe: RefCell<&'a mut dyn FnMut(Box<&dyn Dependency>) -> ()>,
 }
-impl<W: Watchable + 'static> Tracker<W> for DerivedTracker {
+impl<'a, W: Watchable + 'static> Tracker<W> for DerivedTracker<'a> {
     fn observe(&self, w: &W) {
-        (self.on_observe)(Box::new(w));
+        (self.on_observe.borrow_mut())(Box::new(w));
     }
 }
 
