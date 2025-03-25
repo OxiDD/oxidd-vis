@@ -9,6 +9,7 @@ use crate::{
     configuration::{
         configuration::Configuration,
         configuration_object::{AbstractConfigurationObject, Abstractable},
+        observe_configuration::after_configuration_change,
         types::{
             button_config::{ButtonConfig, ButtonStyle},
             composite_config::CompositeConfig,
@@ -372,7 +373,7 @@ pub struct MTBDDDiagramDrawer<
     config: Configuration<
         LocationConfig<
             PanelConfig<
-                CompositeConfig<(ButtonConfig, TextOutputConfig, PanelConfig<ButtonConfig>)>,
+                CompositeConfig<(ButtonConfig, TextOutputConfig, ButtonConfig, ButtonConfig)>,
             >,
         >,
     >,
@@ -453,23 +454,19 @@ impl<
         ));
         grouped_graph.hide(0);
 
-        let composite_config = CompositeConfig::new_horizontal(
+        let composite_config = CompositeConfig::new(
             (
                 ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
-                // ButtonConfig::new_labeled("Expand all"),
-                PanelConfig::builder()
-                    .set_button_text("Expand")
-                    .set_name("Expand")
-                    .set_open_side(OpenSide::Below)
-                    .set_open_size(0.3)
-                    .build(ButtonConfig::new_icon("MaximumValue", "Expand all")),
+                ButtonConfig::new_labeled("Expand all"),
+                ButtonConfig::new_labeled("Reveal terminals"),
             ),
-            |(f1, f2, f3)| {
+            |(f1, f2, f3, f4)| {
                 vec![
                     Box::new(f1.clone()),
                     Box::new(f2.clone()),
                     Box::new(f3.clone()),
+                    Box::new(f4.clone()),
                 ]
             },
         );
@@ -513,11 +510,33 @@ impl<
             out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
         }
 
+        let max = 500;
+        // if out.group_manager.read().get_nodes_of_group(from).len() < max {
+        //     reveal_all(&out.group_manager, from, max);
+        // }
+
         let group_manager = out.group_manager.clone();
         composite_config
             .2
             .clone()
             .add_press_listener(move || reveal_all(&group_manager, from, 10_000_000));
+
+        let group_manager = out.group_manager.clone();
+        let graph = out.graph.clone();
+        composite_config.3.clone().add_press_listener(move || {
+            for t in graph.get_terminals() {
+                group_manager
+                    .get()
+                    .create_group(vec![TargetID(TargetIDType::NodeID, t)]);
+            }
+        });
+
+        // Redraw on interaction
+        let time = out.time.clone();
+        let drawer = out.drawer.clone();
+        let _ = after_configuration_change(&composite_config, move || {
+            drawer.get().layout(*time.get());
+        });
 
         out
     }
@@ -532,11 +551,14 @@ fn reveal_all<
     limit: usize,
 ) {
     let nodes = {
-        let explored_group = group_manager
-            .get()
-            .create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
+        let mut gm = group_manager.get();
+        if !gm.get_groups().contains_key(&from_id) {
+            return;
+        }
+        let explored_group = gm.create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
         group_manager.read().get_nodes_of_group(explored_group)
     };
+
     let mut count = 0;
     let mut group_manager = group_manager.get();
     for node_id in nodes.into_iter().rev() {

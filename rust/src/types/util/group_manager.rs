@@ -671,8 +671,12 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         // TODO: come up with a better splitting approach that considers nodes together
         let mut split = HashSet::new();
         for &node_id in node_ids {
-            let children = &self.graph.get_children(node_id);
-            for &(_, child) in children {
+            let neighbors = self
+                .graph
+                .get_children(node_id)
+                .into_iter()
+                .chain(self.graph.get_known_parents(node_id).into_iter());
+            for (_, child) in neighbors {
                 if split.contains(&child) {
                     continue;
                 }
