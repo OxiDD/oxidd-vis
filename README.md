@@ -1,6 +1,6 @@
-# BDD-viz
+# OxiDD-viz
 
-OxiDD visualization application
+A decision diagram visualization tool
 
 ## Development
 

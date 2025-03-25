@@ -16,6 +16,9 @@ import {usePersistentMemo} from "../../../utils/usePersistentMemo";
 import {Derived} from "../../../watchables/Derived";
 import {FileSource} from "../../../state/diagrams/sources/FileSource";
 import {BuddySelectionModal} from "./modals/BuddySelectionModal";
+import {mtbddDddmpSample} from "./samples/mtbddDddmpSample";
+import {bddDddmpSample} from "./samples/bddDddmpSample";
+import {bddBuddySample} from "./samples/bddBuddySample";
 
 export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> = ({
     diagram,
@@ -94,6 +97,7 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                     />
                 </Stack.Item>
             </Stack>
+            {/* Input management should be in rust eventually since it's diagram specific */}
             <Stack
                 tokens={{childrenGap: theme.spacing.s1}}
                 style={{padding: theme.spacing.s1}}>
@@ -125,22 +129,25 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                         disabled={!canCreateFromFile}>
                         Load from dddump
                     </AddSectionButton>
-                    <AddSectionButton
-                        onClick={startCreatingBuddySection}
-                        hover={
-                            <>
-                                Create a diagram from a buddy file
-                                {!canCreateFromFile && (
-                                    <>
-                                        <br /> Only one file per diagram is supported
-                                        right now
-                                    </>
-                                )}
-                            </>
-                        }
-                        disabled={!canCreateFromFile}>
-                        Load from Buddy
-                    </AddSectionButton>
+
+                    {diagram.type == "MTBDD" ? undefined : (
+                        <AddSectionButton
+                            onClick={startCreatingBuddySection}
+                            hover={
+                                <>
+                                    Create a diagram from a buddy file
+                                    {!canCreateFromFile && (
+                                        <>
+                                            <br /> Only one file per diagram is supported
+                                            right now
+                                        </>
+                                    )}
+                                </>
+                            }
+                            disabled={!canCreateFromFile}>
+                            Load from Buddy
+                        </AddSectionButton>
+                    )}
                     <AddSectionButton
                         onClick={createSelectionSection}
                         hover={
@@ -163,9 +170,11 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
                 visible={showDDDMPInputModal}
                 onCancel={stopCreatingDDDMPSection}
                 onSelect={createDDDMPSection}
+                example={diagram.type == "MTBDD" ? mtbddDddmpSample : bddDddmpSample}
             />
             <BuddySelectionModal
                 visible={showBuddyInputModal}
+                example={bddBuddySample}
                 onCancel={stopCreatingBuddySection}
                 onSelect={createBuddySection}
             />
