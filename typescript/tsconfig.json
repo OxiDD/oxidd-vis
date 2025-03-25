@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+        "moduleResolution": "node",
+        "outDir": "./build/",
+        "sourceMap": true,
+        "module": "es6",
+        "target": "ESNext",
+        "jsx": "react",
+        "allowJs": true,
+        "allowSyntheticDefaultImports": true,
+        "preserveSymlinks": true,
+        "strictNullChecks": true,
+        "noImplicitAny": true,
+        "esModuleInterop": true,        
+        "skipLibCheck": true,
+        "experimentalDecorators": true
+    },
+    "include": ["src/**/*", "src/_types/*"],
+    "types": ["node", "@emotion/core"],
+    "exclude": ["node_modules", "**/node_modules/*", "build"]
+}

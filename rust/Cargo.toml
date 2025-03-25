@@ -1,0 +1,112 @@
+[package]
+name = "oxidd-viz-rust"
+version = "0.1.0"
+authors = []
+edition = "2018"
+
+[[bin]]
+name = "convert_data"
+test = false
+bench = false
+path = "src/util/convert_file.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+wasm-bindgen = "0.2.92"
+js-sys = "0.3.69"
+priority-queue = "2.0.2"
+itertools = "0.12.1"
+rust-sugiyama = "0.2.0"
+num-rational = "0.4.2"
+regex = "1.10.5"
+swash = "0.1.17"
+earcutr = "0.4.3"
+i_float = "=1.0.0"
+i_overlay = "=1.0.0"
+lru = "0.12.3"
+ordered-float = "4.2.0"
+multimap = "0.10.0"
+byteorder = "1.4"
+seeded-random = "0.6.0"
+
+
+# The `console_error_panic_hook` crate provides better debugging of panics by
+# logging them with `console.error`. This is great for development, but requires
+# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
+# code size when deploying.
+console_error_panic_hook = { version = "0.1.7", optional = true }
+# wasm2map = "0.1.0"
+
+
+[dependencies.uuid]
+version = "1.10.0"
+features = [
+    "js",
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
+
+
+[dependencies.oxidd-manager-index]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd-manager-index"
+
+[dependencies.oxidd-core]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd-core"
+
+[dependencies.oxidd-rules-bdd]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd-rules-bdd"
+
+[dependencies.oxidd-cache]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd-cache"
+
+[dependencies.oxidd]
+git = "https://github.com/OxiDD/oxidd.git"
+rev = "a7ab177e55fbef1d381079ef82add66da2cb781d"
+package = "oxidd"
+features = ["manager-index", "bdd", "bcdd", "mtbdd", "zbdd"]
+default-features = false
+
+[dependencies.web-sys]
+version = "0.3.69"
+features = [
+    "console",
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "HtmlCanvasElement",
+    "WebGl2RenderingContext",
+    "WebGlProgram",
+    "WebGlShader",
+    "WebGlVertexArrayObject",
+    "WebGlFramebuffer",
+    "WebGlBuffer",
+    "WebGlUniformLocation",
+    "WebGlTexture",
+]
+
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.34"
+wasm-pack = "0.13.0"
+
+# [package.metadata.wasm-pack.profile.dev.wasm-bindgen]
+# dwarf-debug-info = true
+
+[profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"
