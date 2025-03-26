@@ -548,7 +548,8 @@ fn format_layout<T: DrawTag, NS: NodeStyle + WidthLabel, LS: LayerStyle>(
                                         ed.from_level,
                                         ed.to_level,
                                         // An extra value such that grouping only occurs if the level delta is 1
-                                        if ed.to_level - ed.from_level == 1 {
+                                        if (ed.to_level as i32) - (ed.from_level as i32) == 1 {
+                                            // (In a correct graph, this cannot be negative, but handy to not throw-errors when visually debugging wrong graphs)
                                             0
                                         } else {
                                             index

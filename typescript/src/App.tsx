@@ -1,4 +1,4 @@
-import React, {FC} from "react";
+import React, {FC, useEffect, useState} from "react";
 import {DefaultLayout} from "./layout/DefaultLayout";
 import {LayoutState} from "./layout/LayoutState";
 import {usePersistentMemo} from "./utils/usePersistentMemo";
@@ -7,7 +7,7 @@ import {AppState} from "./state/AppState";
 import {all} from "./watchables/mutator/all";
 import {chain} from "./watchables/mutator/chain";
 import {Derived} from "./watchables/Derived";
-import {Toggle} from "@fluentui/react";
+import {Spinner, SpinnerSize, Toggle, useTheme} from "@fluentui/react";
 import {useWatch} from "./watchables/react/useWatch";
 import {CustomLayout} from "./UI/components/layout/CustomLayout";
 import {SettingsState} from "./state/SettingsState";
@@ -33,6 +33,28 @@ import {HttpDiagramCollectionTargetState} from "./state/diagrams/collections/Htt
 import {DiagramCollectionTarget} from "./UI/views/diagramCollection/types/util/DiagramCollectionTarget";
 import {PanelConfigViewState} from "./state/configuration/types/PanelConfig";
 import {PanelConfigView} from "./UI/components/configuration/PanelConfigComp";
+
+export const AppWithLoader: FC = () => {
+    const [showingLoader, setShowingLoader] = useState(true);
+    useEffect(() => {
+        setShowingLoader(false);
+    }, []);
+
+    if (showingLoader)
+        return (
+            <div
+                style={{
+                    display: "flex",
+                    width: "100%",
+                    height: "100%",
+                    alignItems: "center",
+                    justifyContent: "center",
+                }}>
+                <Spinner size={SpinnerSize.large} />
+            </div>
+        );
+    return <App />;
+};
 
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
@@ -100,7 +122,7 @@ const UserLayout: FC<{state: AppState}> = ({state}) => {
                         // new Derived(watch =>
                         //     watch(app.settings.layout.deleteUnusedPanels) ? "never" : "always"
                         // )
-                        new Constant("whenEmpty")
+                        new Constant("always")
                     }
                     state={state.views.layoutState}
                     getContent={id => state.views.getPanelUI(id, Component, onContext)}

@@ -39,7 +39,21 @@ impl<T: DrawTag, S, LS> NodePositioning<T, S, LS> for BrandesKopfPositioning {
         owners: &HashMap<NodeGroupID, NodeGroupID>,
     ) -> (HashMap<NodeGroupID, Point>, HashMap<LevelNo, f32>) {
         let spacing = 2.0;
-        let layer_coord = |index: usize| (0.5 * (layers.len() as f32) - (index as f32)) * spacing;
+        let first_used_layer = layers
+            .iter()
+            .enumerate()
+            .find(|(_, p)| p.len() > 0)
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        let last_used_layer = layers
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, p)| p.len() > 0)
+            .map(|(i, _)| i)
+            .unwrap_or(layers.len());
+        let offset = 0.5 * (first_used_layer + last_used_layer) as f32;
+        let layer_coord = |index: usize| (offset - (index as f32)) * spacing;
 
         // Remove edges between dummy group nodes and nodes from other groups, such that node positioning will align these items
         let edges = remove_internal_group_to_other_edges(

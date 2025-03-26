@@ -78,14 +78,6 @@ impl<T: DrawTag> PresenceGroups<T> {
     }
 }
 
-// #[derive(Eq, PartialEq, Clone)]
-// pub enum PresenceGroup {
-//     SharedRemainder,      // The original graph's node is used
-//     DuplicateRemainder,   // One node is created per discovered parent
-//     Parents(Vec<NodeID>), // One node is created for the specified parents (output node IDs)
-// }
-// Default presence group if not specified: PresenceGroups(Vec::from([PresenceGroup::SharedRemainder]))
-
 #[derive(Eq, PartialEq, Clone, Hash)]
 pub enum EdgeConstraint<T: DrawTag> {
     Exact(EdgeType<T>),
@@ -349,7 +341,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         };
 
         for (edge, parent) in parents {
-            let r1 = self
+            let _r1 = self
                 .replacements
                 .remove(&(parent, EdgeConstraint::Exact(edge), source));
             let _r2 = self
@@ -535,6 +527,17 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         let parents = match to_sourced(node) {
             Either::Left(id) => {
                 let known_parents = self.graph.get_known_parents(id);
+
+                // Check if this node may be shown at all (only adjusted nodes with remainder=Show can get shown themselves, instead of a copy)
+                let is_shown = self
+                    .adjustments
+                    .get(&id)
+                    .map(|pg| pg.remainder == PresenceRemainder::Show)
+                    .unwrap_or(true);
+                if !is_shown {
+                    return vec![];
+                }
+
                 // Filter parents to remove any parents that use a replacement node instead
                 known_parents
                     .into_iter()

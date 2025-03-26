@@ -25,15 +25,20 @@ export class FileSource extends AbstractDiagramSectionState<IFileSourceSerializa
             diagram,
             new Derived(() => {
                 const data = this.data.get();
-                const diagram =
-                    "dddmp" in data
-                        ? diagramBox.create_section_from_dddmp(data.dddmp)
-                        : diagramBox.create_section_from_buddy(
-                              data.buddy.data,
-                              data.buddy.vars
-                          );
-                if (!diagram) console.error("Diagram could not be created from data");
-                return diagram;
+                try {
+                    const diagram =
+                        "dddmp" in data
+                            ? diagramBox.create_section_from_dddmp(data.dddmp)
+                            : diagramBox.create_section_from_other(
+                                  data.buddy.data,
+                                  data.buddy.vars
+                              );
+                    if (!diagram) console.error("Diagram could not be created from data");
+                    return diagram;
+                } catch (e) {
+                    console.error(e);
+                    throw e;
+                }
             })
         );
         if (data) this.data.set(data).commit();

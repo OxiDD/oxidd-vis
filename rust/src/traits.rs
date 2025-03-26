@@ -9,7 +9,7 @@ use web_sys::HtmlCanvasElement;
 
 pub trait Diagram {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>>; // TODO: error type
-    fn create_section_from_buddy(
+    fn create_section_from_other(
         &mut self,
         data: String,
         vars: Option<String>,

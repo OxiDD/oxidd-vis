@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 // use js_sys::Uint32Array;
 use oxidd::{bdd::BDDManagerRef, ManagerRef};
-use util::logging::console;
+use util::{logging::console, panic_hook::set_panic_hook};
 // use utils::*;
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element, HtmlElement, Window};
@@ -33,11 +33,13 @@ use crate::{
 #[wasm_bindgen]
 pub fn create_qdd_diagram() -> Option<DiagramBox> // And some DD type param
 {
+    set_panic_hook();
     Some(DiagramBox::new(Box::new(QDDDiagram::new())))
 }
 
 #[wasm_bindgen]
 pub fn create_mtbdd_diagram() -> Option<DiagramBox> // And some DD type param
 {
+    set_panic_hook();
     Some(DiagramBox::new(Box::new(MTBDDDiagram::new())))
 }

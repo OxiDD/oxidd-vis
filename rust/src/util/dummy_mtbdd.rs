@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryInto;
+use std::fmt::Display;
 use std::hash::Hasher;
 use std::hash::{DefaultHasher, Hash};
 use std::iter::Cloned;
@@ -29,7 +30,29 @@ use oxidd_core::{BroadcastContext, HasLevel};
 
 use crate::util::logging::console;
 
-type Term = i32;
+#[derive(Clone, Copy, PartialOrd)]
+pub struct MTBDDTerminal(pub f32);
+impl Display for MTBDDTerminal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl Hash for MTBDDTerminal {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_bits().hash(state);
+    }
+}
+impl PartialEq for MTBDDTerminal {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.to_bits() == other.0.to_bits()
+    }
+}
+impl Ord for MTBDDTerminal {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+    }
+}
+impl Eq for MTBDDTerminal {}
 
 // #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(Clone, PartialEq, Eq)]
@@ -122,7 +145,7 @@ impl DummyMTBDDFunction {
 
             for (id, level, children) in nodes_data.clone() {
                 let level_num = level.parse();
-                let term_num = level_num.clone().map(|v| v as i32);
+                let term_num = (level.parse() as Result<f32, _>).map(|r| MTBDDTerminal(r));
                 let is_terminal = children[0] == 0;
                 manager.add_node_level(
                     id.clone(),
@@ -185,16 +208,21 @@ impl DummyMTBDDFunction {
             }
             let funcs = func_map.values().cloned().collect_vec();
 
-            let var_names_text = if data.find(".suppvarnames").is_some() {
-                get_text(".suppvarnames", ".orderedvarnames")
+            let var_names = if data.find(".suppvarnames").is_some() {
+                let var_names_text = get_text(".suppvarnames", ".orderedvarnames");
+                var_names_text
+                    .trim()
+                    .split(" ")
+                    .map(|t| t.to_string())
+                    .collect_vec()
             } else {
-                get_text(".permids", ".nroots")
+                let var_count = get_text(".nsuppvars", ".").trim().parse().unwrap_or(0);
+                (0..var_count)
+                    .into_iter()
+                    .map(|i| format!("{}", i))
+                    .collect_vec()
             };
-            let var_names = var_names_text
-                .trim()
-                .split(" ")
-                .map(|t| t.to_string())
-                .collect_vec();
+
             (funcs, var_names)
         })
     }
@@ -329,13 +357,13 @@ impl Edge for DummyMTBDDEdge {
 #[derive(Clone, PartialEq, Eq)]
 pub struct DummyMTBDDManager(
     BTreeMap<NodeID, DummyMTBDDNode>,
-    HashMap<Term, DummyMTBDDEdge>,
+    HashMap<MTBDDTerminal, DummyMTBDDEdge>,
 );
 impl DummyMTBDDManager {
     pub fn new() -> DummyMTBDDManager {
         DummyMTBDDManager(BTreeMap::new(), HashMap::new())
     }
-    fn init_terminals(&mut self, terminals: HashMap<Term, DummyMTBDDEdge>) {
+    fn init_terminals(&mut self, terminals: HashMap<MTBDDTerminal, DummyMTBDDEdge>) {
         self.1.extend(terminals);
     }
 }
@@ -347,7 +375,7 @@ impl Hash for DummyMTBDDManager {
 
 /// Dummy diagram rules
 pub struct DummyMTBDDRules;
-impl DiagramRules<DummyMTBDDEdge, DummyMTBDDNode, Term> for DummyMTBDDRules {
+impl DiagramRules<DummyMTBDDEdge, DummyMTBDDNode, MTBDDTerminal> for DummyMTBDDRules {
     // type Cofactors<'a> = Iter<'a, Borrowed<'a, DummyEdge>>;
     type Cofactors<'a>
         = <DummyMTBDDNode as InnerNode<DummyMTBDDEdge>>::ChildrenIter<'a>
@@ -376,7 +404,7 @@ impl DummyMTBDDManager {
         &mut self,
         from: NodeID,
         level: LevelNo,
-        terminal: Option<Term>,
+        terminal: Option<MTBDDTerminal>,
     ) -> &mut DummyMTBDDNode {
         self.0.entry(from).or_insert_with(|| {
             if terminal.is_some() {
@@ -404,10 +432,10 @@ unsafe impl Manager for DummyMTBDDManager {
     type Edge = DummyMTBDDEdge;
     type EdgeTag = ();
     type InnerNode = DummyMTBDDNode;
-    type Terminal = Term;
-    type TerminalRef<'a> = &'a Term;
+    type Terminal = MTBDDTerminal;
+    type TerminalRef<'a> = &'a MTBDDTerminal;
     type TerminalIterator<'a>
-        = Cloned<std::collections::hash_map::Values<'a, Term, DummyMTBDDEdge>>
+        = Cloned<std::collections::hash_map::Values<'a, MTBDDTerminal, DummyMTBDDEdge>>
     where
         Self: 'a;
     type Rules = DummyMTBDDRules;
@@ -556,7 +584,7 @@ unsafe impl LevelView<DummyMTBDDEdge, DummyMTBDDNode> for DummyMTBDDLevelView {
 
 /// Dummy node
 #[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
-pub struct DummyMTBDDNode(LevelNo, Vec<DummyMTBDDEdge>, Option<Term>);
+pub struct DummyMTBDDNode(LevelNo, Vec<DummyMTBDDEdge>, Option<MTBDDTerminal>);
 
 impl DropWith<DummyMTBDDEdge> for DummyMTBDDNode {
     fn drop_with(self, _drop_edge: impl Fn(DummyMTBDDEdge)) {

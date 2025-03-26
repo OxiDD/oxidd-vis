@@ -9,10 +9,12 @@ use crate::{
     configuration::{
         configuration::Configuration,
         configuration_object::{AbstractConfigurationObject, Abstractable},
-        observe_configuration::after_configuration_change,
+        observe_configuration::{after_configuration_change, on_configuration_change},
         types::{
             button_config::{ButtonConfig, ButtonStyle},
+            choice_config::{Choice, ChoiceConfig},
             composite_config::CompositeConfig,
+            label_config::LabelConfig,
             location_config::{Location, LocationConfig},
             panel_config::{OpenSide, PanelConfig},
             text_output_config::TextOutputConfig,
@@ -53,6 +55,9 @@ use crate::{
                 graph_manipulators::{
                     group_presence_adjuster::GroupPresenceAdjuster,
                     label_adjusters::group_label_adjuster::GroupLabelAdjuster,
+                    node_presence_adjuster::{
+                        NodePresenceAdjuster, PresenceGroups, PresenceLabel, PresenceRemainder,
+                    },
                     pointer_node_adjuster::{PointerLabel, PointerNodeAdjuster},
                     rc_graph::RCGraph,
                     terminal_level_adjuster::TerminalLevelAdjuster,
@@ -69,6 +74,7 @@ use crate::{
         color::{Color, TransparentColor},
         dummy_mtbdd::{
             DummyMTBDDEdge, DummyMTBDDFunction, DummyMTBDDManager, DummyMTBDDManagerRef,
+            MTBDDTerminal,
         },
         logging::console,
         rc_refcell::MutRcRefCell,
@@ -100,7 +106,8 @@ impl Diagram for MTBDDDiagram<DummyMTBDDManagerRef> {
         Some(Box::new(MTBDDDiagramSection::new(roots, levels)))
     }
 
-    fn create_section_from_buddy(
+    // Does not support other imports
+    fn create_section_from_other(
         &mut self,
         data: String,
         vars: Option<String>,
@@ -165,12 +172,12 @@ where
 impl<
         E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
-        R: DiagramRules<E, N, i32> + 'static,
+        R: DiagramRules<E, N, MTBDDTerminal> + 'static,
         F: Function + 'static,
     > DiagramSection for MTBDDDiagramSection<F>
 where
     for<'id> F::Manager<'id>:
-        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = i32>,
+        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = MTBDDTerminal>,
 {
     fn get_level_labels(&self) -> Vec<String> {
         self.levels.clone()
@@ -281,7 +288,7 @@ pub struct NodeData {
     border_color: TransparentColor,
     width: f32,
     name: Option<String>,
-    is_terminal: Option<i32>,
+    is_terminal: Option<MTBDDTerminal>,
     is_group: bool,
 }
 
@@ -362,28 +369,48 @@ impl LatexLayerStyle for LayerData {
 
 pub struct MTBDDDiagramDrawer<
     T: DrawTag + Serializable<T> + 'static,
-    G: GraphStructure<T, NodeLabel<i32>, String> + StateStorage + 'static,
+    G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
     R: Renderer<T, NodeData, LayerData>,
     L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>>,
 > {
     graph: MGraph<T, G>,
     group_manager: MutRcRefCell<GM<T, G>>,
+    presence_adjuster: MPresenceAdjuster<T, G>,
     time: MutRcRefCell<u32>,
     drawer: MutRcRefCell<Drawer<T, NodeData, LayerData, R, L, GMGraph<T, G>>>,
     config: Configuration<
         LocationConfig<
             PanelConfig<
-                CompositeConfig<(ButtonConfig, TextOutputConfig, ButtonConfig, ButtonConfig)>,
+                CompositeConfig<(
+                    ButtonConfig,
+                    TextOutputConfig,
+                    ButtonConfig,
+                    ButtonConfig,
+                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                )>,
             >,
         >,
     >,
 }
 
-type GraphLabel = PointerLabel<NodeLabel<i32>>;
+type GraphLabel = PresenceLabel<PointerLabel<NodeLabel<MTBDDTerminal>>>;
 type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
-type MGraph<T, G> = RCGraph<T, GraphLabel, String, MPointerAdjuster<T, G>>;
-type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<i32>, String, MBaseGraph<T, G>>;
-type MBaseGraph<T, G> = TerminalLevelAdjuster<T, NodeLabel<i32>, String, G>;
+type MGraph<T, G> = RCGraph<
+    T,
+    GraphLabel,
+    String,
+    TerminalLevelAdjuster<T, GraphLabel, String, MPresenceAdjuster<T, G>>,
+>;
+type MPresenceAdjuster<T, G> = RCGraph<
+    T,
+    GraphLabel,
+    String,
+    NodePresenceAdjuster<T, PointerLabel<NodeLabel<MTBDDTerminal>>, String, MPointerAdjuster<T, G>>,
+>;
+type MPointerAdjuster<T, G> =
+    PointerNodeAdjuster<T, NodeLabel<MTBDDTerminal>, String, MBaseGraph<T, G>>;
+type MBaseGraph<T, G> = TerminalLevelAdjuster<T, NodeLabel<MTBDDTerminal>, String, G>;
 type GMGraph<T, G> = GroupPresenceAdjuster<
     T,
     NodeData,
@@ -393,7 +420,7 @@ type GMGraph<T, G> = GroupPresenceAdjuster<
 
 impl<
         T: DrawTag + Serializable<T> + 'static,
-        G: GraphStructure<T, NodeLabel<i32>, String> + StateStorage + 'static,
+        G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
         R: Renderer<T, NodeData, LayerData> + 'static,
         L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>> + 'static,
     > MTBDDDiagramDrawer<T, G, R, L>
@@ -410,7 +437,8 @@ impl<
             true,
             "".to_string(),
         );
-        let modified_graph = RCGraph::new(pointer_adjuster);
+        let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(pointer_adjuster));
+        let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
         let roots = modified_graph.get_roots();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
 
@@ -419,18 +447,34 @@ impl<
             move |nodes| {
                 let (is_terminal, is_group, color) = match (nodes.get(0), nodes.get(1)) {
                     (
-                        Some(PointerLabel::Node(NodeLabel {
-                            pointers: _,
-                            kind: NodeType::Terminal(ref terminal),
-                        })),
+                        Some(&PresenceLabel {
+                            original_label:
+                                PointerLabel::Node(NodeLabel {
+                                    pointers: _,
+                                    kind: NodeType::Terminal(ref terminal),
+                                }),
+                            original_id: _,
+                        }),
                         None,
                     ) => (Some(*terminal), false, Color(0.2, 1., 0.2)),
-                    (Some(PointerLabel::Pointer(_)), None) => (None, false, Color(0.5, 0.5, 1.0)),
+                    (
+                        Some(&PresenceLabel {
+                            original_label: PointerLabel::Pointer(_),
+                            original_id: _,
+                        }),
+                        None,
+                    ) => (None, false, Color(0.5, 0.5, 1.0)),
                     (Some(_), None) => (None, false, Color(0.1, 0.1, 0.1)),
                     _ => (None, true, Color(0.7, 0.7, 0.7)),
                 };
                 let name: Option<String> = match (nodes.get(0), nodes.get(1)) {
-                    (Some(PointerLabel::Pointer(ref text)), None) => Some(text.clone()),
+                    (
+                        Some(&PresenceLabel {
+                            original_label: PointerLabel::Pointer(ref text),
+                            original_id: _,
+                        }),
+                        None,
+                    ) => Some(text.clone()),
                     _ => None,
                 }
                 .or_else(|| is_terminal.map(|t| format!("{}", t)));
@@ -459,14 +503,33 @@ impl<
                 ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
                 ButtonConfig::new_labeled("Expand all"),
-                ButtonConfig::new_labeled("Reveal terminals"),
+                ButtonConfig::new_labeled("Expand terminals"),
+                LabelConfig::new("0 terminal", {
+                    let mut c = ChoiceConfig::new([
+                        Choice::new(PresenceRemainder::Show, "show"),
+                        Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                        Choice::new(PresenceRemainder::Hide, "hide"),
+                    ]);
+                    c.set_index(2).commit();
+                    c
+                }),
+                LabelConfig::new(
+                    "1 terminal",
+                    ChoiceConfig::new([
+                        Choice::new(PresenceRemainder::Show, "show"),
+                        Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                        Choice::new(PresenceRemainder::Hide, "hide"),
+                    ]),
+                ),
             ),
-            |(f1, f2, f3, f4)| {
+            |(f1, f2, f3, f4, f5, f6)| {
                 vec![
                     Box::new(f1.clone()),
                     Box::new(f2.clone()),
                     Box::new(f3.clone()),
                     Box::new(f4.clone()),
+                    Box::new(f5.clone()),
+                    Box::new(f6.clone()),
                 ]
             },
         );
@@ -485,6 +548,7 @@ impl<
         let mut out = MTBDDDiagramDrawer {
             group_manager,
             graph: modified_graph,
+            presence_adjuster,
             time: MutRcRefCell::new(0),
             drawer: MutRcRefCell::new(Drawer::new(
                 renderer,
@@ -511,9 +575,9 @@ impl<
         }
 
         let max = 500;
-        // if out.group_manager.read().get_nodes_of_group(from).len() < max {
-        //     reveal_all(&out.group_manager, from, max);
-        // }
+        if out.group_manager.read().get_nodes_of_group(from).len() < max {
+            reveal_all(&out.group_manager, from, max);
+        }
 
         let group_manager = out.group_manager.clone();
         composite_config
@@ -522,13 +586,59 @@ impl<
             .add_press_listener(move || reveal_all(&group_manager, from, 10_000_000));
 
         let group_manager = out.group_manager.clone();
-        let graph = out.graph.clone();
+        let mut graph = out.graph.clone();
         composite_config.3.clone().add_press_listener(move || {
             for t in graph.get_terminals() {
-                group_manager
-                    .get()
-                    .create_group(vec![TargetID(TargetIDType::NodeID, t)]);
+                if graph.get_known_parents(t).len() > 0 {
+                    group_manager
+                        .get()
+                        .create_group(vec![TargetID(TargetIDType::NodeID, t)]);
+                }
             }
+        });
+
+        fn set_terminal_presence<
+            T: DrawTag + Serializable<T> + 'static,
+            G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
+        >(
+            presence_adjuster: &MPresenceAdjuster<T, G>,
+            terminal: MTBDDTerminal,
+            presence: PresenceRemainder,
+        ) -> () {
+            let mut adjuster = presence_adjuster.get();
+            let terminals = adjuster.get_terminals();
+            let mut terminals = terminals.iter().filter_map(|&node| {
+                match adjuster.get_node_label(node).original_label {
+                    PointerLabel::Node(NodeLabel {
+                        pointers: _,
+                        kind: NodeType::Terminal(t),
+                    }) if t == terminal => Some(node),
+                    _ => None,
+                }
+            });
+            let Some(target_terminal) = terminals.next() else {
+                return;
+            };
+
+            adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(presence));
+        }
+        let false_config = composite_config.4.clone();
+        let false_presence_adjuster = out.presence_adjuster.clone();
+        let _ = on_configuration_change(&composite_config.4, move || {
+            set_terminal_presence(
+                &false_presence_adjuster,
+                MTBDDTerminal(0.),
+                false_config.get(),
+            );
+        });
+        let true_config = composite_config.5.clone();
+        let true_presence_adjuster = out.presence_adjuster.clone();
+        let _ = on_configuration_change(&composite_config.5, move || {
+            set_terminal_presence(
+                &true_presence_adjuster,
+                MTBDDTerminal(1.),
+                true_config.get(),
+            );
         });
 
         // Redraw on interaction
@@ -544,7 +654,7 @@ impl<
 
 fn reveal_all<
     T: DrawTag + Serializable<T> + 'static,
-    G: GraphStructure<T, NodeLabel<i32>, String> + StateStorage + 'static,
+    G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
 >(
     group_manager: &MutRcRefCell<GM<T, G>>,
     from_id: NodeGroupID,
@@ -556,7 +666,7 @@ fn reveal_all<
             return;
         }
         let explored_group = gm.create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
-        group_manager.read().get_nodes_of_group(explored_group)
+        gm.get_nodes_of_group(explored_group)
     };
 
     let mut count = 0;
@@ -574,7 +684,7 @@ fn reveal_all<
 
 impl<
         T: DrawTag + Serializable<T> + 'static,
-        G: GraphStructure<T, NodeLabel<i32>, String> + StateStorage + 'static,
+        G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
         R: Renderer<T, NodeData, LayerData>,
         L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>>,
     > DiagramSectionDrawer for MTBDDDiagramDrawer<T, G, R, L>
@@ -601,7 +711,6 @@ impl<
     }
 
     fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
-        // self.config.
         self.group_manager.get().create_group(from)
     }
 

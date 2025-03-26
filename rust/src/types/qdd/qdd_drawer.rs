@@ -138,7 +138,8 @@ impl Diagram for QDDDiagram<DummyBDDManagerRef> {
         let (roots, levels) = DummyBDDFunction::from_dddmp(&mut self.manager_ref, &dddmp);
         Some(Box::new(QDDDiagramSection::new(roots, levels)))
     }
-    fn create_section_from_buddy(
+    // Other == Buddy
+    fn create_section_from_other(
         &mut self,
         data: String,
         vars: Option<String>,
@@ -889,7 +890,7 @@ impl<
         });
 
         let move_shared_config = composite_config.4.clone();
-        on_configuration_change(&composite_config.4, move || {
+        let _ = on_configuration_change(&composite_config.4, move || {
             child_edge_adjuster
                 .get()
                 .set_enabled(move_shared_config.get());
