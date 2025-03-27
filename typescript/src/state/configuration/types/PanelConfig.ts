@@ -1,16 +1,20 @@
-import { AbstractConfigurationObject } from "oxidd-viz-rust";
-import { Derived } from "../../../watchables/Derived";
-import { IConfigObjectType } from "../_types/IConfigObjectType";
-import { ConfigurationObject, IConfigOwner, IOwnedAbstractConfig } from "../ConfigurationObject";
-import { IViewGroup, ViewState } from "../../views/ViewState";
-import { IWatchable } from "../../../watchables/_types/IWatchable";
-import { Constant } from "../../../watchables/Constant";
-import { IMutator } from "../../../watchables/mutator/_types/IMutator";
-import { IConfigObjectSerialization } from "../_types/IConfigObjectSerialization";
-import { chain } from "../../../watchables/mutator/chain";
-import { IViewLocationHint } from "../../_types/IViewLocationHint";
-import { IBaseViewSerialization } from "../../_types/IBaseViewSerialization";
-import { IDropPanelSide } from "../../../layout/_types/IDropSide";
+import {AbstractConfigurationObject} from "oxidd-viz-rust";
+import {Derived} from "../../../watchables/Derived";
+import {IConfigObjectType} from "../_types/IConfigObjectType";
+import {
+    ConfigurationObject,
+    IConfigOwner,
+    IOwnedAbstractConfig,
+} from "../ConfigurationObject";
+import {IViewGroup, ViewState} from "../../views/ViewState";
+import {IWatchable} from "../../../watchables/_types/IWatchable";
+import {Constant} from "../../../watchables/Constant";
+import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {IConfigObjectSerialization} from "../_types/IConfigObjectSerialization";
+import {chain} from "../../../watchables/mutator/chain";
+import {IViewLocationHint} from "../../_types/IViewLocationHint";
+import {IBaseViewSerialization} from "../../_types/IBaseViewSerialization";
+import {IDropPanelSide} from "../../../layout/_types/IDropSide";
 
 type IPanelConfigData = {
     text?: string;
@@ -18,14 +22,15 @@ type IPanelConfigData = {
     name: string;
     category: string;
     id: string;
-    openSide: IDropPanelSide,
+    openSide: IDropPanelSide;
     openRelativeVis: boolean;
     openRatio: number;
+    autoOpen: number;
 };
 type IViewState = {
-    view: IBaseViewSerialization
-}
-type IOpenData = { side: IDropPanelSide, relativeTo: string, weight: number };
+    view: IBaseViewSerialization;
+};
+type IOpenData = {side: IDropPanelSide; relativeTo: string; weight: number};
 
 /** A configuration that puts the sub-config in a separate moveable panel */
 export class PanelConfig extends ConfigurationObject<IPanelConfigData> {
@@ -44,15 +49,24 @@ export class PanelConfig extends ConfigurationObject<IPanelConfigData> {
     );
 
     /** The category of the panel, such that it can be opened in a similar category tab */
-    public readonly category = new Derived<string>(
-        watch => watch(this._value).category
+    public readonly category = new Derived<string>(watch => watch(this._value).category);
+
+    /** Whether this tab should automatically open when its parent is open */
+    public readonly autoOpen = new Derived<"never" | "always" | "ifPanelExists">(
+        watch =>
+            (["never", "always", "ifPanelExists"] as const)[watch(this._value).autoOpen]
     );
 
     /* The owner of this config */
     protected readonly owner: IWatchable<IConfigOwner>;
     /** The name of the view */
     public readonly panelName = new Derived(
-        watch => watch(this.owner).map(({name})=>name).join(" - ") + ": " + watch(this._value).name
+        watch =>
+            watch(this.owner)
+                .map(({name}) => name)
+                .join(" - ") +
+            ": " +
+            watch(this._value).name
     );
 
     /** The view of this configuration panel */
@@ -65,8 +79,10 @@ export class PanelConfig extends ConfigurationObject<IPanelConfigData> {
             const owners = watch(this.owner);
             return {
                 side: val.openSide,
-                relativeTo: val.openRelativeVis ? owners[0].id : owners[owners.length-1].id,
-                weight: val.openRatio
+                relativeTo: val.openRelativeVis
+                    ? owners[0].id
+                    : owners[owners.length - 1].id,
+                weight: val.openRatio,
             };
         })
     );
@@ -75,12 +91,14 @@ export class PanelConfig extends ConfigurationObject<IPanelConfigData> {
     public readonly ownViews: IWatchable<ViewState[]> = new Constant([this.view]);
 
     /** @override*/
-    public readonly nonNestedDescendentViews: IWatchable<ViewState[]> = new Constant([this.view]);
+    public readonly nonNestedDescendentViews: IWatchable<ViewState[]> = new Constant([
+        this.view,
+    ]);
 
     /** @override */
-    protected childOwner: IWatchable<IConfigOwner> = new Derived(watch=>{
+    protected childOwner: IWatchable<IConfigOwner> = new Derived(watch => {
         const value = watch(this._value);
-        return [...watch(this.owner), {name: value.name, id: value.id}]
+        return [...watch(this.owner), {name: value.name, id: value.id}];
     });
 
     /**
@@ -94,7 +112,9 @@ export class PanelConfig extends ConfigurationObject<IPanelConfigData> {
     }
 
     /** @override */
-    public deserialize(config: IConfigObjectSerialization<IPanelConfigData> & IViewState): IMutator {
+    public deserialize(
+        config: IConfigObjectSerialization<IPanelConfigData> & IViewState
+    ): IMutator {
         return chain(add => {
             add(super.deserialize(config));
             add(this.view.deserialize(config.view));
@@ -106,7 +126,7 @@ export class PanelConfig extends ConfigurationObject<IPanelConfigData> {
     public serialize(): IConfigObjectSerialization<IPanelConfigData> & IViewState {
         return {
             ...super.serialize(),
-            view: this.view.serialize()
+            view: this.view.serialize(),
         };
     }
 
@@ -128,14 +148,19 @@ export class PanelConfigViewState extends ViewState {
 
     /** @override */
     public readonly groups: IWatchable<IViewGroup[]> = new Derived(watch => [
-        { targets: watch(this.children).map(group => group.ID) },
+        {targets: watch(this.children).map(group => group.ID)},
     ]);
 
     /** The data to figure out where to open this panel on first use */
     protected openData: IWatchable<IOpenData>;
 
     /** Creates a new panel config view */
-    public constructor(config: IWatchable<IConfigObjectType>, name: IWatchable<string>, category: IWatchable<string>, openData: IWatchable<IOpenData>) {
+    public constructor(
+        config: IWatchable<IConfigObjectType>,
+        name: IWatchable<string>,
+        category: IWatchable<string>,
+        openData: IWatchable<IOpenData>
+    ) {
         super();
         this.config = config;
         this.name.setSource(name).commit();
@@ -148,8 +173,7 @@ export class PanelConfigViewState extends ViewState {
         return chain(push => {
             (this as any).ID = data.ID;
             // Use checks to make sure we don't override synchronized sources when not necessary
-            if (this.name.get() != data.name)
-                push(this.name.set(data.name));
+            if (this.name.get() != data.name) push(this.name.set(data.name));
             if (this.category.get() != data.category)
                 push(this.category.set(data.category));
             push(this.canClose.set(data.closable));
@@ -161,9 +185,9 @@ export class PanelConfigViewState extends ViewState {
     protected *getBaseLocationHints(): Generator<IViewLocationHint, void, void> {
         const openData = this.openData.get();
         yield {
-            targetId:openData.relativeTo,
+            targetId: openData.relativeTo,
             side: openData.side,
-            weightRatio: openData.weight
+            weightRatio: openData.weight,
         };
     }
 }

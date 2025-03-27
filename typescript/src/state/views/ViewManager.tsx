@@ -186,28 +186,118 @@ export class ViewManager implements IViewManager {
 
     // View display tools
     /**
+     * Obtain the location hint to be used, based on the current layout
+     * @param view The view state
+     * @param locationHintsModifier Modifies the list of location hints, picking the first one for which the target was found
+     * @returns The location hint to be used
+     */
+    protected getLocationHint(
+        view: ViewState,
+        locationHintsModifier: (
+            hints: Generator<IViewLocationHint>
+        ) => Generator<IViewLocationHint> = h => h
+    ): IWatchable<IViewLocationHint> {
+        return new PassiveDerived(watch => {
+            const recoveryData = watch(this.categoryRecovery);
+            const categoryRecovery = recoveryData[watch(view.category)];
+
+            const panels = watch(this.layoutState.allPanels);
+            const getContainer = (ID: string | null | undefined) =>
+                ID ? panels.find(({id}) => id == ID) : undefined;
+
+            // Obtain the hints, and pass a hint for recovery based on the category data
+            const hints = locationHintsModifier(
+                view.getLocationHints(
+                    categoryRecovery
+                        ? getNeighborHints(
+                              categoryRecovery.target,
+                              categoryRecovery.layout
+                          )
+                        : undefined
+                )
+            );
+
+            // Add a default fallback
+            const hintsWithFallback = (function* () {
+                yield* hints;
+                yield {createId: "default"};
+            })();
+
+            // Add a check to make sure we do not create duplicate locations
+            const hintsWithCreationCheck = (function* () {
+                for (const hint of hintsWithFallback) {
+                    if (hint.createId) yield {targetId: hint.createId};
+                    yield hint;
+                }
+            })();
+
+            // Filter out any hints for which no target panel can be found
+            for (const hint of hintsWithCreationCheck) {
+                if (hint.targetId == undefined) return hint;
+
+                if (!hint.targetType || hint.targetType == "view") {
+                    const container = this.getTabParent(hint.targetId);
+                    if (container)
+                        return {
+                            ...hint,
+                            targetId: container.id,
+                            targetType: "panel" as const,
+                        };
+                }
+                if (!hint.targetType || hint.targetType == "category") {
+                    const containers = this.getTabParentsByCategory(hint.targetId);
+                    if (containers.length > 0)
+                        return {
+                            ...hint,
+                            targetId: containers[0].id,
+                        };
+                }
+                if (!hint.targetType || hint.targetType == "panel") {
+                    const container = getContainer(hint.targetId);
+                    if (container) return hint;
+                }
+            }
+
+            return 0 as never; // The default can always hit
+        });
+    }
+
+    /**
+     * Checks whether the target panel for the given view according to the given modifiers exists
+     * @param view The view state
+     * @param locationHintsModifier Modifies the list of location hints, picking the first one for which the target was found
+     * @returns Whether the target panel
+     */
+    public targetPanelExists(
+        view: ViewState,
+        locationHintsModifier: (
+            hints: Generator<IViewLocationHint>
+        ) => Generator<IViewLocationHint> = h => h
+    ): IWatchable<boolean> {
+        return new PassiveDerived(watch => {
+            const location = watch(this.getLocationHint(view, locationHintsModifier));
+            const panels = watch(this.layoutState.allPanels);
+            return (
+                (location.side == undefined || location.side == "in") &&
+                panels.some(({id}) => id == location.targetId)
+            );
+        });
+    }
+
+    /**
      * Opens the given view, or focuses it if already opened
      * @param view The view state
      * @param locationHintsModifier Modifies the list of location hints, picking the first one for which the target was found
+     * @param focus Whether to focus on this newly opened tab
      * @returns The mutator to commit the change
      */
     public open(
         view: ViewState,
         locationHintsModifier: (
             hints: Generator<IViewLocationHint>
-        ) => Generator<IViewLocationHint> = h => h
+        ) => Generator<IViewLocationHint> = h => h,
+        focus: boolean = true
     ): IMutator {
-        const recoveryData = this.categoryRecovery.get();
-        const categoryRecovery = recoveryData[view.category.get()];
-        // Obtain the hints, and pass a hint for recovery based on the category data
-        const hints = locationHintsModifier(
-            view.getLocationHints(
-                categoryRecovery
-                    ? getNeighborHints(categoryRecovery.target, categoryRecovery.layout)
-                    : undefined
-            )
-        );
-
         const layout = this.layoutState;
         const getContainer = (ID: string | null | undefined) =>
             ID ? layout.allPanels.get().find(({id}) => id == ID) : undefined;
@@ -218,49 +308,7 @@ export class ViewManager implements IViewManager {
             if (existingContainer) {
                 push(layout.selectTab(existingContainer.id, viewID));
             } else {
-                // Add a default fallback
-                const hintsWithFallback = (function* () {
-                    yield* hints;
-                    yield {createId: "default"};
-                })();
-                // Add a check to make sure we do not create duplicate locations
-                const hintsWithCreationCheck = (function* () {
-                    for (const hint of hintsWithFallback) {
-                        if (hint.createId) yield {targetId: hint.createId};
-                        yield hint;
-                    }
-                })();
-                // Filter out any hints for which no target panel can be found
-                const location = (() => {
-                    for (const hint of hintsWithCreationCheck) {
-                        if (hint.targetId == undefined) return hint;
-
-                        if (!hint.targetType || hint.targetType == "view") {
-                            const container = this.getTabParent(hint.targetId);
-                            if (container)
-                                return {
-                                    ...hint,
-                                    targetId: container.id,
-                                    targetType: "panel" as const,
-                                };
-                        }
-                        if (!hint.targetType || hint.targetType == "category") {
-                            const containers = this.getTabParentsByCategory(
-                                hint.targetId
-                            );
-                            if (containers.length > 0)
-                                return {
-                                    ...hint,
-                                    targetId: containers[0].id,
-                                };
-                        }
-                        if (!hint.targetType || hint.targetType == "panel") {
-                            const container = getContainer(hint.targetId);
-                            if (container) return hint;
-                        }
-                    }
-                })()!;
-                console.log("Opening using hint", location);
+                const location = this.getLocationHint(view, locationHintsModifier).get();
 
                 // Possibly create a new container relative to the target
                 const openSide = location?.side ?? "in";
@@ -322,7 +370,7 @@ export class ViewManager implements IViewManager {
 
                 // Open and select the tab
                 push(layout.openTab(openContainer.id, viewID, undefined, beforeTabID));
-                push(layout.selectTab(openContainer.id, viewID));
+                if (focus) push(layout.selectTab(openContainer.id, viewID));
             }
         });
     }

@@ -26,24 +26,22 @@ export const TabsHeader: FC<
     ExtraHeader,
 }) => {
     const OverflowAndRemainder = useMemo(
-        () =>
-            getOverflowAndRemainder(
-                dragging,
-                onDrop,
-                tabs.length == 0,
-                onClose,
-                ExtraHeader
-            ),
+        () => getOverflowAndRemainder(dragging, onDrop, tabs.length == 0),
         [dragging, tabs.length == 0, ExtraHeader]
     );
+
     const theme = useTheme();
 
     return (
         <div
             className={`layout-tabs-header ${pivotStyle}`}
-            style={{display: "flex", backgroundColor: theme.palette.neutralLighter}}>
+            style={{
+                display: "flex",
+                backgroundColor: theme.palette.neutralLighter,
+                width: "100%",
+            }}>
             <Pivot
-                style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}
+                style={{flexGrow: 1, flexShrink: 1, minWidth: 0, overflow: "hidden"}}
                 focusZoneProps={{style: {display: "flex", minHeight: 44}}}
                 overflowBehavior="menu"
                 overflowAriaLabel="more items"
@@ -59,6 +57,9 @@ export const TabsHeader: FC<
                         headerText={name}
                         headerButtonProps={{
                             onContextMenu: onTabContext as any,
+                            style: {
+                                maxWidth: "calc(100% - 50px)", // Make sure there's always enough size for the overflow button and close button
+                            },
                         }}
                         itemKey={id}
                         onRenderItemLink={() => (
@@ -83,6 +84,11 @@ export const TabsHeader: FC<
                     />
                 ))}
             </Pivot>
+            {ExtraHeader ? (
+                <div style={{flex: 0, display: "flex"}}>
+                    <ExtraHeader onClose={onClose} />{" "}
+                </div>
+            ) : undefined}
         </div>
     );
 };
@@ -95,10 +101,8 @@ const pivotStyle = mergeStyles({
 const getOverflowAndRemainder: (
     dragging: boolean,
     onDrop: () => void,
-    empty: boolean,
-    onClose?: () => void,
-    ExtraHeader?: FC<{onClose?: () => void}>
-) => FC<IButtonProps> = (dragging, onDrop, empty, onClose, ExtraHeader) => props =>
+    empty: boolean
+) => FC<IButtonProps> = (dragging, onDrop, empty) => props =>
     (
         <>
             <div style={{flexGrow: 1, position: "relative"}}>
@@ -113,7 +117,6 @@ const getOverflowAndRemainder: (
                 )}
             </div>
             <CommandButton {...props} menuIconProps={{iconName: "ChevronDown"}} />
-            {ExtraHeader && <ExtraHeader onClose={onClose} />}
         </>
     );
 
@@ -143,7 +146,15 @@ export const Tab: FC<{
 
     return (
         <>
-            {name}
+            <span
+                style={{
+                    display: "inline-block",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                }}>
+                {name}
+            </span>
             {selected && !forceOpen && (
                 <>
                     <span style={{display: "inline-block", width: 20}} />

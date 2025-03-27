@@ -33,10 +33,18 @@ struct PanelValue<C: Abstractable + Clone> {
     open_relative_visualization: bool,
     open_ratio: f32,
     name: String,
+    auto_open: AutoOpen,
     // A panel ID, to allow for persistent layout state storage
     id: String,
     // A name for the category of panel, such that other panels of the same category appear in the same location
     panel_category: String,
+}
+
+#[derive(Clone, Copy)]
+pub enum AutoOpen {
+    Never,
+    Always,
+    IfExistingPanel, // Automatically open if the target panel is already present, and this only creates a new tab
 }
 
 pub struct PanelConfigBuilder<C: Abstractable + Clone + 'static> {
@@ -47,6 +55,7 @@ pub struct PanelConfigBuilder<C: Abstractable + Clone + 'static> {
     open_side: OpenSide,
     open_ratio: f32,
     open_relative_visualization: bool,
+    auto_open: AutoOpen,
     data: PhantomData<C>,
 }
 impl<C: Abstractable + Clone + 'static> PanelConfigBuilder<C> {
@@ -58,6 +67,7 @@ impl<C: Abstractable + Clone + 'static> PanelConfigBuilder<C> {
             open_side: OpenSide::Right,
             open_relative_visualization: false,
             open_ratio: 1.0,
+            auto_open: AutoOpen::IfExistingPanel,
             data: PhantomData,
         }
     }
@@ -120,6 +130,11 @@ impl<C: Abstractable + Clone + 'static> PanelConfigBuilder<C> {
         self.open_ratio = size;
         self
     }
+    /// Sets whether or not this panel should automatically open
+    pub fn set_auto_open(mut self, auto_open: AutoOpen) -> Self {
+        self.auto_open = auto_open;
+        self
+    }
     // Create the panel-config using the given child config
     pub fn build(self, child: C) -> PanelConfig<C> {
         let buton_style = &self.button_style;
@@ -139,6 +154,7 @@ impl<C: Abstractable + Clone + 'static> PanelConfigBuilder<C> {
                     .panel_category
                     .or(name)
                     .unwrap_or_else(|| "visualization-settings".into()),
+                auto_open: self.auto_open,
                 button_style: self.button_style,
                 open_relative_visualization: self.open_relative_visualization,
                 open_side: self.open_side,
@@ -220,6 +236,14 @@ impl<C: Abstractable + Clone> ValueMapping<PanelValue<C>> for PanelConfig<C> {
             .set("id", &val.id)
             .set("category", &val.panel_category)
             .set::<&str>("openSide", val.open_side.into())
+            .set(
+                "autoOpen",
+                match val.auto_open {
+                    AutoOpen::Never => 0,
+                    AutoOpen::Always => 1,
+                    AutoOpen::IfExistingPanel => 2,
+                },
+            )
             .set("openRelativeVis", val.open_relative_visualization)
             .set("openRatio", val.open_ratio);
         let obj = match &val.button_style {
