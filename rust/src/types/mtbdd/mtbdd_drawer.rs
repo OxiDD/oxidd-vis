@@ -14,7 +14,8 @@ use crate::{
             button_config::{ButtonConfig, ButtonStyle},
             choice_config::{Choice, ChoiceConfig},
             composite_config::CompositeConfig,
-            label_config::LabelConfig,
+            float_config::FloatConfig,
+            label_config::{LabelConfig, LabelStyle},
             location_config::{Location, LocationConfig},
             panel_config::{OpenSide, PanelConfig},
             text_output_config::TextOutputConfig,
@@ -385,9 +386,14 @@ pub struct MTBDDDiagramDrawer<
                     ButtonConfig,
                     TextOutputConfig,
                     ButtonConfig,
-                    ButtonConfig,
-                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
-                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                    LabelConfig<
+                        CompositeConfig<(
+                            ButtonConfig,
+                            LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                            LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                            LabelConfig<CompositeConfig<(FloatConfig, FloatConfig)>>,
+                        )>,
+                    >,
                 )>,
             >,
         >,
@@ -442,6 +448,8 @@ impl<
         let roots = modified_graph.get_roots();
         let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
 
+        let (terminal_min, terminal_max) = (FloatConfig::new(0.), FloatConfig::new(1.));
+        let (terminal_min_ref, terminal_max_ref) = (terminal_min.clone(), terminal_max.clone());
         let mut grouped_graph = GMGraph::new(GroupLabelAdjuster::new_shared(
             group_manager.clone(),
             move |nodes| {
@@ -456,7 +464,16 @@ impl<
                             original_id: _,
                         }),
                         None,
-                    ) => (Some(*terminal), false, Color(0.2, 1., 0.2)),
+                    ) => {
+                        let min = terminal_min_ref.get();
+                        let max = terminal_max_ref.get();
+                        let per = ((terminal.0 - min) / (max - min)).max(0.0).min(1.0);
+                        (
+                            Some(*terminal),
+                            false,
+                            Color(1., 0.2, 0.2).mix(&Color(0.2, 1., 0.2), per),
+                        )
+                    }
                     (
                         Some(&PresenceLabel {
                             original_label: PointerLabel::Pointer(_),
@@ -502,34 +519,55 @@ impl<
             (
                 ButtonConfig::new_labeled("Generate latex"),
                 TextOutputConfig::new(true),
-                ButtonConfig::new_labeled("Expand all"),
-                ButtonConfig::new_labeled("Expand terminals"),
-                LabelConfig::new("0 terminal", {
-                    let mut c = ChoiceConfig::new([
-                        Choice::new(PresenceRemainder::Show, "show"),
-                        Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                        Choice::new(PresenceRemainder::Hide, "hide"),
-                    ]);
-                    c.set_index(2).commit();
-                    c
-                }),
-                LabelConfig::new(
-                    "1 terminal",
-                    ChoiceConfig::new([
-                        Choice::new(PresenceRemainder::Show, "show"),
-                        Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                        Choice::new(PresenceRemainder::Hide, "hide"),
-                    ]),
+                ButtonConfig::new_labeled("Expand all nodes"),
+                LabelConfig::new_styled(
+                    "Terminals",
+                    LabelStyle::Above,
+                    CompositeConfig::new(
+                        (
+                            ButtonConfig::new_labeled("Expand"),
+                            LabelConfig::new("0 visibility", {
+                                let mut c = ChoiceConfig::new([
+                                    Choice::new(PresenceRemainder::Show, "show"),
+                                    Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                                    Choice::new(PresenceRemainder::Hide, "hide"),
+                                ]);
+                                c.set_index(2).commit();
+                                c
+                            }),
+                            LabelConfig::new(
+                                "1 visibility",
+                                ChoiceConfig::new([
+                                    Choice::new(PresenceRemainder::Show, "show"),
+                                    Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                                    Choice::new(PresenceRemainder::Hide, "hide"),
+                                ]),
+                            ),
+                            LabelConfig::new(
+                                "range",
+                                CompositeConfig::new_horizontal(
+                                    (terminal_min, terminal_max),
+                                    |(f1, f2)| vec![Box::new(f1.clone()), Box::new(f2.clone())],
+                                ),
+                            ),
+                        ),
+                        |(f1, f2, f3, f4)| {
+                            vec![
+                                Box::new(f1.clone()),
+                                Box::new(f2.clone()),
+                                Box::new(f3.clone()),
+                                Box::new(f4.clone()),
+                            ]
+                        },
+                    ),
                 ),
             ),
-            |(f1, f2, f3, f4, f5, f6)| {
+            |(f1, f2, f3, f4)| {
                 vec![
                     Box::new(f1.clone()),
                     Box::new(f2.clone()),
                     Box::new(f3.clone()),
                     Box::new(f4.clone()),
-                    Box::new(f5.clone()),
-                    Box::new(f6.clone()),
                 ]
             },
         );
@@ -558,10 +596,14 @@ impl<
             config,
         };
 
+        let (generate_latex, latex_output, expand_all, terminals) = &*composite_config;
+        let (expand_terminals, zero_visibility, one_visibility, terminal_range) = &***terminals;
+        let (terminal_range_start, terminal_range_end) = &***terminal_range;
+
         let drawer = out.drawer.clone();
         let mut latex_renderer = LatexRenderer::new();
-        let mut output = composite_config.1.clone();
-        composite_config.0.clone().add_press_listener(move || {
+        let mut output = latex_output.clone();
+        generate_latex.clone().add_press_listener(move || {
             latex_renderer.update_layout(&drawer.get().get_current_layout());
             latex_renderer.render(u32::MAX);
             let out = latex_renderer.get_output();
@@ -580,14 +622,13 @@ impl<
         }
 
         let group_manager = out.group_manager.clone();
-        composite_config
-            .2
+        expand_all
             .clone()
             .add_press_listener(move || reveal_all(&group_manager, from, 10_000_000));
 
         let group_manager = out.group_manager.clone();
         let mut graph = out.graph.clone();
-        composite_config.3.clone().add_press_listener(move || {
+        expand_terminals.clone().add_press_listener(move || {
             for t in graph.get_terminals() {
                 if graph.get_known_parents(t).len() > 0 {
                     group_manager
@@ -622,18 +663,18 @@ impl<
 
             adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(presence));
         }
-        let false_config = composite_config.4.clone();
+        let false_config = zero_visibility.clone();
         let false_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&composite_config.4, move || {
+        let _ = on_configuration_change(zero_visibility, move || {
             set_terminal_presence(
                 &false_presence_adjuster,
                 MTBDDTerminal(0.),
                 false_config.get(),
             );
         });
-        let true_config = composite_config.5.clone();
+        let true_config = one_visibility.clone();
         let true_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&composite_config.5, move || {
+        let _ = on_configuration_change(one_visibility, move || {
             set_terminal_presence(
                 &true_presence_adjuster,
                 MTBDDTerminal(1.),

@@ -36,11 +36,14 @@ pub enum LabelStyle {
 
 impl<C: Abstractable + Clone + 'static> LabelConfig<C> {
     pub fn new(label: &str, data: C) -> LabelConfig<C> {
+        Self::new_styled(label, LabelStyle::Inline, data)
+    }
+    pub fn new_styled(label: &str, style: LabelStyle, data: C) -> LabelConfig<C> {
         LabelConfig {
             data: ConfigurationObject::new(LabelValue {
                 child: data.clone(),
                 label: label.to_string(),
-                style: LabelStyle::Inline,
+                style: style,
             }),
             child: data,
         }

@@ -4,6 +4,7 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub enum ConfigurationObjectType {
     Int,
+    Float,
     Choice,
     Label,
     Composite,

@@ -16,9 +16,12 @@ import {PanelConfig} from "../../../state/configuration/types/PanelConfig";
 import {PanelConfigComp} from "./PanelConfigComp";
 import {LocationConfig} from "../../../state/configuration/types/LocationConfig";
 import {LocationConfigComp} from "./LocationConfigComp";
+import {FloatConfigComp} from "./FloatConfigComp";
+import {FloatConfig} from "../../../state/configuration/types/FloatConfig";
 
 export const ConfigTypeComp: FC<{value: IConfigObjectType}> = ({value}) => {
     if (value instanceof IntConfig) return <IntConfigComp value={value} />;
+    if (value instanceof FloatConfig) return <FloatConfigComp value={value} />;
     if (value instanceof LabelConfig)
         return <LabelConfigComp value={value} ChildComp={ConfigTypeComp} />;
     if (value instanceof CompositeConfig)
