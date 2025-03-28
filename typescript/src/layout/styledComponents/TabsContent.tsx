@@ -32,6 +32,7 @@ export const TabTarget = forwardRef<
                 minHeight: 0,
                 position: "relative",
                 display: selected ? "flex" : "none",
+                overflow: "auto",
                 justifyItems: "stretch",
                 "&>div": {
                     flexGrow: 1,
