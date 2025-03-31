@@ -58,28 +58,28 @@ export const Sidebar: FC<{state: AppState; projectUrl: string}> = ({
                         }
                     />
                 </StyledTooltipHost>
-                {/* <StyledTooltipHost
+                <StyledTooltipHost
                     content="Github repository"
                     directionalHint={DirectionalHint.rightCenter}
                     id={githubId}>
-                    <IconButton
-                        aria-describedby={githubId}
+                    <StyledIconButton
+                        tooltipId={githubId}
+                        size={size}
                         className={css({
-                            width: size,
-                            height: size,
-                            backgroundColor: theme.palette.neutralLight,
+                            "&:hover path": {
+                                fill: theme.palette.themePrimary,
+                            },
                         })}
                         onRenderIcon={() => (
                             <GithubIcon
                                 width={size * 0.55}
                                 color={theme.palette.neutralPrimary}
-                                hoverColor={theme.palette.themePrimary}
                             />
                         )}
-                        aria-label="Github"
+                        name="Github"
                         href={projectUrl}
                     />
-                </StyledTooltipHost> */}
+                </StyledTooltipHost>
             </div>
             <div
                 style={{

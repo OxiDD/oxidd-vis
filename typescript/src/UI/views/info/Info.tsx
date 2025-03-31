@@ -5,6 +5,8 @@ import {AppState} from "../../../state/AppState";
 import {css} from "@emotion/css";
 import {ViewContainer} from "../../components/layout/ViewContainer";
 import {CenteredContainer} from "../../components/layout/CenteredContainer";
+import SyntaxHighlighter from "react-syntax-highlighter";
+import {a11yDark, vs2015} from "react-syntax-highlighter/dist/esm/styles/hljs";
 
 export const Info: FC<{app: AppState}> = ({app}) => {
     const theme = useTheme();
@@ -21,15 +23,18 @@ export const Info: FC<{app: AppState}> = ({app}) => {
                         root: {marginRight: 10, fontSize: 45, verticalAlign: "bottom"},
                     }}
                 />
-                BDD-viz
+                OxiDD-viz
             </h1>
             <p>
-                BDD-viz (temporary name) is a Binary Decision Diagram (BDD) visualization
-                tool. It is still a work in progress, meaning that there are many features
-                still missing. Some of these features already have traces in the design,
-                but are not fully there yet. Are you experiencing any difficulties or have
-                suggestions for improvement? Please send me an email at{" "}
-                <Link href="mailto:t.m.k.v.krieken@tue.nl">t.m.k.v.krieken@tue.nl</Link> .
+                OxiDD-viz is a Decision Diagram (DD) visualization tool. It is in active
+                development, and more features will be added over time. Two types of
+                diagrams are currently supported:
+                <ul>
+                    <li>Binary Decision Diagrams without complement edges</li>
+                    <li>
+                        Multi-Terminal Binary Decision Diagrams with numeric terminals
+                    </li>
+                </ul>
             </p>
 
             <h2>Loading diagrams</h2>
@@ -43,12 +48,14 @@ export const Info: FC<{app: AppState}> = ({app}) => {
             <h3>Local</h3>
             <p>
                 To add a local diagram, simply open the{" "}
-                {link("diagrams panel", app.diagrams)} and click "Add local DD". This
-                should adds a shared diagram, which you can now add content into using
-                either "Load from dddump" or 'Load from Buddy'. Here you can select either
-                the file or text contents, and load the contents. After the contents
-                loaded, a new section should appear in the diagram, and clicking it opens
-                the visualization.
+                {link("diagrams panel", app.diagrams)} and click "Add local BDD" or "Add
+                local MTBDD". This should add a shared diagram, which you can now add
+                content into using either "Load from dddump" or 'Load from Buddy'. Here
+                you can either select a file or supply text contents, and load the
+                diagrams. After the diagrams finished loading, a new section should appear
+                in the diagram. Clicking this section opens the visualization. Any diagram
+                allows new sections to be created by selecting a node in the visualization
+                and clicking the "Create from selection" button.
             </p>
             <h3>Remote</h3>
             <p>
@@ -56,39 +63,38 @@ export const Info: FC<{app: AppState}> = ({app}) => {
                 {link("diagrams panel", app.diagrams)} and click "Add diagram source".
                 This opens up a window in which you can select the host of the diagrams
                 you want to show. In most cases, this host will be the default entered
-                address (at which you are also accessing the tool). After the host is
-                added, it will be regularly checked for diagram updates and reflect them.{" "}
-                <br />
+                address (configured as the default in OxiDD). After the host is added, it
+                will be regularly check for new diagrams. <br />
                 Here you can also select "Automatically open diagrams" to open a tab in
-                which the diagrams will be opened when created.
+                which the diagrams will be opened when created, and toggle whether new
+                diagrams should replace previous diagrams by the same name.
                 <br />
             </p>
             <p>
-                There are several ways to add a diagram to the default remote host. If you
-                make use of the course provided Buddy python wrapper, there is a python
-                function <code>manager.visualize(root, "diagram_name")</code> that can be
-                invoked. This will then show the diagram in this tool. Similarly the Oxidd
-                python wrapper obtainable from{" "}
-                <Link href="https://github.com/TarVK/oxidd">github.com/TarVK/oxidd</Link>{" "}
-                contains a function <code>manager.visualize(root, "diagram_name")</code>{" "}
-                that behaves the same. Finally, this Oxidd fork also contains{" "}
-                <Link href="https://github.com/TarVK/oxidd/blob/main/crates/oxidd-dump/src/visualize.rs">
-                    a visualize function
-                </Link>{" "}
-                that can be used to visualize the diagram when writing code in Rust.
+                Remote diagrams can be provided by any tool which hosts a server with a{" "}
+                <code>/diagrams</code> path, which provides a JSON response of the
+                following format:
+                <SyntaxHighlighter language="javascript" style={vs2015}>
+                    {`{\n\tname: string;\n\ttype: "BDD"|"MTBDD";\n\tdiagram: string;\n}[]`}
+                </SyntaxHighlighter>
+                The diagram should be the contents of a valid DDDMP file with the given
+                type. When no new diagrams have been created, this request should return a
+                404. OxiDD provides a visualize function in the <code>oxidd-dump</code>{" "}
+                crate which temporarily hosts such a server until the contents are read by
+                OxiDD-viz.
             </p>
 
             <h2>Features</h2>
             <p>
-                The tool is not finished, but already includes several useful features.
-                These will be briefly introduced here.
+                Despite being unfinished, OxiDD-viz already includes several great
+                features. Some of these will be briefly introduced here.
             </p>
             <h3>Tabs</h3>
             <p>
                 The layout of the tool can be customized by dragging tabs around. Simply
                 drag a tab and drop it in one of the highlighted blue areas to split the
                 corresponding section into two. This allows for viewing several diagrams
-                side by side.
+                side by side. These tabs can also be renamed by right-clicking them.
             </p>
             <h3>Terminal hiding</h3>
             <p>
@@ -103,8 +109,14 @@ export const Info: FC<{app: AppState}> = ({app}) => {
                 To deal with large diagrams, nodes can be grouped together. By default, if
                 a loaded diagram is too large to effectively display, its nodes remain
                 grouped in a single group. The tools in the top right can be used to
-                either group a selection of nodes (drag on screen), or ungroup the
+                either group a selection of nodes (by dragging on screen), or ungroup the
                 children of a selection of nodes.
+            </p>
+            <h3>Settings</h3>
+            <p>
+                Different decision diagrams provide different settings. Every
+                visualization contains a gear icon in the bottom right, which opens a
+                dedicated settings panel for the corresponding visualization.
             </p>
 
             {/* <p>Settings: {link("settings", app.settings)}</p> */}

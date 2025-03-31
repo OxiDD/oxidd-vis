@@ -1,19 +1,10 @@
 import {css} from "@emotion/css";
 import React, {FC} from "react";
 
-export const GithubIcon: FC<{width: number; color: string; hoverColor?: string}> = ({
-    width,
-    color,
-    hoverColor = color,
-}) => (
+export const GithubIcon: FC<{width: number; color: string}> = ({width, color}) => (
     <svg
         width={width}
         height={width}
-        className={css({
-            "*:hover & path": {
-                fill: hoverColor,
-            },
-        })}
         viewBox="0 0 98 96"
         xmlns="http://www.w3.org/2000/svg">
         <path

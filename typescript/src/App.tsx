@@ -81,7 +81,10 @@ export const App: FC = () => {
             <ViewManagerProvider value={app.views}>
                 <ToolbarProvider value={app.toolbar}>
                     <div style={{display: "flex", height: "100%"}}>
-                        <Sidebar state={app} projectUrl="https://google.com" />
+                        <Sidebar
+                            state={app}
+                            projectUrl="https://github.com/OxiDD/oxidd-viz"
+                        />
                         <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
                             <UserLayout state={app} />
                         </div>
