@@ -55,7 +55,8 @@ impl<T: DrawTag> WebglRenderer<T> {
         context: WebGl2RenderingContext,
         screen_texture: ScreenTexture,
         edge_types: HashMap<EdgeType<T>, EdgeRenderingType>,
-        colors: NodeRenderingColorConfig,
+        node_colors: NodeRenderingColorConfig,
+        layer_colors: LayerRenderingColorConfig,
         font: Rc<Font>,
         // TODO: add text configuration?
     ) -> Result<WebglRenderer<T>, JsValue> {
@@ -75,8 +76,9 @@ impl<T: DrawTag> WebglRenderer<T> {
             .resolution(2.0)
             .sample_distance(35.)
             .scale_factor_group_size(3.0)
-            .scale_cache_size(10) // Very large, mostly for testing
-            .max_scale(1.5);
+            .scale_cache_size(10)
+            .max_scale(1.5)
+            .color(node_colors.text);
 
         // context.enable(WebGl2RenderingContext::DEPTH_TEST);
         context.enable(WebGl2RenderingContext::BLEND);
@@ -88,7 +90,7 @@ impl<T: DrawTag> WebglRenderer<T> {
         Ok(WebglRenderer {
             node_renderer: NodeRenderer::new(
                 &context,
-                colors,
+                node_colors,
                 TextRenderingConfig {
                     screen_height,
                     font: font.clone(),
@@ -98,11 +100,11 @@ impl<T: DrawTag> WebglRenderer<T> {
             edge_renderer: EdgeRenderer::new(&context, edge_rendering_types),
             layer_renderer: LayerRenderer::new(
                 &context,
-                LayerBgRenderer::new(&context),
+                LayerBgRenderer::new(&context, layer_colors.background1, layer_colors.background2),
                 // LayerLinesRenderer::new(&context),
                 screen_height,
                 font,
-                font_settings,
+                font_settings.color(layer_colors.text),
             ),
             webgl_context: context,
             screen_texture,
@@ -112,7 +114,8 @@ impl<T: DrawTag> WebglRenderer<T> {
     pub fn from_canvas(
         canvas: HtmlCanvasElement,
         edge_types: HashMap<EdgeType<T>, EdgeRenderingType>,
-        colors: NodeRenderingColorConfig,
+        node_colors: NodeRenderingColorConfig,
+        layer_colors: LayerRenderingColorConfig,
         font: Rc<Font>,
     ) -> Result<WebglRenderer<T>, JsValue> {
         let context = canvas
@@ -121,15 +124,17 @@ impl<T: DrawTag> WebglRenderer<T> {
             .unwrap()
             .dyn_into::<WebGl2RenderingContext>()
             .unwrap();
+        let c = layer_colors.background1;
         WebglRenderer::new(
             context,
             ScreenTexture::new(
                 canvas.width() as usize,
                 canvas.height() as usize,
-                (1.0, 1.0, 1.0, 1.0),
+                (c.0, c.1, c.2, c.3),
             ),
             edge_types,
-            colors,
+            node_colors,
+            layer_colors,
             font,
         )
     }
@@ -247,6 +252,12 @@ impl<T: DrawTag, S: WebglNodeStyle, LS: WebglLayerStyle> Renderer<T, S, LS> for 
         self.edge_renderer.render(&self.webgl_context, time);
         self.node_renderer.render(&self.webgl_context, time);
     }
+}
+
+pub struct LayerRenderingColorConfig {
+    pub background1: TransparentColor,
+    pub background2: TransparentColor,
+    pub text: Color,
 }
 
 impl<T: DrawTag> Drop for WebglRenderer<T> {

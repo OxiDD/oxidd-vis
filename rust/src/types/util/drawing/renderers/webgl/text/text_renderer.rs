@@ -33,7 +33,7 @@ use crate::{
         },
     },
     util::{
-        logging::console, matrix4::Matrix4, point::Point, rectangle::Rectangle,
+        color::Color, logging::console, matrix4::Matrix4, point::Point, rectangle::Rectangle,
         transition::Transition,
     },
 };
@@ -681,8 +681,8 @@ impl TextRendererSettings {
         self.scale_cache_size = scale_cache_size;
         self
     }
-    pub fn rgb_color(mut self, color: (f32, f32, f32)) -> TextRendererSettings {
-        self.rgb_color = color;
+    pub fn color(mut self, c: Color) -> TextRendererSettings {
+        self.rgb_color = (c.0, c.1, c.2);
         self
     }
 }

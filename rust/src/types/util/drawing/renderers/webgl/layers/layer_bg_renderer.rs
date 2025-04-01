@@ -6,7 +6,7 @@ use crate::{
         text::text_renderer::Text,
         util::{set_animated_data::set_animated_data, vertex_renderer::VertexRenderer},
     },
-    util::{logging::console, matrix4::Matrix4, transition::Transition},
+    util::{color::TransparentColor, logging::console, matrix4::Matrix4, transition::Transition},
 };
 
 use super::{
@@ -16,12 +16,16 @@ use super::{
 
 pub struct LayerBgRenderer {
     bg_renderer: VertexRenderer,
-    bg_color1: (f32, f32, f32, f32),
-    bg_color2: (f32, f32, f32, f32),
+    bg_color1: TransparentColor,
+    bg_color2: TransparentColor,
 }
 
 impl LayerBgRenderer {
-    pub fn new(context: &WebGl2RenderingContext) -> LayerBgRenderer {
+    pub fn new(
+        context: &WebGl2RenderingContext,
+        color1: TransparentColor,
+        color2: TransparentColor,
+    ) -> LayerBgRenderer {
         let vertex_renderer = VertexRenderer::new(
             context,
             include_str!("layer_bg_renderer.vert"),
@@ -30,8 +34,8 @@ impl LayerBgRenderer {
         .unwrap();
         LayerBgRenderer {
             bg_renderer: vertex_renderer,
-            bg_color1: (0.9, 0.9, 0.9, 1.),
-            bg_color2: (0.98, 0.98, 0.98, 1.),
+            bg_color1: color1,
+            bg_color2: color2,
         }
     }
 }
@@ -99,11 +103,11 @@ impl LayerDivisionRenderer for LayerBgRenderer {
         self.bg_renderer
             .set_uniform(context, "time", |u| context.uniform1f(u, time as f32));
 
-        let (r1, g1, b1, a1) = self.bg_color1;
+        let TransparentColor(r1, g1, b1, a1) = self.bg_color1;
         self.bg_renderer
             .set_uniform(context, "color1", |u| context.uniform4f(u, r1, g1, b1, a1));
 
-        let (r2, g2, b2, a2) = self.bg_color2;
+        let TransparentColor(r2, g2, b2, a2) = self.bg_color2;
         self.bg_renderer
             .set_uniform(context, "color2", |u| context.uniform4f(u, r2, g2, b2, a2));
 

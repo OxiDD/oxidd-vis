@@ -38,6 +38,7 @@ use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
 use crate::types::util::drawing::layouts::layer_orderings::edge_layer_ordering::EdgeLayerOrdering;
+use crate::types::util::drawing::renderers::webgl_renderer::LayerRenderingColorConfig;
 use crate::types::util::drawing::renderers::webgl_renderer::WebglLayerStyle;
 use crate::types::util::graph_structure::graph_manipulators::child_edge_adjuster::ChildEdgeAdjuster;
 use crate::types::util::graph_structure::graph_manipulators::edge_to_adjuster::EdgeToAdjuster;
@@ -203,6 +204,65 @@ where
     }
 }
 
+#[derive(Clone)]
+struct QDDColors {
+    edge_true: Color,
+    edge_false: Color,
+    edge_both: Color,
+    node_true: Color,
+    node_false: Color,
+    node_group: Color,
+    node_default: Color,
+    node_text: Color,
+    node_label: Color,
+    layer_background1: Color,
+    layer_background2: Color,
+    layer_text: Color,
+    selection: TransparentColor,
+    selection_partial: TransparentColor,
+    selection_hover: TransparentColor,
+    selection_hover_partial: TransparentColor,
+}
+impl QDDColors {
+    const DARK: QDDColors = QDDColors {
+        edge_true: Color(0.631, 0.749, 0.423),
+        edge_false: Color(0.835, 0.341, 0.341),
+        edge_both: Color(0.6, 0.6, 0.6),
+        node_true: Color(0.631, 0.749, 0.423),
+        node_false: Color(0.835, 0.341, 0.341),
+        node_group: Color(0.45, 0.45, 0.45),
+        node_default: Color(0.35, 0.35, 0.35),
+        node_text: Color(0.0, 0.0, 0.0),
+        node_label: Color(0.5, 0.5, 1.0),
+        layer_background1: Color(0.1875, 0.1875, 0.1875),
+        layer_background2: Color(0.125, 0.125, 0.125),
+        layer_text: Color(1.0, 1.0, 1.0),
+        selection: TransparentColor(0.6, 0.0, 1.0, 0.7),
+        selection_partial: TransparentColor(0.6, 0.0, 1.0, 0.7),
+        selection_hover: TransparentColor(0.0, 0.0, 1.0, 0.3),
+        selection_hover_partial: TransparentColor(1.0, 0.0, 0.8, 0.2),
+    };
+
+    const LIGHT: QDDColors = QDDColors {
+        edge_true: Color(0.2, 1.0, 0.2),
+        edge_false: Color(1.0, 0.2, 0.2),
+        edge_both: Color(0.6, 0.6, 0.6),
+        node_true: Color(0.2, 1.0, 0.2),
+        node_false: Color(1.0, 0.2, 0.2),
+        node_group: Color(0.45, 0.45, 0.45),
+        node_default: Color(0.1, 0.1, 0.1),
+        node_text: Color(0.0, 0.0, 0.0),
+        node_label: Color(0.5, 0.5, 1.0),
+        layer_background1: Color(0.9, 0.9, 0.9),
+        layer_background2: Color(0.98, 0.98, 0.98),
+        layer_text: Color(0.0, 0.0, 0.0),
+        selection: TransparentColor(0.6, 0.0, 1.0, 0.7),
+        selection_partial: TransparentColor(0.6, 0.0, 1.0, 0.7),
+        selection_hover: TransparentColor(0.0, 0.0, 1.0, 0.3),
+        selection_hover_partial: TransparentColor(1.0, 0.0, 0.8, 0.2),
+    };
+}
+
 impl<
         E: Edge<Tag = ()> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
@@ -220,14 +280,19 @@ where
         self.labels.get(&node).cloned().unwrap_or_else(|| vec![])
     }
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
-        let c0 = Color(1.0, 0.2, 0.2);
-        let c1 = Color(0.2, 1.0, 0.2);
-        let c2 = Color(0.6, 0.6, 0.6);
+        let colors = &QDDColors::LIGHT;
 
-        let select_color = (Color(0.3, 0.3, 1.0), 0.8);
-        let partial_select_color = (Color(0.6, 0.0, 1.0), 0.7);
-        let hover_color = (Color(0.0, 0.0, 1.0), 0.3);
-        let partial_hover_color = (Color(1.0, 0.0, 0.8), 0.2);
+        let edge_rendering_type =
+            |color: Color, width: f32, dash_solid: f32, dash_transparent: f32| EdgeRenderingType {
+                select_color: color.mix_transparent(&colors.selection),
+                partial_select_color: color.mix_transparent(&colors.selection_partial),
+                hover_color: color.mix_transparent(&colors.selection_hover),
+                partial_hover_color: color.mix_transparent(&colors.selection_hover_partial),
+                color,
+                width,
+                dash_solid,
+                dash_transparent,
+            };
 
         let font = Rc::new(Font::new(
             include_bytes!("../../../resources/Roboto-Bold.ttf").to_vec(),
@@ -239,54 +304,35 @@ where
                 // True edge
                 (
                     EdgeType::new((), 0),
-                    EdgeRenderingType {
-                        hover_color: c1.mix(&hover_color.0, hover_color.1),
-                        select_color: c1.mix(&select_color.0, select_color.1),
-                        partial_hover_color: c1.mix(&partial_hover_color.0, partial_hover_color.1),
-                        partial_select_color: c1
-                            .mix(&partial_select_color.0, partial_select_color.1),
-                        color: c1,
-                        width: 0.2,
-                        dash_solid: 1.0,
-                        dash_transparent: 0.0, // No dashing
-                    },
+                    edge_rendering_type(
+                        colors.edge_true,
+                        0.2,
+                        1.0,
+                        0.0, // No dashing
+                    ),
                 ),
                 // False edge
                 (
                     EdgeType::new((), 1),
-                    EdgeRenderingType {
-                        hover_color: c0.mix(&hover_color.0, hover_color.1),
-                        select_color: c0.mix(&select_color.0, select_color.1),
-                        partial_hover_color: c0.mix(&partial_hover_color.0, partial_hover_color.1),
-                        partial_select_color: c0
-                            .mix(&partial_select_color.0, partial_select_color.1),
-                        color: c0,
-                        width: 0.2,
-                        dash_solid: 0.3,
-                        dash_transparent: 0.15,
-                    },
+                    edge_rendering_type(colors.edge_false, 0.2, 0.3, 0.15),
                 ),
-                // Both edge
+                // Label edge
                 (
                     EdgeType::new((), 2),
-                    EdgeRenderingType {
-                        hover_color: c2.mix(&hover_color.0, hover_color.1),
-                        select_color: c2.mix(&select_color.0, select_color.1),
-                        partial_hover_color: c2.mix(&partial_hover_color.0, partial_hover_color.1),
-                        partial_select_color: c2
-                            .mix(&partial_select_color.0, partial_select_color.1),
-                        color: c2,
-                        width: 0.15,
-                        dash_solid: 1.0,
-                        dash_transparent: 0.0,
-                    },
+                    edge_rendering_type(colors.edge_both, 0.15, 1.0, 0.0),
                 ),
             ]),
             NodeRenderingColorConfig {
-                select: select_color,
-                partial_select: partial_select_color,
-                hover: hover_color,
-                partial_hover: partial_hover_color,
+                select: colors.selection,
+                partial_select: colors.selection_partial,
+                hover: colors.selection_hover,
+                partial_hover: colors.selection_hover_partial,
+                text: colors.node_text,
+            },
+            LayerRenderingColorConfig {
+                background1: colors.layer_background1.into(),
+                background2: colors.layer_background2.into(),
+                text: colors.layer_text,
             },
             font.clone(),
         )
@@ -325,7 +371,7 @@ where
             self.levels.clone(),
             terminal_to_string,
         );
-        let diagram = QDDDiagramDrawer::new(graph, renderer, layout, font);
+        let diagram = QDDDiagramDrawer::new(graph, renderer, layout, colors.clone(), font);
         Box::new(diagram)
     }
 }
@@ -612,7 +658,13 @@ impl<
         L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>> + LayoutEditing + 'static,
     > QDDDiagramDrawer<T, G, R, L>
 {
-    pub fn new(graph: G, renderer: R, layout: L, font: Rc<Font>) -> QDDDiagramDrawer<T, G, R, L> {
+    pub fn new(
+        graph: G,
+        renderer: R,
+        layout: L,
+        colors: QDDColors,
+        font: Rc<Font>,
+    ) -> QDDDiagramDrawer<T, G, R, L> {
         let original_roots = graph.get_roots().clone();
         let base_graph = TerminalLevelAdjuster::new(graph); // Make sure that terminal levels make sense before possibly adding pointers to these terminals
         let pointer_adjuster = PointerNodeAdjuster::new(
@@ -649,9 +701,9 @@ impl<
                         None,
                     ) => {
                         if terminal == "T" {
-                            (Some(1), false, Color(0.2, 1., 0.2))
+                            (Some(1), false, colors.node_true)
                         } else {
-                            (Some(0), false, Color(1., 0.2, 0.2))
+                            (Some(0), false, colors.node_false)
                         }
                     }
                     (
@@ -660,9 +712,9 @@ impl<
                             original_id: _,
                         }),
                         None,
-                    ) => (None, false, Color(0.5, 0.5, 1.0)),
-                    (Some(_), None) => (None, false, Color(0.1, 0.1, 0.1)),
-                    _ => (None, true, Color(0.7, 0.7, 0.7)),
+                    ) => (None, false, colors.node_label),
+                    (Some(_), None) => (None, false, colors.node_default),
+                    _ => (None, true, colors.node_group),
                 };
                 let name: Option<String> = match (nodes.get(0), nodes.get(1)) {
                     (
