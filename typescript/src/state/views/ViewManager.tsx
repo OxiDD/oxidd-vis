@@ -189,13 +189,15 @@ export class ViewManager implements IViewManager {
      * Obtain the location hint to be used, based on the current layout
      * @param view The view state
      * @param locationHintsModifier Modifies the list of location hints, picking the first one for which the target was found
+     * @param withFallback Whether to include the fallback such that the hint is guaranteed to find a location
      * @returns The location hint to be used
      */
     protected getLocationHint(
         view: ViewState,
         locationHintsModifier: (
             hints: Generator<IViewLocationHint>
-        ) => Generator<IViewLocationHint> = h => h
+        ) => Generator<IViewLocationHint> = h => h,
+        withFallback: boolean = true
     ): IWatchable<IViewLocationHint> {
         return new PassiveDerived(watch => {
             const recoveryData = watch(this.categoryRecovery);
@@ -218,10 +220,12 @@ export class ViewManager implements IViewManager {
             );
 
             // Add a default fallback
-            const hintsWithFallback = (function* () {
-                yield* hints;
-                yield {createId: "default"};
-            })();
+            const hintsWithFallback = withFallback
+                ? (function* () {
+                      yield* hints;
+                      yield {createId: "default"};
+                  })()
+                : hints;
 
             // Add a check to make sure we do not create duplicate locations
             const hintsWithCreationCheck = (function* () {
@@ -266,16 +270,20 @@ export class ViewManager implements IViewManager {
      * Checks whether the target panel for the given view according to the given modifiers exists
      * @param view The view state
      * @param locationHintsModifier Modifies the list of location hints, picking the first one for which the target was found
+     * @param withFallback Whether to include the fallback to the default panel
      * @returns Whether the target panel
      */
     public targetPanelExists(
         view: ViewState,
         locationHintsModifier: (
             hints: Generator<IViewLocationHint>
-        ) => Generator<IViewLocationHint> = h => h
+        ) => Generator<IViewLocationHint> = h => h,
+        withFallback: boolean = false
     ): IWatchable<boolean> {
         return new PassiveDerived(watch => {
-            const location = watch(this.getLocationHint(view, locationHintsModifier));
+            const location = watch(
+                this.getLocationHint(view, locationHintsModifier, withFallback)
+            );
             const panels = watch(this.layoutState.allPanels);
             return (
                 (location.side == undefined || location.side == "in") &&
