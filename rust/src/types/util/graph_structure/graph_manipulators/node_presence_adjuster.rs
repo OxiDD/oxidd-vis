@@ -33,28 +33,20 @@ use crate::{
 // The source node IDs are distinguished into 2 labeled kinds:
 // - left node IDs, corresponding to the underlying graph we are wrapping
 // - right node IDs, corresponding to the created virtual nodes
-pub struct NodePresenceAdjuster<
-    T: DrawTag + 'static,
-    NL: Clone,
-    LL: Clone,
-    G: GraphStructure<T, NL, LL>,
-> {
+pub struct NodePresenceAdjuster<G: GraphStructure> {
     graph: G,
     event_writer: GraphEventsWriter,
     graph_events: GraphEventsReader,
 
-    node_label: PhantomData<NL>,
-    level_label: PhantomData<LL>,
-
     /*  All the adjustment data */
-    adjustments: HashMap<NodeID, PresenceGroups<T>>, // Specifies the adjustments for the left source node ID
+    adjustments: HashMap<NodeID, PresenceGroups<G::T>>, // Specifies the adjustments for the left source node ID
     sources: HashMap<NodeID, NodeID>, // Maps the right source nodeID to the corresponding left source node ID
     images: MultiMap<NodeID, NodeID>, // Maps the left source nodeID to all of the corresponding right source node IDs
     // node_group: HashMap<NodeID, PresenceGroup>, // Maps the left source nodeID to the presence group it represents
-    replacements: HashMap<(NodeID, EdgeConstraint<T>, NodeID), NodeID>, // For a combination of parent output nodeID and a child left source nodeID, the replacement child right source nodeID
+    replacements: HashMap<(NodeID, EdgeConstraint<G::T>, NodeID), NodeID>, // For a combination of parent output nodeID and a child left source nodeID, the replacement child right source nodeID
     parent_nodes: HashMap<NodeID, HashSet<NodeID>>, // The parent nodes (output node IDs) of a right source nodeID.
-    known_parents: HashMap<NodeID, Vec<(EdgeType<T>, NodeID)>>, // The parents (output node IDs) and edge type of a right source nodeID. Note that these are the known parents, because we may for sure these are the only parents that can exist for the created node, but can not be sure these are the only edge types.
-    children: HashMap<NodeID, Vec<(EdgeType<T>, NodeID)>>, // The children (output node IDs) and edge type of a output nodeID
+    known_parents: HashMap<NodeID, Vec<(EdgeType<G::T>, NodeID)>>, // The parents (output node IDs) and edge type of a right source nodeID. Note that these are the known parents, because we may for sure these are the only parents that can exist for the created node, but can not be sure these are the only edge types.
+    children: HashMap<NodeID, Vec<(EdgeType<G::T>, NodeID)>>, // The children (output node IDs) and edge type of a output nodeID
     free_id: FreeIdManager<usize>,
 }
 
@@ -121,10 +113,8 @@ fn from_sourced(id: SourcedNodeID) -> NodeID {
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    NodePresenceAdjuster<T, NL, LL, G>
-{
-    pub fn new(mut graph: G) -> NodePresenceAdjuster<T, NL, LL, G> {
+impl<G: GraphStructure> NodePresenceAdjuster<G> {
+    pub fn new(mut graph: G) -> NodePresenceAdjuster<G> {
         NodePresenceAdjuster {
             graph_events: graph.create_event_reader(),
             graph,
@@ -137,12 +127,10 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             known_parents: HashMap::new(),
             children: HashMap::new(),
             free_id: FreeIdManager::new(0),
-            level_label: PhantomData,
-            node_label: PhantomData,
         }
     }
 
-    pub fn set_node_presence(&mut self, out_node: NodeID, presence: PresenceGroups<T>) {
+    pub fn set_node_presence(&mut self, out_node: NodeID, presence: PresenceGroups<G::T>) {
         let owner = self.get_owner_id(out_node);
 
         // Create events for removal of the old node (connections) and images
@@ -179,7 +167,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         }
     }
 
-    pub fn get_node_presence(&self, out_node: NodeID) -> Option<PresenceGroups<T>> {
+    pub fn get_node_presence(&self, out_node: NodeID) -> Option<PresenceGroups<G::T>> {
         let owner = self.get_owner_id(out_node);
         self.adjustments.get(&owner).cloned()
     }
@@ -295,7 +283,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
     fn create_replacement(
         &mut self,
-        parents: Vec<(EdgeConstraint<T>, NodeID)>,
+        parents: Vec<(EdgeConstraint<G::T>, NodeID)>,
         child_to_be_replaced: NodeID,
     ) -> NodeID {
         let id = self.free_id.get_next();
@@ -309,7 +297,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
     fn create_replacement_without_events(
         &mut self,
-        parents: Vec<(EdgeConstraint<T>, NodeID)>,
+        parents: Vec<(EdgeConstraint<G::T>, NodeID)>,
         child_to_be_replaced: NodeID,
         id: NodeID,
     ) -> NodeID {
@@ -504,9 +492,10 @@ pub struct PresenceLabel<LL> {
     pub original_id: NodeID,
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    GraphStructure<T, PresenceLabel<NL>, LL> for NodePresenceAdjuster<T, NL, LL, G>
-{
+impl<G: GraphStructure> GraphStructure for NodePresenceAdjuster<G> {
+    type T = G::T;
+    type NL = PresenceLabel<G::NL>;
+    type LL = G::LL;
     fn get_roots(&self) -> Vec<NodeID> {
         self.graph
             .get_roots()
@@ -522,7 +511,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             .collect()
     }
 
-    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<G::T>, NodeID)> {
         self.process_graph_changes();
         let parents = match to_sourced(node) {
             Either::Left(id) => {
@@ -565,7 +554,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         parents
     }
 
-    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<G::T>, NodeID)> {
         self.process_graph_changes();
         if let Some(children) = self.children.get(&node) {
             return children.clone();
@@ -588,7 +577,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         self.graph.get_level(id)
     }
 
-    fn get_node_label(&self, node: NodeID) -> PresenceLabel<NL> {
+    fn get_node_label(&self, node: NodeID) -> PresenceLabel<G::NL> {
         let id = self.get_owner_id(node);
         PresenceLabel {
             original_id: id,
@@ -596,7 +585,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         }
     }
 
-    fn get_level_label(&self, level: LevelNo) -> LL {
+    fn get_level_label(&self, level: LevelNo) -> G::LL {
         self.graph.get_level_label(level)
     }
 
@@ -626,14 +615,14 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 }
 
-impl<T: DrawTag + Serializable<T>, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
-    for NodePresenceAdjuster<T, NL, LL, G>
+impl<G: GraphStructure> StateStorage for NodePresenceAdjuster<G>
 where
     G: StateStorage,
+    G::T: Serializable,
 {
     fn write(&self, stream: &mut std::io::Cursor<&mut Vec<u8>>) -> std::io::Result<()> {
         let write_constraint = |stream: &mut std::io::Cursor<&mut Vec<u8>>,
-                                constraint: &EdgeConstraint<T>|
+                                constraint: &EdgeConstraint<G::T>|
          -> std::io::Result<()> {
             match constraint {
                 EdgeConstraint::Any => stream.write_u8(0)?,
@@ -686,12 +675,12 @@ where
 
     fn read(&mut self, stream: &mut std::io::Cursor<&Vec<u8>>) -> std::io::Result<()> {
         let read_constraint =
-            |stream: &mut std::io::Cursor<&Vec<u8>>| -> std::io::Result<EdgeConstraint<T>> {
+            |stream: &mut std::io::Cursor<&Vec<u8>>| -> std::io::Result<EdgeConstraint<G::T>> {
                 Ok(match stream.read_u8()? {
                     0 => EdgeConstraint::Any,
                     _ => {
                         let index = stream.read_i32::<LittleEndian>()?;
-                        let tag = T::deserialize(stream)?;
+                        let tag = G::T::deserialize(stream)?;
                         EdgeConstraint::Exact(EdgeType { tag, index })
                     }
                 })
@@ -729,8 +718,10 @@ where
         }
 
         let replacement_count = stream.read_u32::<LittleEndian>()?;
-        let mut replacements: HashMap<NodeID, HashMap<NodeID, Vec<(EdgeConstraint<T>, NodeID)>>> =
-            HashMap::new();
+        let mut replacements: HashMap<
+            NodeID,
+            HashMap<NodeID, Vec<(EdgeConstraint<G::T>, NodeID)>>,
+        > = HashMap::new();
         for _ in 0..replacement_count {
             let parent = stream.read_u32::<LittleEndian>()? as usize;
             let constraint = read_constraint(stream)?;

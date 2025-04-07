@@ -11,6 +11,7 @@ use crate::{
     types::util::{
         drawing::{
             diagram_layout::{DiagramLayout, LayerStyle, NodeStyle},
+            layout_rules::LayoutRules,
             renderer::{GroupSelection, Renderer},
         },
         graph_structure::graph_structure::{DrawTag, EdgeType},
@@ -140,7 +141,11 @@ impl<T: DrawTag> WebglRenderer<T> {
     }
 }
 
-impl<T: DrawTag, S: WebglNodeStyle, LS: WebglLayerStyle> Renderer<T, S, LS> for WebglRenderer<T> {
+impl<L: LayoutRules> Renderer<L> for WebglRenderer<L::T>
+where
+    L::NS: WebglNodeStyle,
+    L::LS: WebglLayerStyle,
+{
     fn set_transform(&mut self, transform: Transformation) {
         let height = transform.height as usize;
         // if self.screen_texture.get_size().1 != height {
@@ -158,7 +163,7 @@ impl<T: DrawTag, S: WebglNodeStyle, LS: WebglLayerStyle> Renderer<T, S, LS> for 
         self.layer_renderer
             .set_transform_and_screen_height(&self.webgl_context, &matrix, height);
     }
-    fn update_layout(&mut self, layout: &DiagramLayout<T, S, LS>) {
+    fn update_layout(&mut self, layout: &DiagramLayout<L::T, L::NS, L::LS>) {
         self.node_renderer.set_nodes(
             &self.webgl_context,
             &layout

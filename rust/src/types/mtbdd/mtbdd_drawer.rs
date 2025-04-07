@@ -231,16 +231,7 @@ impl MTBDDColors {
     };
 }
 
-impl<
-        E: Edge<Tag = ()> + 'static,
-        N: InnerNode<E> + HasLevel + 'static,
-        R: DiagramRules<E, N, MTBDDTerminal> + 'static,
-        F: Function + 'static,
-    > DiagramSection for MTBDDDiagramSection<F>
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = MTBDDTerminal>,
-{
+impl DiagramSection for MTBDDDiagramSection<DummyMTBDDFunction> {
     fn get_level_labels(&self) -> Vec<String> {
         self.levels.clone()
     }
@@ -248,86 +239,11 @@ where
         self.labels.get(&node).cloned().unwrap_or_else(|| vec![])
     }
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
-        let colors = &MTBDDColors::LIGHT;
-
-        let edge_rendering_type =
-            |color: Color, width: f32, dash_solid: f32, dash_transparent: f32| EdgeRenderingType {
-                select_color: color.mix_transparent(&colors.selection),
-                partial_select_color: color.mix_transparent(&colors.selection_partial),
-                hover_color: color.mix_transparent(&colors.selection_hover),
-                partial_hover_color: color.mix_transparent(&colors.selection_hover_partial),
-                color,
-                width,
-                dash_solid,
-                dash_transparent,
-            };
-
-        let font = Rc::new(Font::new(
-            include_bytes!("../../../resources/Roboto-Bold.ttf").to_vec(),
-            1.0,
-        ));
-        let renderer = WebglRenderer::from_canvas(
-            canvas,
-            HashMap::from([
-                // True edge
-                (
-                    EdgeType::new((), 0),
-                    edge_rendering_type(
-                        colors.edge_true,
-                        0.2,
-                        1.0,
-                        0.0, // No dashing
-                    ),
-                ),
-                // False edge
-                (
-                    EdgeType::new((), 1),
-                    edge_rendering_type(colors.edge_false, 0.2, 0.3, 0.15),
-                ),
-                // Label edge
-                (
-                    EdgeType::new((), 2),
-                    edge_rendering_type(colors.edge_label, 0.15, 1.0, 0.0),
-                ),
-            ]),
-            NodeRenderingColorConfig {
-                select: colors.selection,
-                partial_select: colors.selection_partial,
-                hover: colors.selection_hover,
-                partial_hover: colors.selection_hover_partial,
-                text: colors.node_text,
-            },
-            LayerRenderingColorConfig {
-                background1: colors.layer_background1.into(),
-                background2: colors.layer_background2.into(),
-                text: colors.layer_text,
-            },
-            font.clone(),
-        )
-        .unwrap();
-        let layout = LayeredLayout::new(
-            // SugiyamaOrdering::new(2, 2),
-            SequenceOrdering::new(EdgeLayerOrdering, SugiyamaOrdering::new(2, 2)),
-            // AverageGroupAlignment,
-            OrderingGroupAlignment,
-            // BrandesKopfPositioning,
-            BrandesKopfPositioningCorrected,
-            // DummyLayerPositioning,
-            0.3,
-        );
-        let layout = TransitionLayout::new(layout);
-        let graph = OxiddGraphStructure::new(
-            self.roots.iter().cloned().collect(),
-            self.levels.clone(),
-            terminal_to_string,
-        );
-        let diagram = MTBDDDiagramDrawer::new(graph, renderer, layout, colors.clone(), font);
+        let graph =
+            OxiddGraphStructure::new(self.roots.iter().cloned().collect(), self.levels.clone());
+        let diagram = MTBDDDiagramDrawer::new(graph, canvas);
         Box::new(diagram)
     }
-}
-
-fn terminal_to_string<T: ToString>(terminal: &T) -> String {
-    terminal.to_string()
 }
 
 #[derive(Clone)]
@@ -415,17 +331,28 @@ impl LatexLayerStyle for LayerData {
     }
 }
 
-pub struct MTBDDDiagramDrawer<
-    T: DrawTag + Serializable<T> + 'static,
-    G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
-    R: Renderer<T, NodeData, LayerData>,
-    L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>>,
-> {
-    graph: MGraph<T, G>,
-    group_manager: MutRcRefCell<GM<T, G>>,
-    presence_adjuster: MPresenceAdjuster<T, G>,
+type GroupedGraph =
+    GroupPresenceAdjuster<GroupLabelAdjuster<NodeData, LayerData, GroupManager<Graph>>>;
+type Graph = RCGraph<TerminalLevelAdjuster<PresenceAdjuster>>;
+type PresenceAdjuster =
+    RCGraph<NodePresenceAdjuster<PointerNodeAdjuster<TerminalLevelAdjuster<BaseGraph>>>>;
+type BaseGraph = OxiddGraphStructure<(), DummyMTBDDFunction, MTBDDTerminal>;
+
+type Layout = TransitionLayout<
+    LayeredLayout<
+        GroupedGraph,
+        SequenceOrdering<GroupedGraph, EdgeLayerOrdering, SugiyamaOrdering>,
+        OrderingGroupAlignment,
+        BrandesKopfPositioningCorrected,
+    >,
+>;
+
+pub struct MTBDDDiagramDrawer {
+    graph: Graph,
+    group_manager: MutRcRefCell<GroupManager<Graph>>,
+    presence_adjuster: PresenceAdjuster,
     time: MutRcRefCell<u32>,
-    drawer: MutRcRefCell<Drawer<T, NodeData, LayerData, R, L, GMGraph<T, G>>>,
+    drawer: MutRcRefCell<Drawer<WebglRenderer<()>, Layout, GroupedGraph>>,
     config: Configuration<
         LocationConfig<
             PanelConfig<
@@ -447,46 +374,82 @@ pub struct MTBDDDiagramDrawer<
     >,
 }
 
-type GraphLabel = PresenceLabel<PointerLabel<NodeLabel<MTBDDTerminal>>>;
-type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
-type MGraph<T, G> = RCGraph<
-    T,
-    GraphLabel,
-    String,
-    TerminalLevelAdjuster<T, GraphLabel, String, MPresenceAdjuster<T, G>>,
->;
-type MPresenceAdjuster<T, G> = RCGraph<
-    T,
-    GraphLabel,
-    String,
-    NodePresenceAdjuster<T, PointerLabel<NodeLabel<MTBDDTerminal>>, String, MPointerAdjuster<T, G>>,
->;
-type MPointerAdjuster<T, G> =
-    PointerNodeAdjuster<T, NodeLabel<MTBDDTerminal>, String, MBaseGraph<T, G>>;
-type MBaseGraph<T, G> = TerminalLevelAdjuster<T, NodeLabel<MTBDDTerminal>, String, G>;
-type GMGraph<T, G> = GroupPresenceAdjuster<
-    T,
-    NodeData,
-    LayerData,
-    GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData, LayerData>,
->;
+impl MTBDDDiagramDrawer {
+    pub fn new(graph: BaseGraph, canvas: HtmlCanvasElement) -> Self {
+        let colors = &MTBDDColors::LIGHT;
 
-impl<
-        T: DrawTag + Serializable<T> + 'static,
-        G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
-        R: Renderer<T, NodeData, LayerData> + 'static,
-        L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>> + 'static,
-    > MTBDDDiagramDrawer<T, G, R, L>
-{
-    pub fn new(graph: G, renderer: R, layout: L, colors: MTBDDColors, font: Rc<Font>) -> Self {
+        let edge_rendering_type =
+            |color: Color, width: f32, dash_solid: f32, dash_transparent: f32| EdgeRenderingType {
+                select_color: color.mix_transparent(&colors.selection),
+                partial_select_color: color.mix_transparent(&colors.selection_partial),
+                hover_color: color.mix_transparent(&colors.selection_hover),
+                partial_hover_color: color.mix_transparent(&colors.selection_hover_partial),
+                color,
+                width,
+                dash_solid,
+                dash_transparent,
+            };
+
+        let font = Rc::new(Font::new(
+            include_bytes!("../../../resources/Roboto-Bold.ttf").to_vec(),
+            1.0,
+        ));
+        let renderer = WebglRenderer::from_canvas(
+            canvas,
+            HashMap::from([
+                // True edge
+                (
+                    EdgeType::new((), 0),
+                    edge_rendering_type(
+                        colors.edge_true,
+                        0.2,
+                        1.0,
+                        0.0, // No dashing
+                    ),
+                ),
+                // False edge
+                (
+                    EdgeType::new((), 1),
+                    edge_rendering_type(colors.edge_false, 0.2, 0.3, 0.15),
+                ),
+                // Label edge
+                (
+                    EdgeType::new((), 2),
+                    edge_rendering_type(colors.edge_label, 0.15, 1.0, 0.0),
+                ),
+            ]),
+            NodeRenderingColorConfig {
+                select: colors.selection,
+                partial_select: colors.selection_partial,
+                hover: colors.selection_hover,
+                partial_hover: colors.selection_hover_partial,
+                text: colors.node_text,
+            },
+            LayerRenderingColorConfig {
+                background1: colors.layer_background1.into(),
+                background2: colors.layer_background2.into(),
+                text: colors.layer_text,
+            },
+            font.clone(),
+        )
+        .unwrap();
+        let layout = LayeredLayout::new(
+            // SugiyamaOrdering::new(2, 2),
+            SequenceOrdering::new(EdgeLayerOrdering, SugiyamaOrdering::new(2, 2)),
+            // AverageGroupAlignment,
+            OrderingGroupAlignment,
+            // BrandesKopfPositioning,
+            BrandesKopfPositioningCorrected,
+            // DummyLayerPositioning,
+            0.3,
+        );
+        let layout = TransitionLayout::new(layout);
+
         let original_roots = graph.get_roots().clone();
         let base_graph = TerminalLevelAdjuster::new(graph); // Make sure that terminal levels make sense before possibly adding pointers to these terminals
         let pointer_adjuster = PointerNodeAdjuster::new(
             base_graph,
-            EdgeType {
-                tag: T::default(),
-                index: 2,
-            },
+            EdgeType { tag: (), index: 2 },
             true,
             "".to_string(),
         );
@@ -497,7 +460,7 @@ impl<
 
         let (terminal_min, terminal_max) = (FloatConfig::new(0.), FloatConfig::new(1.));
         let (terminal_min_ref, terminal_max_ref) = (terminal_min.clone(), terminal_max.clone());
-        let mut grouped_graph = GMGraph::new(GroupLabelAdjuster::new_shared(
+        let mut grouped_graph = GroupPresenceAdjuster::new(GroupLabelAdjuster::new_shared(
             group_manager.clone(),
             move |nodes| {
                 let (is_terminal, is_group, color) = match (nodes.get(0), nodes.get(1)) {
@@ -562,62 +525,42 @@ impl<
         ));
         grouped_graph.hide(0);
 
-        let composite_config = CompositeConfig::new(
-            (
-                ButtonConfig::new_labeled("Generate latex"),
-                TextOutputConfig::new(true),
-                ButtonConfig::new_labeled("Expand all nodes"),
-                LabelConfig::new_styled(
-                    "Terminals",
-                    LabelStyle::Above,
-                    CompositeConfig::new(
-                        (
-                            ButtonConfig::new_labeled("Expand"),
-                            LabelConfig::new("0 visibility", {
-                                let mut c = ChoiceConfig::new([
-                                    Choice::new(PresenceRemainder::Show, "show"),
-                                    Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                                    Choice::new(PresenceRemainder::Hide, "hide"),
-                                ]);
-                                c.set_index(2).commit();
-                                c
-                            }),
-                            LabelConfig::new(
-                                "1 visibility",
-                                ChoiceConfig::new([
-                                    Choice::new(PresenceRemainder::Show, "show"),
-                                    Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                                    Choice::new(PresenceRemainder::Hide, "hide"),
-                                ]),
-                            ),
-                            LabelConfig::new(
-                                "range",
-                                CompositeConfig::new_horizontal(
-                                    (terminal_min, terminal_max),
-                                    |(f1, f2)| vec![Box::new(f1.clone()), Box::new(f2.clone())],
-                                ),
-                            ),
-                        ),
-                        |(f1, f2, f3, f4)| {
-                            vec![
-                                Box::new(f1.clone()),
-                                Box::new(f2.clone()),
-                                Box::new(f3.clone()),
-                                Box::new(f4.clone()),
-                            ]
-                        },
+        let composite_config = CompositeConfig::new((
+            ButtonConfig::new_labeled("Generate latex"),
+            TextOutputConfig::new(true),
+            ButtonConfig::new_labeled("Expand all nodes"),
+            LabelConfig::new_styled(
+                "Terminals",
+                LabelStyle::Above,
+                CompositeConfig::new((
+                    ButtonConfig::new_labeled("Expand"),
+                    LabelConfig::new("0 visibility", {
+                        let mut c = ChoiceConfig::new([
+                            Choice::new(PresenceRemainder::Show, "show"),
+                            Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                            Choice::new(PresenceRemainder::Hide, "hide"),
+                        ]);
+                        c.set_index(2).commit();
+                        c
+                    }),
+                    LabelConfig::new(
+                        "1 visibility",
+                        ChoiceConfig::new([
+                            Choice::new(PresenceRemainder::Show, "show"),
+                            Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                            Choice::new(PresenceRemainder::Hide, "hide"),
+                        ]),
                     ),
-                ),
+                    LabelConfig::new(
+                        "range",
+                        CompositeConfig::new_horizontal(
+                            (terminal_min, terminal_max),
+                            |(f1, f2)| vec![Box::new(f1.clone()), Box::new(f2.clone())],
+                        ),
+                    ),
+                )),
             ),
-            |(f1, f2, f3, f4)| {
-                vec![
-                    Box::new(f1.clone()),
-                    Box::new(f2.clone()),
-                    Box::new(f3.clone()),
-                    Box::new(f4.clone()),
-                ]
-            },
-        );
+        ));
         let config = Configuration::new(LocationConfig::new(
             Location::BOTTOM_RIGHT,
             PanelConfig::builder()
@@ -648,7 +591,7 @@ impl<
         let (terminal_range_start, terminal_range_end) = &***terminal_range;
 
         let drawer = out.drawer.clone();
-        let mut latex_renderer = LatexRenderer::new();
+        let mut latex_renderer = LatexRenderer::<Layout>::new();
         let mut output = latex_output.clone();
         generate_latex.clone().add_press_listener(move || {
             latex_renderer.update_layout(&drawer.get().get_current_layout());
@@ -685,11 +628,8 @@ impl<
             }
         });
 
-        fn set_terminal_presence<
-            T: DrawTag + Serializable<T> + 'static,
-            G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
-        >(
-            presence_adjuster: &MPresenceAdjuster<T, G>,
+        fn set_terminal_presence(
+            presence_adjuster: &PresenceAdjuster,
             terminal: MTBDDTerminal,
             presence: PresenceRemainder,
         ) -> () {
@@ -740,11 +680,8 @@ impl<
     }
 }
 
-fn reveal_all<
-    T: DrawTag + Serializable<T> + 'static,
-    G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
->(
-    group_manager: &MutRcRefCell<GM<T, G>>,
+fn reveal_all<G: GraphStructure>(
+    group_manager: &MutRcRefCell<GroupManager<G>>,
     from_id: NodeGroupID,
     limit: usize,
 ) {
@@ -770,13 +707,7 @@ fn reveal_all<
     }
 }
 
-impl<
-        T: DrawTag + Serializable<T> + 'static,
-        G: GraphStructure<T, NodeLabel<MTBDDTerminal>, String> + StateStorage + 'static,
-        R: Renderer<T, NodeData, LayerData>,
-        L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>>,
-    > DiagramSectionDrawer for MTBDDDiagramDrawer<T, G, R, L>
-{
+impl DiagramSectionDrawer for MTBDDDiagramDrawer {
     fn render(&mut self, time: u32) -> () {
         *self.time.get() = time;
         self.drawer.get().render(time);

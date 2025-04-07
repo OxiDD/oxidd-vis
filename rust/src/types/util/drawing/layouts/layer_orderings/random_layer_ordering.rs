@@ -27,10 +27,10 @@ impl RandomLayerOrdering {
         }
     }
 }
-impl<T: DrawTag, GL, LL> LayerOrdering<T, GL, LL> for RandomLayerOrdering {
+impl<G: GroupedGraphStructure> LayerOrdering<G> for RandomLayerOrdering {
     fn order_nodes(
         &self,
-        _graph: &impl GroupedGraphStructure<T, GL, LL>,
+        _graph: &G,
         layers: &Vec<Order>,
         _edges: &EdgeMap,
         _dummy_group_start_id: NodeGroupID,

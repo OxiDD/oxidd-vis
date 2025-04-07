@@ -41,46 +41,33 @@ use super::{
     },
 };
 pub struct LayeredLayout<
-    T: DrawTag,
-    GL,
-    LL,
-    O: LayerOrdering<T, GL, LL>,
-    G: LayerGroupSorting<T, GL, LL>,
-    P: NodePositioning<T, GL, LL>,
+    G: GroupedGraphStructure,
+    O: LayerOrdering<G>,
+    GS: LayerGroupSorting<G>,
+    P: NodePositioning<G>,
 > {
     ordering: O,
-    group_aligning: G,
+    group_aligning: GS,
     positioning: P,
     max_curve_offset: f32,
-    tag: PhantomData<T>,
-    group_label: PhantomData<GL>,
-    level_label: PhantomData<LL>,
     group_edge_data: EdgeLayoutData,
+    graph: PhantomData<G>,
 }
 
 impl<
-        T: DrawTag,
-        GL,
-        LL,
-        O: LayerOrdering<T, GL, LL>,
-        G: LayerGroupSorting<T, GL, LL>,
-        P: NodePositioning<T, GL, LL>,
-    > LayeredLayout<T, GL, LL, O, G, P>
+        G: GroupedGraphStructure,
+        O: LayerOrdering<G>,
+        GS: LayerGroupSorting<G>,
+        P: NodePositioning<G>,
+    > LayeredLayout<G, O, GS, P>
 {
-    pub fn new(
-        ordering: O,
-        group_aligning: G,
-        positioning: P,
-        max_curve_offset: f32,
-    ) -> LayeredLayout<T, GL, LL, O, G, P> {
+    pub fn new(ordering: O, group_aligning: GS, positioning: P, max_curve_offset: f32) -> Self {
         LayeredLayout {
             ordering,
             group_aligning,
             positioning,
             max_curve_offset,
-            tag: PhantomData,
-            group_label: PhantomData,
-            level_label: PhantomData,
+            graph: PhantomData,
             group_edge_data: EdgeLayoutData {
                 weight: 1000,
                 order: -1,
@@ -91,7 +78,7 @@ impl<
     pub fn get_ordering(&mut self) -> &mut O {
         &mut self.ordering
     }
-    pub fn get_group_aligning(&mut self) -> &mut G {
+    pub fn get_group_aligning(&mut self) -> &mut GS {
         &mut self.group_aligning
     }
     pub fn get_positioning_aligning(&mut self) -> &mut P {
@@ -111,22 +98,28 @@ pub fn is_edge_dummy(node: NodeGroupID, dummy_edge_start_id: NodeGroupID) -> boo
 }
 
 impl<
-        T: DrawTag,
-        NS: NodeStyle + WidthLabel,
-        LS: LayerStyle,
-        O: LayerOrdering<T, NS, LS>,
-        S: LayerGroupSorting<T, NS, LS>,
-        P: NodePositioning<T, NS, LS>,
-        G: GroupedGraphStructure<T, NS, LS>,
-    > LayoutRules<T, NS, LS, G> for LayeredLayout<T, NS, LS, O, S, P>
+        G: GroupedGraphStructure,
+        O: LayerOrdering<G>,
+        S: LayerGroupSorting<G>,
+        P: NodePositioning<G>,
+    > LayoutRules for LayeredLayout<G, O, S, P>
+where
+    G::GL: NodeStyle + WidthLabel,
+    G::LL: LayerStyle,
 {
+    type T = G::T;
+    type NS = G::GL;
+    type LS = G::LL;
+    type Tracker = G::Tracker;
+    type G = G;
+
     fn layout(
         &mut self,
         graph: &G,
-        old: &DiagramLayout<T, NS, LS>,
+        old: &DiagramLayout<Self::T, Self::NS, Self::LS>,
         sources: &G::Tracker,
         time: u32,
-    ) -> DiagramLayout<T, NS, LS> {
+    ) -> DiagramLayout<Self::T, Self::NS, Self::LS> {
         // Setup the layers and edges, and a way of adding o them
         let mut layers: Vec<Order> = Vec::new();
         let mut edges: EdgeMap = HashMap::new();
@@ -209,12 +202,15 @@ impl<
     }
 }
 
-fn get_node_width<T: DrawTag, GL: WidthLabel, LL>(
+fn get_node_width<G: GroupedGraphStructure>(
     node: NodeGroupID,
-    graph: &impl GroupedGraphStructure<T, GL, LL>,
+    graph: &G,
     owners: &HashMap<NodeGroupID, NodeGroupID>,
     dummy_group_start_id: NodeGroupID,
-) -> f32 {
+) -> f32
+where
+    G::GL: WidthLabel,
+{
     let owner = owners.get(&node).cloned().unwrap_or(node);
     if owner < dummy_group_start_id {
         graph.get_group_label(owner).get_width()
@@ -238,14 +234,18 @@ fn add_to_edges(edges: &mut EdgeMap, from: NodeGroupID, to: NodeGroupID, data: E
         .insert(to, data);
 }
 
-fn add_groups_with_dummies<T: DrawTag, GL, LL>(
-    graph: &impl GroupedGraphStructure<T, GL, LL>,
+fn add_groups_with_dummies<G: GroupedGraphStructure>(
+    graph: &G,
     layers: &mut Vec<Order>,
     edges: &mut EdgeMap,
     group_edge_data: EdgeLayoutData,
     dummy_owners: &mut HashMap<NodeGroupID, NodeGroupID>,
     next_free_id: &mut NodeGroupID,
-) -> (NodeGroupID, HashMap<NodeGroupID, HashMap<u32, usize>>) {
+) -> (NodeGroupID, HashMap<NodeGroupID, HashMap<u32, usize>>)
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
+{
     let mut group_layers: HashMap<NodeGroupID, HashMap<u32, usize>> = HashMap::new();
     for group in graph.get_all_groups() {
         let (start, _end) = graph.get_level_range(group);
@@ -278,20 +278,27 @@ fn add_groups_with_dummies<T: DrawTag, GL, LL>(
     (dummy_group_start_id, group_layers)
 }
 
-fn add_edges_with_dummies<T: DrawTag, GL, LL>(
-    graph: &impl GroupedGraphStructure<T, GL, LL>,
+fn add_edges_with_dummies<G: GroupedGraphStructure>(
+    graph: &G,
     layers: &mut Vec<Order>,
     edges: &mut EdgeMap,
     dummy_owners: &mut HashMap<NodeGroupID, NodeGroupID>,
     group_layers: &HashMap<NodeGroupID, HashMap<u32, usize>>,
     next_free_id: &mut NodeGroupID,
 ) -> (
-    HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>>,
-    HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)>,
-) {
-    let mut edge_bend_nodes: HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>> = HashMap::new();
-    let mut edge_connection_nodes: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)> =
+    HashMap<(NodeGroupID, EdgeData<G::T>), Vec<NodeGroupID>>,
+    HashMap<(NodeGroupID, EdgeData<G::T>), (NodeGroupID, NodeGroupID)>,
+)
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
+{
+    let mut edge_bend_nodes: HashMap<(NodeGroupID, EdgeData<G::T>), Vec<NodeGroupID>> =
         HashMap::new();
+    let mut edge_connection_nodes: HashMap<
+        (NodeGroupID, EdgeData<G::T>),
+        (NodeGroupID, NodeGroupID),
+    > = HashMap::new();
 
     for group in graph.get_all_groups() {
         // let (parent_start_level, parent_end_level) = graph.get_level_range(group);
@@ -449,16 +456,20 @@ fn remove_group_crossings(
     }
 }
 
-fn format_layout<T: DrawTag, NS: NodeStyle + WidthLabel, LS: LayerStyle>(
-    graph: &impl GroupedGraphStructure<T, NS, LS>,
+fn format_layout<G: GroupedGraphStructure>(
+    graph: &G,
     max_curve_offset: f32,
     node_positions: HashMap<usize, Point>,
     node_widths: &HashMap<NodeGroupID, f32>,
     layer_positions: HashMap<LevelNo, f32>,
-    edge_bend_nodes: HashMap<(NodeGroupID, EdgeData<T>), Vec<NodeGroupID>>,
-    edge_connection_nodes: HashMap<(NodeGroupID, EdgeData<T>), (NodeGroupID, NodeGroupID)>,
+    edge_bend_nodes: HashMap<(NodeGroupID, EdgeData<G::T>), Vec<NodeGroupID>>,
+    edge_connection_nodes: HashMap<(NodeGroupID, EdgeData<G::T>), (NodeGroupID, NodeGroupID)>,
     dummy_group_start_id: usize,
-) -> DiagramLayout<T, NS, LS> {
+) -> DiagramLayout<G::T, G::GL, G::LL>
+where
+    G::GL: NodeStyle + WidthLabel,
+    G::LL: LayerStyle,
+{
     let node_size = 1.; // TODO: make configurable
     let node_size_shift = -0.5
         * Point {

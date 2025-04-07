@@ -32,9 +32,7 @@ use super::{
     storage::state_storage::StateStorage,
 };
 
-pub struct GroupManager<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> {
-    node_label: PhantomData<NL>,
-    level_label: PhantomData<LL>,
+pub struct GroupManager<G: GraphStructure> {
     graph: G,
     graph_events: GraphEventsReader,
 
@@ -42,7 +40,7 @@ pub struct GroupManager<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, N
     /// - group_by_id[group_id_by_node[node]].nodes.contains(node)
     /// - or !group_id_by_node.contains(node) && !exists g. group_by_id[g].nodes.contains(node)
     group_id_by_node: HashMap<NodeID, NodeGroupID>,
-    group_by_id: HashMap<NodeGroupID, NodeGroup<T>>,
+    group_by_id: HashMap<NodeGroupID, NodeGroup<G::T>>,
     // free_ids: FreeIdManager<usize>,
     // returned_ids: HashSet<usize>,
     /// Source trackers to manage sources obtained from the groupedGraphStructure
@@ -90,7 +88,7 @@ impl<T: DrawTag> Display for NodeGroup<T> {
 }
 
 // Helper methods
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManager<T, NL, LL, G> {
+impl<G: GraphStructure> GroupManager<G> {
     fn process_graph_events(&mut self) {
         let events = self.graph.consume_events(&self.graph_events);
 
@@ -222,7 +220,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         self.group_ids.make_available(id);
     }
 
-    fn remove_edges_to_set(edges: &mut EdgeCounts<T>, edge_data: EdgeData<T>, count: usize) {
+    fn remove_edges_to_set(edges: &mut EdgeCounts<G::T>, edge_data: EdgeData<G::T>, count: usize) {
         if let Some(cur_count) = edges.get_mut(&edge_data) {
             *cur_count -= count;
             if *cur_count <= 0 {
@@ -239,11 +237,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         to: NodeGroupID,
         to_source: NodeID,
         to_level: LevelNo,
-        edge_type: EdgeType<T>,
+        edge_type: EdgeType<G::T>,
         count: usize,
     ) {
         if let Some(from_group) = self.group_by_id.get_mut(&from) {
-            GroupManager::<T, NL, LL, G>::remove_edges_to_set(
+            GroupManager::<G>::remove_edges_to_set(
                 &mut from_group.out_edges,
                 EdgeData::new(to, from_level, to_level, edge_type),
                 count,
@@ -255,7 +253,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         }
 
         if let Some(to_group) = self.group_by_id.get_mut(&to) {
-            GroupManager::<T, NL, LL, G>::remove_edges_to_set(
+            GroupManager::<G>::remove_edges_to_set(
                 &mut to_group.in_edges,
                 EdgeData::new(from, to_level, from_level, edge_type),
                 count,
@@ -267,7 +265,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         }
     }
 
-    fn add_edges_to_set(edges: &mut EdgeCounts<T>, edge_data: EdgeData<T>, count: usize) {
+    fn add_edges_to_set(edges: &mut EdgeCounts<G::T>, edge_data: EdgeData<G::T>, count: usize) {
         let cur_count = edges.entry(edge_data).or_insert(0);
         *cur_count += count;
     }
@@ -278,7 +276,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         from_source: NodeID,
         to: NodeGroupID,
         to_source: NodeID,
-        edge_type: EdgeType<T>,
+        edge_type: EdgeType<G::T>,
         count: usize,
     ) {
         let from_level = self.graph.get_level(from_source);
@@ -306,7 +304,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 
         // self.ensure_node_in_group(from_source);
         if let Some(from_group) = self.group_by_id.get_mut(&from) {
-            GroupManager::<T, NL, LL, G>::add_edges_to_set(
+            GroupManager::<G>::add_edges_to_set(
                 &mut from_group.out_edges,
                 EdgeData::new(to, from_level, to_level, edge_type),
                 count,
@@ -321,7 +319,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 
         // self.ensure_node_in_group(to_source);
         if let Some(to_group) = self.group_by_id.get_mut(&to) {
-            GroupManager::<T, NL, LL, G>::add_edges_to_set(
+            GroupManager::<G>::add_edges_to_set(
                 &mut to_group.in_edges,
                 EdgeData::new(from, to_level, from_level, edge_type),
                 count,
@@ -516,11 +514,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
 }
 
 // Main methods
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManager<T, NL, LL, G> {
-    pub fn new(mut graph: G) -> GroupManager<T, NL, LL, G> {
+impl<G: GraphStructure> GroupManager<G> {
+    pub fn new(mut graph: G) -> GroupManager<G> {
         let mut gm = GroupManager {
-            level_label: PhantomData,
-            node_label: PhantomData,
             graph_events: graph.create_event_reader(),
             group_id_by_node: HashMap::new(),
             group_by_id: HashMap::new(),
@@ -565,7 +561,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
         self.graph.consume_events(&self.graph_events);
     }
 
-    pub fn get_groups(&self) -> &HashMap<NodeGroupID, NodeGroup<T>> {
+    pub fn get_groups(&self) -> &HashMap<NodeGroupID, NodeGroup<G::T>> {
         &self.group_by_id
     }
 
@@ -693,9 +689,10 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManage
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    GroupedGraphStructure<T, Vec<NL>, LL> for GroupManager<T, NL, LL, G>
-{
+impl<G: GraphStructure> GroupedGraphStructure for GroupManager<G> {
+    type T = G::T;
+    type GL = Vec<G::NL>;
+    type LL = G::LL;
     type Tracker = NodeTrackerM;
     fn get_roots(&self) -> Vec<NodeGroupID> {
         let root_nodes = self.graph.get_roots();
@@ -722,7 +719,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         }
     }
 
-    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
+    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<G::T>> {
         self.group_by_id.get(&group).map_or_else(
             || Vec::default(),
             |group| {
@@ -743,12 +740,12 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                         },
                     )
                     .sorted()
-                    .collect::<Vec<EdgeCountData<T>>>()
+                    .collect::<Vec<_>>()
             },
         )
     }
 
-    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
+    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<G::T>> {
         self.group_by_id.get(&group).map_or_else(
             || Vec::default(),
             |group| {
@@ -769,7 +766,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
                         },
                     )
                     .sorted()
-                    .collect::<Vec<EdgeCountData<T>>>()
+                    .collect::<Vec<_>>()
             },
         )
     }
@@ -807,11 +804,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         self.group_ids.create_reader()
     }
 
-    fn get_level_label(&self, level: LevelNo) -> LL {
+    fn get_level_label(&self, level: LevelNo) -> G::LL {
         self.graph.get_level_label(level)
     }
 
-    fn get_group_label(&self, group_id: NodeID) -> Vec<NL> {
+    fn get_group_label(&self, group_id: NodeID) -> Vec<G::NL> {
         self.group_by_id.get(&group_id).map_or_else(
             || Vec::default(),
             |group| {
@@ -829,11 +826,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
-    for GroupManager<T, NL, LL, G>
-where
-    G: StateStorage,
-{
+impl<G: GraphStructure + StateStorage> StateStorage for GroupManager<G> {
     fn write(&self, stream: &mut Cursor<&mut Vec<u8>>) -> Result<()> {
         self.graph.write(stream)?;
         let group_count = self.group_by_id.len();
@@ -906,10 +899,7 @@ where
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GroupManager<T, NL, LL, G>
-where
-    G: StateStorage,
-{
+impl<G: GraphStructure> GroupManager<G> {
     // This function can be used to make sure that all nodes in the given set are found through "children" accesses. The graph structure assumes that all reference node IDs are found this way, so it's important that if the ID is obtained another way it's found using this function before further use
     fn explore_from_root(&mut self, nodes: HashSet<NodeID>) {
         let mut found = HashSet::new();

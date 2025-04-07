@@ -27,10 +27,10 @@ use crate::{
 
 pub struct BrandesKopfPositioningCorrected;
 
-impl<T: DrawTag, S, LS> NodePositioning<T, S, LS> for BrandesKopfPositioningCorrected {
+impl<G: GroupedGraphStructure> NodePositioning<G> for BrandesKopfPositioningCorrected {
     fn position_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, S, LS>,
+        graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         node_widths: &HashMap<NodeGroupID, f32>,

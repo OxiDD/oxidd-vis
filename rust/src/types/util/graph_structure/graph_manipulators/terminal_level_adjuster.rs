@@ -19,35 +19,22 @@ use crate::{
     wasm_interface::NodeID,
 };
 
-pub struct TerminalLevelAdjuster<
-    T: DrawTag + 'static,
-    NL: Clone + 'static,
-    LL: Clone + 'static,
-    G: GraphStructure<T, NL, LL> + 'static,
-> {
+pub struct TerminalLevelAdjuster<G: GraphStructure + 'static> {
     graph: G,
     event_writer: GraphEventsWriter,
     graph_events: GraphEventsReader,
 
     level_cache: HashMap<NodeID, LevelNo>,
     terminal_parents_cache: HashMap<NodeID, HashSet<NodeID>>,
-    node_label: PhantomData<NL>,
-    level_label: PhantomData<LL>,
-    tag: PhantomData<T>,
 }
 
-impl<T: DrawTag + 'static, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    TerminalLevelAdjuster<T, NL, LL, G>
-{
-    pub fn new(mut graph: G) -> TerminalLevelAdjuster<T, NL, LL, G> {
+impl<G: GraphStructure> TerminalLevelAdjuster<G> {
+    pub fn new(mut graph: G) -> TerminalLevelAdjuster<G> {
         let mut ta = TerminalLevelAdjuster {
             level_cache: HashMap::new(),
             graph_events: graph.create_event_reader(),
             event_writer: GraphEventsWriter::new(),
             terminal_parents_cache: HashMap::new(),
-            node_label: PhantomData,
-            level_label: PhantomData,
-            tag: PhantomData,
             graph,
         };
         ta.init_terminals_cache();
@@ -110,8 +97,7 @@ impl<T: DrawTag + 'static, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
-    for TerminalLevelAdjuster<T, NL, LL, G>
+impl<G: GraphStructure> StateStorage for TerminalLevelAdjuster<G>
 where
     G: StateStorage,
 {
@@ -125,9 +111,11 @@ where
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStructure<T, NL, LL>
-    for TerminalLevelAdjuster<T, NL, LL, G>
-{
+impl<G: GraphStructure> GraphStructure for TerminalLevelAdjuster<G> {
+    type T = G::T;
+    type NL = G::NL;
+    type LL = G::LL;
+
     fn get_roots(&self) -> Vec<NodeID> {
         self.graph.get_roots()
     }
@@ -136,11 +124,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
         self.graph.get_terminals()
     }
 
-    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<Self::T>, NodeID)> {
         self.graph.get_known_parents(node)
     }
 
-    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<Self::T>, NodeID)> {
         let children = self.graph.get_children(node);
 
         // When new children are found, it might be a connection to a terminal which might cause the level of the terminal to need to be updated, so we do this here
@@ -200,11 +188,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
         }
     }
 
-    fn get_node_label(&self, node: NodeID) -> NL {
+    fn get_node_label(&self, node: NodeID) -> Self::NL {
         self.graph.get_node_label(node)
     }
 
-    fn get_level_label(&self, level: LevelNo) -> LL {
+    fn get_level_label(&self, level: LevelNo) -> Self::LL {
         self.graph.get_level_label(level)
     }
 

@@ -25,12 +25,19 @@ use super::{
     util::layered::layer_orderer::{EdgeMap, Order},
 };
 
-pub struct SugiyamaLibLayout<T: DrawTag, S, LS> {
-    layout:
-        LayeredLayout<T, S, LS, DummyLayerOrdering, AverageGroupAlignment, SugiyamaLibPositioning>,
+pub struct SugiyamaLibLayout<G: GroupedGraphStructure>
+where
+    G::GL: NodeStyle + WidthLabel,
+    G::LL: LayerStyle,
+{
+    layout: LayeredLayout<G, DummyLayerOrdering, AverageGroupAlignment, SugiyamaLibPositioning>,
 }
-impl<T: DrawTag, S, LS> SugiyamaLibLayout<T, S, LS> {
-    pub fn new(max_curve_offset: f32) -> SugiyamaLibLayout<T, S, LS> {
+impl<G: GroupedGraphStructure> SugiyamaLibLayout<G>
+where
+    G::GL: NodeStyle + WidthLabel,
+    G::LL: LayerStyle,
+{
+    pub fn new(max_curve_offset: f32) -> Self {
         SugiyamaLibLayout {
             layout: LayeredLayout::new(
                 DummyLayerOrdering,
@@ -42,24 +49,31 @@ impl<T: DrawTag, S, LS> SugiyamaLibLayout<T, S, LS> {
     }
 }
 
-impl<T: DrawTag, S: NodeStyle + WidthLabel, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>
-    LayoutRules<T, S, LS, G> for SugiyamaLibLayout<T, S, LS>
+impl<G: GroupedGraphStructure> LayoutRules for SugiyamaLibLayout<G>
+where
+    G::GL: NodeStyle + WidthLabel,
+    G::LL: LayerStyle,
 {
+    type T = G::T;
+    type NS = G::GL;
+    type LS = G::LL;
+    type Tracker = G::Tracker;
+    type G = G;
     fn layout(
         &mut self,
         graph: &G,
-        old: &DiagramLayout<T, S, LS>,
+        old: &DiagramLayout<Self::T, Self::NS, Self::LS>,
         sources: &G::Tracker,
         time: u32,
-    ) -> DiagramLayout<T, S, LS> {
+    ) -> DiagramLayout<Self::T, Self::NS, Self::LS> {
         self.layout.layout(graph, old, sources, time)
     }
 }
 struct SugiyamaLibPositioning;
-impl<T: DrawTag, S, LS> NodePositioning<T, S, LS> for SugiyamaLibPositioning {
+impl<G: GroupedGraphStructure> NodePositioning<G> for SugiyamaLibPositioning {
     fn position_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, S, LS>,
+        graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         node_widths: &HashMap<NodeGroupID, f32>,

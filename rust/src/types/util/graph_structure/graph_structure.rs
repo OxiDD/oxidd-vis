@@ -18,19 +18,24 @@ use crate::{
     wasm_interface::NodeID,
 };
 
+use super::oxidd_graph_structure::OxiddGraphStructure;
+
 /// A graph structure trait used as the data to visualize
-pub trait GraphStructure<T: DrawTag, NL: Clone, LL: Clone> {
+pub trait GraphStructure {
+    type T: DrawTag;
+    type NL: Clone;
+    type LL: Clone;
     fn get_roots(&self) -> Vec<NodeID>;
     fn get_terminals(&self) -> Vec<NodeID>;
     /// Only returns connections that have already been discovered by calling get_children
-    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)>;
+    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<Self::T>, NodeID)>;
     /// This is only supported for nodeIDs that have been obtained from this interface before
-    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)>;
+    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<Self::T>, NodeID)>;
     fn get_level(&mut self, node: NodeID) -> LevelNo;
 
     // Labels for displaying information about nodes
-    fn get_node_label(&self, node: NodeID) -> NL;
-    fn get_level_label(&self, level: LevelNo) -> LL;
+    fn get_node_label(&self, node: NodeID) -> Self::NL;
+    fn get_level_label(&self, level: LevelNo) -> Self::LL;
 
     /// Change events are created for all nodes that have been obtained from this interface before, but might not be invoked for not yet "discovered" nodes
     fn create_event_reader(&mut self) -> GraphEventsReader;
@@ -41,7 +46,6 @@ pub trait GraphStructure<T: DrawTag, NL: Clone, LL: Clone> {
     /// Retrieves the local nodes representing the collection of sources
     fn source_nodes_to_local(&self, nodes: Vec<NodeID>) -> Vec<NodeID>;
 }
-
 // pub type GraphListener = dyn Fn(&Vec<Change>) -> ();
 
 pub trait DrawTag: Tag + Hash + Ord {}

@@ -18,32 +18,21 @@ use crate::{
 };
 
 // A cloneable graph such that multiple places can share ownership
-pub struct RCGraph<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> {
+pub struct RCGraph<G: GraphStructure> {
     graph: MutRcRefCell<G>,
-    tag: PhantomData<T>,
-    node_label: PhantomData<NL>,
-    level_label: PhantomData<LL>,
 }
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> Clone
-    for RCGraph<T, NL, LL, G>
-{
+impl<G: GraphStructure> Clone for RCGraph<G> {
     fn clone(&self) -> Self {
         Self {
             graph: self.graph.clone(),
-            tag: self.tag.clone(),
-            node_label: self.node_label.clone(),
-            level_label: self.level_label.clone(),
         }
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> RCGraph<T, NL, LL, G> {
-    pub fn new(graph: G) -> RCGraph<T, NL, LL, G> {
+impl<G: GraphStructure> RCGraph<G> {
+    pub fn new(graph: G) -> RCGraph<G> {
         RCGraph {
             graph: MutRcRefCell::new(graph),
-            tag: PhantomData,
-            node_label: PhantomData,
-            level_label: PhantomData,
         }
     }
 
@@ -56,8 +45,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> RCGraph<T, 
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
-    for RCGraph<T, NL, LL, G>
+impl<G: GraphStructure> StateStorage for RCGraph<G>
 where
     G: StateStorage,
 {
@@ -69,9 +57,10 @@ where
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStructure<T, NL, LL>
-    for RCGraph<T, NL, LL, G>
-{
+impl<G: GraphStructure> GraphStructure for RCGraph<G> {
+    type T = G::T;
+    type NL = G::NL;
+    type LL = G::LL;
     fn get_roots(&self) -> Vec<NodeID> {
         self.graph.read().get_roots()
     }
@@ -80,11 +69,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
         self.graph.read().get_terminals()
     }
 
-    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<Self::T>, NodeID)> {
         self.graph.get().get_known_parents(node)
     }
 
-    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<Self::T>, NodeID)> {
         self.graph.get().get_children(node)
     }
 
@@ -92,11 +81,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
         self.graph.get().get_level(node)
     }
 
-    fn get_node_label(&self, node: NodeID) -> NL {
+    fn get_node_label(&self, node: NodeID) -> Self::NL {
         self.graph.read().get_node_label(node)
     }
 
-    fn get_level_label(&self, level: LevelNo) -> LL {
+    fn get_level_label(&self, level: LevelNo) -> Self::LL {
         self.graph.read().get_level_label(level)
     }
 

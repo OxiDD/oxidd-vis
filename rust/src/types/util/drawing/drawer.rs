@@ -38,18 +38,18 @@ use super::{
 };
 
 pub struct Drawer<
-    T: DrawTag,
-    S: NodeStyle,
-    LS: LayerStyle,
-    R: Renderer<T, S, LS>,
-    L: LayoutRules<T, S, LS, G>,
-    G: GroupedGraphStructure<T, S, LS>,
-> {
+    R: Renderer<L>,
+    L: LayoutRules<G = G, T = G::T, LS = G::LL, NS = G::GL, Tracker = G::Tracker>,
+    G: GroupedGraphStructure,
+> where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
+{
     renderer: R,
     layout_rules: L,
-    layout: DiagramLayout<T, S, LS>,
+    layout: DiagramLayout<L::T, L::NS, L::LS>,
     graph: MutRcRefCell<G>,
-    sources: G::Tracker,
+    sources: L::Tracker,
     transform: Transformation,
     selection: SelectionData,
 }
@@ -57,15 +57,15 @@ pub struct Drawer<
 type SelectionData = (Vec<NodeGroupID>, Vec<NodeGroupID>);
 
 impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        R: Renderer<T, S, LS>,
-        L: LayoutRules<T, S, LS, G>,
-        G: GroupedGraphStructure<T, S, LS>,
-    > Drawer<T, S, LS, R, L, G>
+        R: Renderer<L>,
+        L: LayoutRules<G = G, T = G::T, LS = G::LL, NS = G::GL, Tracker = G::Tracker>,
+        G: GroupedGraphStructure,
+    > Drawer<R, L, G>
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
 {
-    pub fn new(renderer: R, layout_rules: L, graph: MutRcRefCell<G>) -> Drawer<T, S, LS, R, L, G> {
+    pub fn new(renderer: R, layout_rules: L, graph: MutRcRefCell<G>) -> Self {
         Drawer {
             sources: graph.get().create_node_tracker(),
             renderer,
@@ -84,7 +84,7 @@ impl<
         &mut self.layout_rules
     }
 
-    pub fn get_current_layout(&self) -> DiagramLayout<T, S, LS> {
+    pub fn get_current_layout(&self) -> DiagramLayout<L::T, L::NS, L::LS> {
         self.layout.clone()
     }
 

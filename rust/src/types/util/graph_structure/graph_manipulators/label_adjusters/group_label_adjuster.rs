@@ -18,48 +18,41 @@ use crate::{
     wasm_interface::{NodeGroupID, NodeID},
 };
 
-pub struct GroupLabelAdjuster<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NGL, NLL> {
+pub struct GroupLabelAdjuster<NGL, NLL, G: GroupedGraphStructure> {
     graph: MutRcRefCell<G>,
-    node_adjuster: Box<dyn Fn(GL) -> NGL>,
-    level_adjuster: Box<dyn Fn(LL) -> NLL>,
-    tag: PhantomData<T>,
-    group_label: PhantomData<GL>,
+    node_adjuster: Box<dyn Fn(G::GL) -> NGL>,
+    level_adjuster: Box<dyn Fn(G::LL) -> NLL>,
     new_group_label: PhantomData<NGL>,
-    level_label: PhantomData<LL>,
     new_level_label: PhantomData<NLL>,
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NGL, NLL>
-    GroupLabelAdjuster<T, GL, LL, G, NGL, NLL>
-{
-    pub fn new<A: Fn(GL) -> NGL + 'static, B: Fn(LL) -> NLL + 'static>(
+impl<G: GroupedGraphStructure, NGL, NLL> GroupLabelAdjuster<NGL, NLL, G> {
+    pub fn new<A: Fn(G::GL) -> NGL + 'static, B: Fn(G::LL) -> NLL + 'static>(
         graph: G,
         node_adjuster: A,
         level_adjuster: B,
-    ) -> GroupLabelAdjuster<T, GL, LL, G, NGL, NLL> {
+    ) -> GroupLabelAdjuster<NGL, NLL, G> {
         GroupLabelAdjuster::new_shared(MutRcRefCell::new(graph), node_adjuster, level_adjuster)
     }
-    pub fn new_shared<A: Fn(GL) -> NGL + 'static, B: Fn(LL) -> NLL + 'static>(
+    pub fn new_shared<A: Fn(G::GL) -> NGL + 'static, B: Fn(G::LL) -> NLL + 'static>(
         graph: MutRcRefCell<G>,
         node_adjuster: A,
         level_adjuster: B,
-    ) -> GroupLabelAdjuster<T, GL, LL, G, NGL, NLL> {
+    ) -> GroupLabelAdjuster<NGL, NLL, G> {
         GroupLabelAdjuster {
             graph,
             node_adjuster: Box::new(node_adjuster),
             level_adjuster: Box::new(level_adjuster),
-            tag: PhantomData,
-            group_label: PhantomData,
             new_group_label: PhantomData,
-            level_label: PhantomData,
             new_level_label: PhantomData,
         }
     }
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NGL, NLL>
-    GroupedGraphStructure<T, NGL, NLL> for GroupLabelAdjuster<T, GL, LL, G, NGL, NLL>
-{
+impl<G: GroupedGraphStructure, NGL, NLL> GroupedGraphStructure for GroupLabelAdjuster<NGL, NLL, G> {
+    type T = G::T;
+    type GL = NGL;
+    type LL = NLL;
     type Tracker = G::Tracker;
 
     fn get_roots(&self) -> Vec<NodeGroupID> {
@@ -82,11 +75,11 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NGL, NLL>
         (self.node_adjuster)(self.graph.read().get_group_label(node))
     }
 
-    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
+    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<G::T>> {
         self.graph.read().get_parents(group)
     }
 
-    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
+    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<G::T>> {
         self.graph.read().get_children(group)
     }
 
@@ -111,10 +104,8 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NGL, NLL>
     }
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NGL, NLL> StateStorage
-    for GroupLabelAdjuster<T, GL, LL, G, NGL, NLL>
-where
-    G: StateStorage,
+impl<G: GroupedGraphStructure + StateStorage, NGL, NLL> StateStorage
+    for GroupLabelAdjuster<NGL, NLL, G>
 {
     fn write(&self, stream: &mut Cursor<&mut Vec<u8>>) -> Result<()> {
         self.graph.read().write(stream)?;

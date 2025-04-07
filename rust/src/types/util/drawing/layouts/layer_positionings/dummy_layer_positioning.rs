@@ -20,10 +20,10 @@ use crate::{
 
 pub struct DummyLayerPositioning;
 
-impl<T: DrawTag, GL: WidthLabel, LL> NodePositioning<T, GL, LL> for DummyLayerPositioning {
+impl<G: GroupedGraphStructure> NodePositioning<G> for DummyLayerPositioning {
     fn position_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, GL, LL>,
+        graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         node_widths: &HashMap<NodeGroupID, f32>,

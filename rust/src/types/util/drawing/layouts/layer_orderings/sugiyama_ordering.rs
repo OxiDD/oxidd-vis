@@ -46,10 +46,10 @@ impl SugiyamaOrdering {
     }
 }
 
-impl<T: DrawTag, GL, LL> LayerOrdering<T, GL, LL> for SugiyamaOrdering {
+impl<G: GroupedGraphStructure> LayerOrdering<G> for SugiyamaOrdering {
     fn order_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, GL, LL>,
+        graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,

@@ -19,10 +19,10 @@ use crate::{
 
 pub struct AverageGroupAlignment;
 
-impl<T: DrawTag, GL, LL> LayerGroupSorting<T, GL, LL> for AverageGroupAlignment {
+impl<G: GroupedGraphStructure> LayerGroupSorting<G> for AverageGroupAlignment {
     fn align_cross_layer_nodes(
         &self,
-        _graph: &impl GroupedGraphStructure<T, GL, LL>,
+        _graph: &G,
         layers: &Vec<Order>,
         _edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group

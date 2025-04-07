@@ -6,20 +6,31 @@ use crate::{
     types::util::{
         drawing::{
             diagram_layout::{DiagramLayout, LayerStyle, NodeStyle},
+            layout_rules::LayoutRules,
             renderer::{GroupSelection, Renderer},
         },
-        graph_structure::graph_structure::DrawTag,
+        graph_structure::{
+            graph_structure::DrawTag, grouped_graph_structure::GroupedGraphStructure,
+        },
     },
     util::{logging::console, transformation::Transformation},
 };
 
-pub struct LatexRenderer<T: DrawTag, S: NodeStyle, LS: LayerStyle> {
+pub struct LatexRenderer<L: LayoutRules>
+where
+    L::NS: LatexNodeStyle,
+    L::LS: LatexLayerStyle,
+{
     output: String,
-    layout: Option<DiagramLayout<T, S, LS>>,
+    layout: Option<DiagramLayout<L::T, L::NS, L::LS>>,
 }
 
-impl<T: DrawTag, S: LatexNodeStyle, LS: LatexLayerStyle> LatexRenderer<T, S, LS> {
-    pub fn new() -> LatexRenderer<T, S, LS> {
+impl<L: LayoutRules> LatexRenderer<L>
+where
+    L::NS: LatexNodeStyle,
+    L::LS: LatexLayerStyle,
+{
+    pub fn new() -> LatexRenderer<L> {
         LatexRenderer {
             output: "".into(),
             layout: None,
@@ -31,14 +42,16 @@ impl<T: DrawTag, S: LatexNodeStyle, LS: LatexLayerStyle> LatexRenderer<T, S, LS>
     }
 }
 
-impl<T: DrawTag, S: LatexNodeStyle, LS: LatexLayerStyle> Renderer<T, S, LS>
-    for LatexRenderer<T, S, LS>
+impl<L: LayoutRules> Renderer<L> for LatexRenderer<L>
+where
+    L::NS: LatexNodeStyle,
+    L::LS: LatexLayerStyle,
 {
     fn set_transform(&mut self, transform: Transformation) {
         todo!()
     }
 
-    fn update_layout(&mut self, layout: &DiagramLayout<T, S, LS>) {
+    fn update_layout(&mut self, layout: &DiagramLayout<L::T, L::NS, L::LS>) {
         self.layout = Some(layout.clone());
     }
 

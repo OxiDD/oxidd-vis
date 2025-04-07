@@ -27,21 +27,14 @@ use crate::{
 // The source node IDs are distinguished into 2 labeled kinds:
 // - left node IDs, corresponding to the underlying graph we are wrapping
 // - right node IDs, corresponding to the created pointer nodes
-pub struct PointerNodeAdjuster<
-    T: DrawTag + 'static,
-    NL: Clone,
-    LL: Clone,
-    G: GraphStructure<T, NL, LL>,
-> {
+pub struct PointerNodeAdjuster<G: GraphStructure> {
     graph: G,
     event_writer: GraphEventsWriter,
     graph_events: GraphEventsReader,
-    node_label: PhantomData<NL>,
-    level_label: PhantomData<LL>,
 
-    pointer_edge: EdgeType<T>,
+    pointer_edge: EdgeType<G::T>,
     transfer_root_pointers: bool,
-    dummy_level_label: LL,
+    dummy_level_label: G::LL,
 
     pointers_of: HashMap<NodeID, HashSet<NodeID>>, // Maps left nodes to right nodes
     pointers: HashMap<NodeID, PointerNode>,        // Maps right nodes to their pointer data
@@ -88,12 +81,9 @@ impl<NL: Clone> Into<Option<String>> for PointerLabel<NL> {
     }
 }
 
-impl<
-        T: DrawTag + 'static,
-        NL: Clone + WithPointerLabels,
-        LL: Clone,
-        G: GraphStructure<T, NL, LL>,
-    > PointerNodeAdjuster<T, NL, LL, G>
+impl<G: GraphStructure> PointerNodeAdjuster<G>
+where
+    G::NL: WithPointerLabels,
 {
     /// Creates a new pointer node adjuster, which creates dedicated nodes from the given point labels.
     ///
@@ -102,16 +92,14 @@ impl<
     /// `dummy_level_label` indicates the label to use for the newly inserted level (inserted to make space for an initial label)
     pub fn new(
         mut graph: G,
-        pointer_edge: EdgeType<T>,
+        pointer_edge: EdgeType<G::T>,
         transfer_root_pointers: bool,
-        dummy_level_label: LL,
-    ) -> PointerNodeAdjuster<T, NL, LL, G> {
+        dummy_level_label: G::LL,
+    ) -> PointerNodeAdjuster<G> {
         let mut adjuster = PointerNodeAdjuster {
             graph_events: graph.create_event_reader(),
             graph,
             event_writer: GraphEventsWriter::new(),
-            node_label: PhantomData,
-            level_label: PhantomData,
             pointer_edge,
             transfer_root_pointers,
             dummy_level_label,
@@ -255,14 +243,14 @@ impl<
     }
 }
 
-impl<
-        T: DrawTag + 'static,
-        NL: Clone + WithPointerLabels,
-        LL: Clone,
-        G: GraphStructure<T, NL, LL>,
-    > GraphStructure<T, PointerLabel<NL>, LL> for PointerNodeAdjuster<T, NL, LL, G>
+impl<G: GraphStructure> GraphStructure for PointerNodeAdjuster<G>
+where
+    G::NL: WithPointerLabels,
 {
-    fn get_roots(&self) -> Vec<crate::wasm_interface::NodeID> {
+    type T = G::T;
+    type NL = PointerLabel<G::NL>;
+    type LL = G::LL;
+    fn get_roots(&self) -> Vec<NodeID> {
         if self.transfer_root_pointers {
             let p = self
                 .graph
@@ -287,7 +275,7 @@ impl<
         }
     }
 
-    fn get_terminals(&self) -> Vec<crate::wasm_interface::NodeID> {
+    fn get_terminals(&self) -> Vec<NodeID> {
         self.graph
             .get_terminals()
             .iter()
@@ -295,13 +283,7 @@ impl<
             .collect()
     }
 
-    fn get_known_parents(
-        &mut self,
-        node: crate::wasm_interface::NodeID,
-    ) -> Vec<(
-        crate::types::util::graph_structure::graph_structure::EdgeType<T>,
-        crate::wasm_interface::NodeID,
-    )> {
+    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<G::T>, NodeID)> {
         self.process_graph_changes();
         match to_sourced(node) {
             Either::Left(node) => {
@@ -324,13 +306,7 @@ impl<
         }
     }
 
-    fn get_children(
-        &mut self,
-        node: crate::wasm_interface::NodeID,
-    ) -> Vec<(
-        crate::types::util::graph_structure::graph_structure::EdgeType<T>,
-        crate::wasm_interface::NodeID,
-    )> {
+    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<G::T>, NodeID)> {
         self.process_graph_changes();
         match to_sourced(node) {
             Either::Left(node) => self
@@ -349,7 +325,7 @@ impl<
         }
     }
 
-    fn get_level(&mut self, node: crate::wasm_interface::NodeID) -> oxidd::LevelNo {
+    fn get_level(&mut self, node: NodeID) -> oxidd::LevelNo {
         match to_sourced(node) {
             Either::Left(node) => self.graph.get_level(node) + 1,
             Either::Right(node) => match self.pointers.get(&node) {
@@ -368,7 +344,7 @@ impl<
         }
     }
 
-    fn get_node_label(&self, node: crate::wasm_interface::NodeID) -> PointerLabel<NL> {
+    fn get_node_label(&self, node: NodeID) -> PointerLabel<G::NL> {
         match to_sourced(node) {
             Either::Left(node) => PointerLabel::Node(self.graph.get_node_label(node)),
             Either::Right(node) => match self.pointers.get(&node) {
@@ -378,7 +354,7 @@ impl<
         }
     }
 
-    fn get_level_label(&self, level: oxidd::LevelNo) -> LL {
+    fn get_level_label(&self, level: oxidd::LevelNo) -> G::LL {
         if level > 0 {
             self.graph.get_level_label(level - 1)
         } else {
@@ -386,24 +362,16 @@ impl<
         }
     }
 
-    fn create_event_reader(
-        &mut self,
-    ) -> crate::types::util::graph_structure::graph_structure::GraphEventsReader {
+    fn create_event_reader(&mut self) -> GraphEventsReader {
         self.event_writer.create_reader()
     }
 
-    fn consume_events(
-        &mut self,
-        reader: &crate::types::util::graph_structure::graph_structure::GraphEventsReader,
-    ) -> Vec<crate::types::util::graph_structure::graph_structure::Change> {
+    fn consume_events(&mut self, reader: &GraphEventsReader) -> Vec<Change> {
         self.process_graph_changes();
         self.event_writer.read(reader)
     }
 
-    fn local_nodes_to_sources(
-        &self,
-        nodes: Vec<crate::wasm_interface::NodeID>,
-    ) -> Vec<crate::wasm_interface::NodeID> {
+    fn local_nodes_to_sources(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
         nodes
             .into_iter()
             .filter_map(|node| match to_sourced(node) {
@@ -413,10 +381,7 @@ impl<
             .collect()
     }
 
-    fn source_nodes_to_local(
-        &self,
-        nodes: Vec<crate::wasm_interface::NodeID>,
-    ) -> Vec<crate::wasm_interface::NodeID> {
+    fn source_nodes_to_local(&self, nodes: Vec<NodeID>) -> Vec<NodeID> {
         // For each node, map it to the output format and add its pointers
         nodes
             .into_iter()
@@ -438,9 +403,7 @@ impl<
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL> + StateStorage> StateStorage
-    for PointerNodeAdjuster<T, NL, LL, G>
-{
+impl<G: GraphStructure + StateStorage> StateStorage for PointerNodeAdjuster<G> {
     fn read(&mut self, stream: &mut std::io::Cursor<&Vec<u8>>) -> std::io::Result<()> {
         self.graph.read(stream)
     }

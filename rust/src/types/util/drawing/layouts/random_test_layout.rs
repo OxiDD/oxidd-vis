@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
 use itertools::Itertools;
 use js_sys::Math::random;
@@ -21,18 +22,31 @@ use crate::{
     util::transition::Transition,
 };
 
-pub struct RandomTestLayout;
+pub struct RandomTestLayout<G: GroupedGraphStructure>(PhantomData<G>);
+impl<G: GroupedGraphStructure> RandomTestLayout<G> {
+    pub fn new() -> Self {
+        RandomTestLayout(PhantomData)
+    }
+}
 
-impl<T: DrawTag, S: NodeStyle, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>
-    LayoutRules<T, S, LS, G> for RandomTestLayout
+impl<G: GroupedGraphStructure> LayoutRules for RandomTestLayout<G>
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
 {
+    type T = G::T;
+    type NS = G::GL;
+    type LS = G::LL;
+    type Tracker = G::Tracker;
+    type G = G;
+
     fn layout(
         &mut self,
         graph: &G,
-        old: &DiagramLayout<T, S, LS>,
+        old: &DiagramLayout<Self::T, Self::NS, Self::LS>,
         sources: &G::Tracker,
         time: u32,
-    ) -> DiagramLayout<T, S, LS> {
+    ) -> DiagramLayout<Self::T, Self::NS, Self::LS> {
         let groups = graph.get_all_groups();
         DiagramLayout {
             groups: groups

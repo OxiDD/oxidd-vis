@@ -26,17 +26,21 @@ pub struct AbstractedGraph<T: DrawTag, NL: Clone, LL: Clone> {
 }
 
 trait StateGraphStructure<T: DrawTag, NL: Clone, LL: Clone>:
-    GraphStructure<T, NL, LL> + StateStorage
+    GraphStructure<T = T, NL = NL, LL = LL> + StateStorage
 {
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL> + StateStorage>
-    StateGraphStructure<T, NL, LL> for G
+impl<
+        T: DrawTag,
+        NL: Clone,
+        LL: Clone,
+        G: GraphStructure<T = T, NL = NL, LL = LL> + StateStorage,
+    > StateGraphStructure<T, NL, LL> for G
 {
 }
 
 impl<T: DrawTag, NL: Clone, LL: Clone> AbstractedGraph<T, NL, LL> {
-    pub fn new<G: GraphStructure<T, NL, LL> + StateStorage + 'static>(
+    pub fn new<G: GraphStructure<T = T, NL = NL, LL = LL> + StateStorage + 'static>(
         graph: G,
     ) -> AbstractedGraph<T, NL, LL> {
         AbstractedGraph {
@@ -57,7 +61,10 @@ impl<T: DrawTag, NL: Clone, LL: Clone> StateStorage for AbstractedGraph<T, NL, L
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone> GraphStructure<T, NL, LL> for AbstractedGraph<T, NL, LL> {
+impl<T: DrawTag, NL: Clone, LL: Clone> GraphStructure for AbstractedGraph<T, NL, LL> {
+    type T = T;
+    type NL = NL;
+    type LL = LL;
     fn get_roots(&self) -> Vec<NodeID> {
         self.graph.get_roots()
     }

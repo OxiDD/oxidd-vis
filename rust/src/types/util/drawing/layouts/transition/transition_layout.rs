@@ -37,44 +37,23 @@ use super::{
 /// A layout builder that takes another layout approach, and applies transitioning to it.
 /// This will make layout changes smoothly transition from the previous state to the new state.
 ///
-pub struct TransitionLayout<
-    T: DrawTag,
-    S: NodeStyle,
-    LS: LayerStyle,
-    G: GroupedGraphStructure<T, S, LS>,
-    L: LayoutRules<T, S, LS, G>,
-> {
+pub struct TransitionLayout<L: LayoutRules> {
     layout: L,
     durations: TransitionDurations,
-    group_label: PhantomData<S>,
-    level_label: PhantomData<LS>,
-    // TODO: see if these generics and  phantom data is even needed
-    tag: PhantomData<T>,
-    graph: PhantomData<G>,
 }
 
-impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L: LayoutRules<T, S, LS, G>,
-    > TransitionLayout<T, S, LS, G, L>
-{
-    pub fn new(layout: L) -> TransitionLayout<T, S, LS, G, L> {
+impl<L: LayoutRules> TransitionLayout<L> {
+    pub fn new(layout: L) -> Self {
         let speed_modifier = 1; // for testing
                                 // TODO: add parameters
         TransitionLayout {
             layout,
+            // TODO: make this more finely grained configurable
             durations: TransitionDurations {
                 insert_duration: 900 * speed_modifier,
                 transition_duration: 600 * speed_modifier,
                 delete_duration: 300 * speed_modifier,
             },
-            tag: PhantomData,
-            graph: PhantomData,
-            group_label: PhantomData,
-            level_label: PhantomData,
         }
     }
     pub fn get_layout_rules(&mut self) -> &mut L {
@@ -89,21 +68,20 @@ pub struct TransitionDurations {
     insert_duration: u32,
 }
 
-impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L: LayoutRules<T, S, LS, G>,
-    > LayoutRules<T, S, LS, G> for TransitionLayout<T, S, LS, G, L>
-{
+impl<L: LayoutRules> LayoutRules for TransitionLayout<L> {
+    type T = L::T;
+    type NS = L::NS;
+    type LS = L::LS;
+    type Tracker = L::Tracker;
+    type G = L::G;
+
     fn layout(
         &mut self,
-        graph: &G,
-        old: &DiagramLayout<T, S, LS>,
-        sources: &G::Tracker,
+        graph: &Self::G,
+        old: &DiagramLayout<Self::T, Self::NS, Self::LS>,
+        sources: &Self::Tracker,
         time: u32,
-    ) -> DiagramLayout<T, S, LS> {
+    ) -> DiagramLayout<Self::T, Self::NS, Self::LS> {
         let duration = self.durations.transition_duration;
         let old_time = time;
         let new = self.layout.layout(graph, old, sources, time);
@@ -166,7 +144,7 @@ impl<
             .map(|(&id, group, _)| {
                 (
                     id,
-                    layout_added_group::<T, S, LS>(
+                    layout_added_group::<Self::T, Self::NS, Self::LS>(
                         id,
                         group,
                         &some_updated_parents,

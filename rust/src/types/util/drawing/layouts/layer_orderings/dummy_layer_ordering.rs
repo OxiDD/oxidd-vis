@@ -16,10 +16,10 @@ use crate::{
 };
 
 pub struct DummyLayerOrdering;
-impl<T: DrawTag, GL, LL> LayerOrdering<T, GL, LL> for DummyLayerOrdering {
+impl<G: GroupedGraphStructure> LayerOrdering<G> for DummyLayerOrdering {
     fn order_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, GL, LL>,
+        graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,

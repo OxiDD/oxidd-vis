@@ -13,10 +13,10 @@ use crate::{
 use super::util::layered::layer_orderer::{EdgeMap, Order};
 
 /// The trait used to decide what ordering of nodes to use in the layout, including dummy nodes
-pub trait LayerOrdering<T: DrawTag, S, LS> {
+pub trait LayerOrdering<G: GroupedGraphStructure> {
     fn order_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, S, LS>,
+        graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
@@ -29,11 +29,11 @@ pub trait LayerOrdering<T: DrawTag, S, LS> {
 }
 
 /// The trait used to decide what positioning of nodes to use in the layout for the given node orders, including dummy nodes
-pub trait NodePositioning<T: DrawTag, S, LS> {
+pub trait NodePositioning<G: GroupedGraphStructure> {
     // TODO: change interface to provide node widths instead of having to get them from the graph
     fn position_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, S, LS>,
+        graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         node_widths: &HashMap<NodeGroupID, f32>,
@@ -47,10 +47,10 @@ pub trait NodePositioning<T: DrawTag, S, LS> {
 }
 
 /// The trait used to decide what positioning of nodes to use in the layout for the given node orders, including dummy nodes
-pub trait LayerGroupSorting<T: DrawTag, S, LS> {
+pub trait LayerGroupSorting<G: GroupedGraphStructure> {
     fn align_cross_layer_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, S, LS>,
+        graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group
