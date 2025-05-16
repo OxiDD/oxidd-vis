@@ -548,7 +548,7 @@ impl QDDDiagramDrawer {
                         }),
                         None,
                     ) => {
-                        if terminal == "T" {
+                        if terminal == "T" || terminal == "B" {
                             (Some(1), false, colors.node_true)
                         } else {
                             (Some(0), false, colors.node_false)
@@ -722,9 +722,9 @@ impl QDDDiagramDrawer {
         // Connect the config
         let drawer = out.drawer.clone();
         let time = out.time.clone();
-        fn set_terminal_presence(
+        fn set_terminal_presence<const P: usize>(
             presence_adjuster: &PresenceAdjuster,
-            terminal: String,
+            target_terminals: [String; P],
             presence: PresenceRemainder,
         ) -> () {
             let mut adjuster = presence_adjuster.get();
@@ -734,7 +734,7 @@ impl QDDDiagramDrawer {
                     PointerLabel::Node(NodeLabel {
                         pointers: _,
                         kind: NodeType::Terminal(t),
-                    }) if t == terminal => Some(node),
+                    }) if target_terminals.iter().any(|terminal| &t == terminal) => Some(node),
                     _ => None,
                 }
             });
@@ -747,12 +747,12 @@ impl QDDDiagramDrawer {
         let false_config = composite_config.1.clone();
         let false_presence_adjuster = out.presence_adjuster.clone();
         let _ = on_configuration_change(&composite_config.1, move || {
-            set_terminal_presence(&false_presence_adjuster, "F".into(), false_config.get());
+            set_terminal_presence(&false_presence_adjuster, ["F".into(), "E".into()], false_config.get());
         });
         let true_config = composite_config.2.clone();
         let true_presence_adjuster = out.presence_adjuster.clone();
         let _ = on_configuration_change(&composite_config.2, move || {
-            set_terminal_presence(&true_presence_adjuster, "T".into(), true_config.get());
+            set_terminal_presence(&true_presence_adjuster, ["T".into(), "B".into()], true_config.get());
         });
 
         let hide_shared_true_config = composite_config.3.clone();

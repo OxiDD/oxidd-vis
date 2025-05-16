@@ -314,7 +314,7 @@ export class ViewManager implements IViewManager {
             const viewID = view.ID;
             const existingContainer = this.getTabParent(viewID);
             if (existingContainer) {
-                push(layout.selectTab(existingContainer.id, viewID));
+                if (focus) push(this.focus(viewID));
             } else {
                 const location = this.getLocationHint(view, locationHintsModifier).get();
 
@@ -378,7 +378,7 @@ export class ViewManager implements IViewManager {
 
                 // Open and select the tab
                 push(layout.openTab(openContainer.id, viewID, undefined, beforeTabID));
-                if (focus) push(layout.selectTab(openContainer.id, viewID));
+                if (focus) push(this.focus(viewID));
             }
         });
     }
