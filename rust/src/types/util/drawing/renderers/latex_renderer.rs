@@ -291,3 +291,88 @@ pub trait LatexNodeStyle: NodeStyle {
 pub trait LatexLayerStyle: LayerStyle {
     fn get_label(&self) -> String;
 }
+
+pub const latex_headers: &str = "\\usepackage{tikz}
+\\tikzset{
+    inner/.style={
+            shape=circle,
+            fill=black!70,
+        },
+    innerSized/.style={
+            draw=black,
+            shape=rectangle,
+            fill=blue!20,
+            rounded corners,
+            font = {\\Huge\\bfseries\\sffamily}
+        },
+    template/.style={
+            shape=rectangle,
+            rounded corners,
+            font = {\\Huge\\bfseries\\sffamily}
+        },
+    dots/.style={
+            shape=rectangle,
+            rounded corners,
+            font = {\\Huge\\sffamily}
+        },
+    group/.style={
+            shape=rectangle,
+            fill=black!30,
+            rounded corners,
+        },
+    terminal/.style={
+            shape=rectangle,
+            draw=black,
+            fill=green!20,
+            inner sep=2pt,
+            minimum size=25pt,
+            font = {\\Huge\\bfseries\\sffamily}
+        },
+    terminal0/.style={
+            shape=rectangle,
+            draw=black,
+            fill=red!20,
+            inner sep=2pt,
+            minimum size=25pt,
+            font = {\\Huge\\bfseries\\sffamily}
+        },
+    terminal0/label/.initial=$\\mathbf{0}$,
+    terminal1/.style={
+            shape=rectangle,
+            draw=black,
+            fill=green!20,
+            inner sep=2pt,
+            minimum size=25pt,
+            font = {\\Huge\\bfseries\\sffamily}
+        },
+    terminal1/label/.initial=$\\mathbf{1}$,
+    choice0/.style={
+            draw,
+            color=green,
+            line width=2.5pt,
+            ->,
+            shorten >=1pt,
+        },
+    choice1/.style={
+            draw,
+            color=red,
+            line width=2.5pt,
+            dashed,
+            ->,
+            shorten >=1pt,
+        },
+    choice2/.style={
+            draw,
+            color=black!60,
+            line width=2.5pt,
+            ->
+        },
+    layerDivider/.style={
+            color=gray,
+            dashed
+        },
+    layerLabel/.style={
+            anchor=west,
+            font = {\\Huge\\bfseries\\sffamily}
+        },
+}";

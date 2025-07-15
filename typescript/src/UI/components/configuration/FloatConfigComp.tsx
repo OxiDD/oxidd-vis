@@ -1,14 +1,4 @@
-import React, {
-    FC,
-    FormEvent,
-    KeyboardEvent,
-    SyntheticEvent,
-    useCallback,
-    useEffect,
-    useRef,
-} from "react";
-import {IntConfig} from "../../../state/configuration/types/IntConfig";
-import {SpinButton} from "@fluentui/react";
+import React, {FC, useCallback, useEffect, useRef} from "react";
 import {useWatch} from "../../../watchables/react/useWatch";
 import {StyledSpinButton} from "../StyledSpinButton";
 import {FloatConfig} from "../../../state/configuration/types/FloatConfig";

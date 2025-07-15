@@ -11,6 +11,7 @@ import {IWatchable} from "../../watchables/_types/IWatchable";
 import {IOwnedAbstractConfig} from "./ConfigurationObject";
 import {LocationConfig} from "./types/LocationConfig";
 import {FloatConfig} from "./types/FloatConfig";
+import {ContainerConfig} from "./types/ContainerConfig";
 
 /**
  * Creates the configuration object wrapper from the given abstract configuration object
@@ -39,6 +40,8 @@ export function getConfigurationObjectWrapper(
         return new PanelConfig(ownedConfig);
     } else if (type === ConfigurationObjectType.Location) {
         return new LocationConfig(ownedConfig);
+    } else if (type === ConfigurationObjectType.Container) {
+        return new ContainerConfig(ownedConfig);
     }
 
     return null as never;

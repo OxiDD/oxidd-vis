@@ -12,15 +12,12 @@ import {
 import {ConfigTypeComp} from "./ConfigTypeComp";
 import {useDragStart} from "../../../utils/useDragStart";
 import {useViewManager} from "../../providers/ViewManagerContext";
-import {css} from "@emotion/css";
 import {StyledIconButton} from "../StyledIconButton";
-import {chain} from "../../../watchables/mutator/chain";
 import {Observer} from "../../../watchables/Observer";
 import {Derived} from "../../../watchables/Derived";
 
 export const PanelConfigComp: FC<{value: PanelConfig}> = ({value}) => {
     const watch = useWatch();
-    const theme = useTheme();
     const label = watch(value.label);
     const icon = watch(value.icon);
     const view = value.view;

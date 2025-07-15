@@ -27,8 +27,11 @@ use crate::configuration::types::choice_config::Choice;
 use crate::configuration::types::choice_config::ChoiceConfig;
 use crate::configuration::types::composite_config;
 use crate::configuration::types::composite_config::CompositeConfig;
+use crate::configuration::types::container_config::ContainerConfig;
+use crate::configuration::types::container_config::ContainerStyle;
 use crate::configuration::types::int_config::IntConfig;
 use crate::configuration::types::label_config::LabelConfig;
+use crate::configuration::types::label_config::LabelStyle;
 use crate::configuration::types::location_config::Location;
 use crate::configuration::types::location_config::LocationConfig;
 use crate::configuration::types::panel_config::OpenSide;
@@ -38,6 +41,7 @@ use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
 use crate::types::util::drawing::layouts::layer_orderings::edge_layer_ordering::EdgeLayerOrdering;
+use crate::types::util::drawing::renderers::latex_renderer::latex_headers;
 use crate::types::util::drawing::renderers::webgl_renderer::LayerRenderingColorConfig;
 use crate::types::util::drawing::renderers::webgl_renderer::WebglLayerStyle;
 use crate::types::util::graph_structure::graph_manipulators::child_edge_adjuster::ChildEdgeAdjuster;
@@ -411,16 +415,31 @@ pub struct QDDDiagramDrawer {
         LocationConfig<
             PanelConfig<
                 CompositeConfig<(
-                    LabelConfig<ChoiceConfig<usize>>,
-                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
-                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
-                    LabelConfig<ChoiceConfig<bool>>,
-                    LabelConfig<ChoiceConfig<bool>>,
-                    LabelConfig<IntConfig>,
-                    ButtonConfig,
-                    ButtonConfig,
-                    TextOutputConfig,
-                    ButtonConfig,
+                    CompositeConfig<(
+                        ButtonConfig,
+                        LabelConfig<ChoiceConfig<bool>>,
+                        LabelConfig<IntConfig>,
+                        ButtonConfig,
+                    )>,
+                    ContainerConfig<LabelConfig<ChoiceConfig<usize>>>,
+                    ContainerConfig<
+                        LabelConfig<
+                            CompositeConfig<(
+                                LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                                LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                                LabelConfig<ChoiceConfig<bool>>,
+                            )>,
+                        >,
+                    >,
+                    ContainerConfig<
+                        LabelConfig<
+                            CompositeConfig<(
+                                ButtonConfig,
+                                TextOutputConfig,
+                                LabelConfig<TextOutputConfig>,
+                            )>,
+                        >,
+                    >,
                 )>,
             >,
         >,
@@ -594,46 +613,73 @@ impl QDDDiagramDrawer {
         ));
         grouped_graph.hide(0);
 
+        const TOP_MARGIN: f32 = 40.0;
         let composite_config = CompositeConfig::new((
-            LabelConfig::new(
-                "Layout",
-                ChoiceConfig::new([Choice::new(0, "1"), Choice::new(1, "2")]),
+            CompositeConfig::new((
+                ButtonConfig::new_labeled("Expand all nodes"),
+                LabelConfig::new("Move shared", {
+                    let mut c = ChoiceConfig::new([
+                        Choice::new(true, "enabled"),
+                        Choice::new(false, "disabled"),
+                    ]);
+                    c
+                }),
+                LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
+                ButtonConfig::new_labeled("Change seed"),
+            )),
+            ContainerConfig::new(
+                ContainerStyle::new().hidden(true),
+                LabelConfig::new(
+                    "Layout",
+                    ChoiceConfig::new([Choice::new(0, "1"), Choice::new(1, "2")]),
+                ),
             ),
-            LabelConfig::new("False terminal", {
-                let mut c = ChoiceConfig::new([
-                    Choice::new(PresenceRemainder::Show, "show"),
-                    Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                    Choice::new(PresenceRemainder::Hide, "hide"),
-                ]);
-                c.set_index(2).commit();
-                c
-            }),
-            LabelConfig::new(
-                "True terminal",
-                ChoiceConfig::new([
-                    Choice::new(PresenceRemainder::Show, "show"),
-                    Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                    Choice::new(PresenceRemainder::Hide, "hide"),
-                ]),
+            ContainerConfig::new(
+                ContainerStyle::new().margin_top(TOP_MARGIN),
+                LabelConfig::new_styled(
+                    "Terminals",
+                    LabelStyle::Category,
+                    CompositeConfig::new((
+                        LabelConfig::new("False visibility", {
+                            let mut c = ChoiceConfig::new([
+                                Choice::new(PresenceRemainder::Show, "show"),
+                                Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                                Choice::new(PresenceRemainder::Hide, "hide"),
+                            ]);
+                            c.set_index(2).commit();
+                            c
+                        }),
+                        LabelConfig::new(
+                            "True visibility",
+                            ChoiceConfig::new([
+                                Choice::new(PresenceRemainder::Show, "show"),
+                                Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                                Choice::new(PresenceRemainder::Hide, "hide"),
+                            ]),
+                        ),
+                        LabelConfig::new("Hide shared true", {
+                            let mut c = ChoiceConfig::new([
+                                Choice::new(false, "show"),
+                                Choice::new(true, "hide"),
+                            ]);
+                            c.set_index(1).commit();
+                            c
+                        }),
+                    )),
+                ),
             ),
-            LabelConfig::new("Hide shared true", {
-                let mut c =
-                    ChoiceConfig::new([Choice::new(false, "show"), Choice::new(true, "hide")]);
-                c.set_index(1).commit();
-                c
-            }),
-            LabelConfig::new("Move shared", {
-                let mut c = ChoiceConfig::new([
-                    Choice::new(true, "enabled"),
-                    Choice::new(false, "disabled"),
-                ]);
-                c
-            }),
-            LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
-            ButtonConfig::new_labeled("Change seed"),
-            ButtonConfig::new_labeled("Generate latex"),
-            TextOutputConfig::new(true),
-            ButtonConfig::new_labeled("Expand all"),
+            ContainerConfig::new(
+                ContainerStyle::new().margin_top(TOP_MARGIN),
+                LabelConfig::new_styled(
+                    "Latex",
+                    LabelStyle::Category,
+                    CompositeConfig::new((
+                        ButtonConfig::new_labeled("Generate"),
+                        TextOutputConfig::new(true),
+                        LabelConfig::new("Headers", TextOutputConfig::new(false)),
+                    )),
+                ),
+            ),
         ));
         let config = Configuration::new(LocationConfig::new(
             Location::BOTTOM_RIGHT,
@@ -660,47 +706,56 @@ impl QDDDiagramDrawer {
             config,
         };
 
+        let (base_config, layout_config, terminal_config, latex_config) = &*composite_config;
+        let (expand_all, move_shared, seed, change_seed) = &**base_config;
+        let (false_visibility, true_visibility, hide_shared_true) = &****terminal_config;
+        let (latex_generate, latex_output, latex_header_output) = &****latex_config;
+
         let drawer = out.drawer.clone();
-        let false_config = composite_config.0.clone();
-        let _ = on_configuration_change(&composite_config.0, move || {
+        let layout_config_copy = layout_config.clone();
+        let _ = on_configuration_change(&*layout_config, move || {
             drawer
                 .get()
                 .get_layout_rules()
                 .get_layout_rules()
-                .select_layout(false_config.get());
+                .select_layout(layout_config_copy.get());
         });
 
         let drawer = out.drawer.clone();
-        let mut seed = composite_config.5.clone();
-        composite_config.6.clone().add_press_listener(move || {
-            let new_seed = seed.get() + 1;
-            seed.set(new_seed).commit();
+        let mut seed_copy = seed.clone();
+        change_seed.clone().add_press_listener(move || {
+            let new_seed = seed_copy.get() + 1;
+            seed_copy.set(new_seed).commit();
         });
-        let seed = composite_config.5.clone();
-        let seed2 = seed.clone();
-        let _ = on_configuration_change(&seed, move || {
+
+        let seed_copy = seed.clone();
+        let _ = on_configuration_change(&*seed, move || {
             let mut drawer = drawer.get();
             let p = drawer.get_layout_rules().get_layout_rules();
             p.get_layout_rules1()
                 .get_ordering()
                 .get_ordering1()
-                .set_seed(seed2.get() as usize);
+                .set_seed(seed_copy.get() as usize);
             p.get_layout_rules2()
                 .get_layout_rules()
                 .get_ordering()
                 .get_ordering1()
-                .set_seed(seed2.get() as usize);
+                .set_seed(seed_copy.get() as usize);
         });
 
         let drawer = out.drawer.clone();
         let mut latex_renderer = LatexRenderer::<Layout>::new();
-        let mut output = composite_config.8.clone();
-        composite_config.7.clone().add_press_listener(move || {
+        let mut output = latex_output.clone();
+        latex_generate.clone().add_press_listener(move || {
             latex_renderer.update_layout(&drawer.get().get_current_layout());
             latex_renderer.render(u32::MAX);
             let out = latex_renderer.get_output();
             output.set(out.into()).commit();
         });
+        latex_header_output
+            .clone()
+            .set(latex_headers.to_string())
+            .commit();
 
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         // let from = 0;
@@ -714,8 +769,7 @@ impl QDDDiagramDrawer {
         }
 
         let group_manager = out.group_manager.clone();
-        composite_config
-            .9
+        expand_all
             .clone()
             .add_press_listener(move || reveal_all(&group_manager, from, 10_000_000));
 
@@ -744,20 +798,29 @@ impl QDDDiagramDrawer {
 
             adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(presence));
         }
-        let false_config = composite_config.1.clone();
+
         let false_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&composite_config.1, move || {
-            set_terminal_presence(&false_presence_adjuster, ["F".into(), "E".into()], false_config.get());
+        let false_visibility_copy = false_visibility.clone();
+        let _ = on_configuration_change(&*false_visibility, move || {
+            set_terminal_presence(
+                &false_presence_adjuster,
+                ["F".into(), "E".into()],
+                false_visibility_copy.get(),
+            );
         });
-        let true_config = composite_config.2.clone();
         let true_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&composite_config.2, move || {
-            set_terminal_presence(&true_presence_adjuster, ["T".into(), "B".into()], true_config.get());
+        let true_visibility_copy = true_visibility.clone();
+        let _ = on_configuration_change(&*true_visibility, move || {
+            set_terminal_presence(
+                &true_presence_adjuster,
+                ["T".into(), "B".into()],
+                true_visibility_copy.get(),
+            );
         });
 
-        let hide_shared_true_config = composite_config.3.clone();
-        let _ = on_configuration_change(&composite_config.3, move || {
-            if hide_shared_true_config.get() {
+        let hide_shared_true_copy = hide_shared_true.clone();
+        let _ = on_configuration_change(&*hide_shared_true, move || {
+            if hide_shared_true_copy.get() {
                 let hide_edges = edge_to_adjuster
                     .get_terminals()
                     .into_iter()
@@ -778,11 +841,11 @@ impl QDDDiagramDrawer {
             }
         });
 
-        let move_shared_config = composite_config.4.clone();
-        let _ = on_configuration_change(&composite_config.4, move || {
+        let move_shared_copy = move_shared.clone();
+        let _ = on_configuration_change(&*move_shared, move || {
             child_edge_adjuster
                 .get()
-                .set_enabled(move_shared_config.get());
+                .set_enabled(move_shared_copy.get());
         });
 
         let _ = after_configuration_change(&composite_config, move || {

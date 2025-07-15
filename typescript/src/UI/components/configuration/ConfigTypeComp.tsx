@@ -18,6 +18,8 @@ import {LocationConfig} from "../../../state/configuration/types/LocationConfig"
 import {LocationConfigComp} from "./LocationConfigComp";
 import {FloatConfigComp} from "./FloatConfigComp";
 import {FloatConfig} from "../../../state/configuration/types/FloatConfig";
+import {ContainerConfig} from "../../../state/configuration/types/ContainerConfig";
+import {ContainerConfigComp} from "./ContainerConfigComp";
 
 export const ConfigTypeComp: FC<{value: IConfigObjectType}> = ({value}) => {
     if (value instanceof IntConfig) return <IntConfigComp value={value} />;
@@ -32,5 +34,7 @@ export const ConfigTypeComp: FC<{value: IConfigObjectType}> = ({value}) => {
     if (value instanceof PanelConfig) return <PanelConfigComp value={value} />;
     if (value instanceof LocationConfig)
         return <LocationConfigComp value={value} ChildComp={ConfigTypeComp} />;
+    if (value instanceof ContainerConfig)
+        return <ContainerConfigComp value={value} ChildComp={ConfigTypeComp} />;
     return <></>;
 };

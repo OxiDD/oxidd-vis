@@ -14,6 +14,7 @@ use crate::{
             button_config::{ButtonConfig, ButtonStyle},
             choice_config::{Choice, ChoiceConfig},
             composite_config::CompositeConfig,
+            container_config::{ContainerConfig, ContainerStyle},
             float_config::FloatConfig,
             label_config::{LabelConfig, LabelStyle},
             location_config::{Location, LocationConfig},
@@ -44,7 +45,9 @@ use crate::{
                 },
                 renderer::Renderer,
                 renderers::{
-                    latex_renderer::{LatexLayerStyle, LatexNodeStyle, LatexRenderer},
+                    latex_renderer::{
+                        latex_headers, LatexLayerStyle, LatexNodeStyle, LatexRenderer,
+                    },
                     util::Font::Font,
                     webgl::{
                         edge_renderer::EdgeRenderingType, node_renderer::NodeRenderingColorConfig,
@@ -358,15 +361,24 @@ pub struct MTBDDDiagramDrawer {
             PanelConfig<
                 CompositeConfig<(
                     ButtonConfig,
-                    TextOutputConfig,
-                    ButtonConfig,
-                    LabelConfig<
-                        CompositeConfig<(
-                            ButtonConfig,
-                            LabelConfig<ChoiceConfig<PresenceRemainder>>,
-                            LabelConfig<ChoiceConfig<PresenceRemainder>>,
-                            LabelConfig<CompositeConfig<(FloatConfig, FloatConfig)>>,
-                        )>,
+                    ContainerConfig<
+                        LabelConfig<
+                            CompositeConfig<(
+                                ButtonConfig,
+                                LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                                LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                                LabelConfig<CompositeConfig<(FloatConfig, FloatConfig)>>,
+                            )>,
+                        >,
+                    >,
+                    ContainerConfig<
+                        LabelConfig<
+                            CompositeConfig<(
+                                ButtonConfig,
+                                TextOutputConfig,
+                                LabelConfig<TextOutputConfig>,
+                            )>,
+                        >,
                     >,
                 )>,
             >,
@@ -525,40 +537,54 @@ impl MTBDDDiagramDrawer {
         ));
         grouped_graph.hide(0);
 
+        const TOP_MARGIN: f32 = 40.0;
         let composite_config = CompositeConfig::new((
-            ButtonConfig::new_labeled("Generate latex"),
-            TextOutputConfig::new(true),
             ButtonConfig::new_labeled("Expand all nodes"),
-            LabelConfig::new_styled(
-                "Terminals",
-                LabelStyle::Above,
-                CompositeConfig::new((
-                    ButtonConfig::new_labeled("Expand"),
-                    LabelConfig::new("0 visibility", {
-                        let mut c = ChoiceConfig::new([
-                            Choice::new(PresenceRemainder::Show, "show"),
-                            Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                            Choice::new(PresenceRemainder::Hide, "hide"),
-                        ]);
-                        c.set_index(2).commit();
-                        c
-                    }),
-                    LabelConfig::new(
-                        "1 visibility",
-                        ChoiceConfig::new([
-                            Choice::new(PresenceRemainder::Show, "show"),
-                            Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                            Choice::new(PresenceRemainder::Hide, "hide"),
-                        ]),
-                    ),
-                    LabelConfig::new(
-                        "range",
-                        CompositeConfig::new_horizontal(
-                            (terminal_min, terminal_max),
-                            |(f1, f2)| vec![Box::new(f1.clone()), Box::new(f2.clone())],
+            ContainerConfig::new(
+                ContainerStyle::new().margin_top(TOP_MARGIN),
+                LabelConfig::new_styled(
+                    "Terminals",
+                    LabelStyle::Category,
+                    CompositeConfig::new((
+                        ButtonConfig::new_labeled("Expand"),
+                        LabelConfig::new("0 visibility", {
+                            let mut c = ChoiceConfig::new([
+                                Choice::new(PresenceRemainder::Show, "show"),
+                                Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                                Choice::new(PresenceRemainder::Hide, "hide"),
+                            ]);
+                            c.set_index(2).commit();
+                            c
+                        }),
+                        LabelConfig::new(
+                            "1 visibility",
+                            ChoiceConfig::new([
+                                Choice::new(PresenceRemainder::Show, "show"),
+                                Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                                Choice::new(PresenceRemainder::Hide, "hide"),
+                            ]),
                         ),
-                    ),
-                )),
+                        LabelConfig::new(
+                            "range",
+                            CompositeConfig::new_horizontal(
+                                (terminal_min, terminal_max),
+                                |(f1, f2)| vec![Box::new(f1.clone()), Box::new(f2.clone())],
+                            ),
+                        ),
+                    )),
+                ),
+            ),
+            ContainerConfig::new(
+                ContainerStyle::new().margin_top(TOP_MARGIN),
+                LabelConfig::new_styled(
+                    "Latex",
+                    LabelStyle::Category,
+                    CompositeConfig::new((
+                        ButtonConfig::new_labeled("Generate"),
+                        TextOutputConfig::new(true),
+                        LabelConfig::new("Headers", TextOutputConfig::new(false)),
+                    )),
+                ),
             ),
         ));
         let config = Configuration::new(LocationConfig::new(
@@ -586,8 +612,9 @@ impl MTBDDDiagramDrawer {
             config,
         };
 
-        let (generate_latex, latex_output, expand_all, terminals) = &*composite_config;
-        let (expand_terminals, zero_visibility, one_visibility, terminal_range) = &***terminals;
+        let (expand_all, terminals, latex_config) = &*composite_config;
+        let (generate_latex, latex_output, latex_headers_output) = &****latex_config;
+        let (expand_terminals, zero_visibility, one_visibility, terminal_range) = &****terminals;
         let (terminal_range_start, terminal_range_end) = &***terminal_range;
 
         let drawer = out.drawer.clone();
@@ -599,6 +626,10 @@ impl MTBDDDiagramDrawer {
             let out = latex_renderer.get_output();
             output.set(out.into()).commit();
         });
+        latex_headers_output
+            .clone()
+            .set(latex_headers.to_string())
+            .commit();
 
         let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
         // let from = 0;

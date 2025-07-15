@@ -27,4 +27,5 @@ export class LabelConfig extends ConfigurationObject<{label: string; style: numb
 export enum LabelStyle {
     Inline = 0,
     Above = 1,
+    Category = 2,
 }

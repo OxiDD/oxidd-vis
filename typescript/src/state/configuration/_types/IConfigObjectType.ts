@@ -1,6 +1,7 @@
 import {ButtonConfig} from "../types/ButtonConfig";
 import {ChoiceConfig} from "../types/ChoiceConfig";
 import {CompositeConfig} from "../types/CompositeConfig";
+import {ContainerConfig} from "../types/ContainerConfig";
 import {FloatConfig} from "../types/FloatConfig";
 import {IntConfig} from "../types/IntConfig";
 import {LabelConfig} from "../types/LabelConfig";
@@ -17,4 +18,5 @@ export type IConfigObjectType =
     | ButtonConfig
     | TextOutputConfig
     | PanelConfig
-    | LocationConfig;
+    | LocationConfig
+    | ContainerConfig;

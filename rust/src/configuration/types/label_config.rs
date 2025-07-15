@@ -32,6 +32,7 @@ struct LabelValue<C: Abstractable> {
 pub enum LabelStyle {
     Inline = 0,
     Above = 1,
+    Category = 2,
 }
 
 impl<C: Abstractable + Clone + 'static> LabelConfig<C> {
