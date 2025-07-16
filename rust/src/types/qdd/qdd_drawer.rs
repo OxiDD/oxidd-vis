@@ -143,8 +143,8 @@ impl QDDDiagram<DummyBDDManagerRef> {
 
 impl Diagram for QDDDiagram<DummyBDDManagerRef> {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
-        let (roots, levels) = DummyBDDFunction::from_dddmp(&mut self.manager_ref, &dddmp);
-        Some(Box::new(QDDDiagramSection::new(roots, levels)))
+        let (roots, levels, is_bdd) = DummyBDDFunction::from_dddmp(&mut self.manager_ref, &dddmp);
+        Some(Box::new(QDDDiagramSection::new(roots, is_bdd, levels)))
     }
     // Other == Buddy
     fn create_section_from_other(
@@ -152,9 +152,9 @@ impl Diagram for QDDDiagram<DummyBDDManagerRef> {
         data: String,
         vars: Option<String>,
     ) -> Option<Box<dyn DiagramSection>> {
-        let (roots, levels) =
+        let (roots, levels, is_bdd) =
             DummyBDDFunction::from_buddy(&mut self.manager_ref, &data, vars.as_deref());
-        Some(Box::new(QDDDiagramSection::new(roots, levels)))
+        Some(Box::new(QDDDiagramSection::new(roots, is_bdd, levels)))
     }
     fn create_section_from_ids(
         &self,
@@ -169,7 +169,8 @@ impl Diagram for QDDDiagram<DummyBDDManagerRef> {
                 (DummyBDDFunction(root_edge), section.get_node_labels(id))
             })
             .collect_vec();
-        Some(Box::new(QDDDiagramSection::new(roots, levels)))
+        let is_bdd = sources.iter().all(|&(_, section)| section.get_meta() == 1);
+        Some(Box::new(QDDDiagramSection::new(roots, is_bdd, levels)))
     }
 }
 
@@ -180,13 +181,14 @@ where
     roots: Vec<(F, Vec<String>)>,
     labels: HashMap<NodeID, Vec<String>>,
     levels: Vec<String>,
+    is_bdd: bool,
 }
 
 impl<F: Function> QDDDiagramSection<F>
 where
     for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
 {
-    fn new(roots: Vec<(F, Vec<String>)>, levels: Vec<String>) -> Self {
+    fn new(roots: Vec<(F, Vec<String>)>, is_bdd: bool, levels: Vec<String>) -> Self {
         let s = QDDDiagramSection {
             labels: roots
                 .iter()
@@ -198,6 +200,7 @@ where
                 })
                 .collect(),
             roots,
+            is_bdd,
             levels,
         };
         console::log!(
@@ -281,8 +284,11 @@ impl DiagramSection for QDDDiagramSection<DummyBDDFunction> {
         let graph =
             OxiddGraphStructure::new(self.roots.iter().cloned().collect(), self.levels.clone());
 
-        let diagram = QDDDiagramDrawer::new(graph, canvas);
+        let diagram = QDDDiagramDrawer::new(graph, self.is_bdd, canvas);
         Box::new(diagram)
+    }
+    fn get_meta(&self) -> i128 {
+        self.is_bdd as i128
     }
 }
 
@@ -415,19 +421,21 @@ pub struct QDDDiagramDrawer {
         LocationConfig<
             PanelConfig<
                 CompositeConfig<(
-                    CompositeConfig<(
-                        ButtonConfig,
-                        LabelConfig<ChoiceConfig<bool>>,
-                        LabelConfig<IntConfig>,
-                        ButtonConfig,
-                    )>,
-                    ContainerConfig<LabelConfig<ChoiceConfig<usize>>>,
+                    ButtonConfig,
+                    ContainerConfig<
+                        CompositeConfig<(
+                            LabelConfig<ChoiceConfig<bool>>,
+                            LabelConfig<IntConfig>,
+                            ButtonConfig,
+                            LabelConfig<ChoiceConfig<usize>>,
+                        )>,
+                    >,
                     ContainerConfig<
                         LabelConfig<
                             CompositeConfig<(
                                 LabelConfig<ChoiceConfig<PresenceRemainder>>,
                                 LabelConfig<ChoiceConfig<PresenceRemainder>>,
-                                LabelConfig<ChoiceConfig<bool>>,
+                                ContainerConfig<LabelConfig<ChoiceConfig<bool>>>,
                             )>,
                         >,
                     >,
@@ -447,7 +455,7 @@ pub struct QDDDiagramDrawer {
 }
 
 impl QDDDiagramDrawer {
-    pub fn new(graph: BaseGraph, canvas: HtmlCanvasElement) -> Self {
+    pub fn new(graph: BaseGraph, is_bdd: bool, canvas: HtmlCanvasElement) -> Self {
         let colors = &QDDColors::LIGHT;
         let edge_rendering_type =
             |color: Color, width: f32, dash_solid: f32, dash_transparent: f32| EdgeRenderingType {
@@ -615,24 +623,25 @@ impl QDDDiagramDrawer {
 
         const TOP_MARGIN: f32 = 40.0;
         let composite_config = CompositeConfig::new((
-            CompositeConfig::new((
-                ButtonConfig::new_labeled("Expand all nodes"),
-                LabelConfig::new("Move shared", {
-                    let mut c = ChoiceConfig::new([
-                        Choice::new(true, "enabled"),
-                        Choice::new(false, "disabled"),
-                    ]);
-                    c
-                }),
-                LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
-                ButtonConfig::new_labeled("Change seed"),
-            )),
+            ButtonConfig::new_labeled("Expand defaults"),
             ContainerConfig::new(
-                ContainerStyle::new().hidden(true),
-                LabelConfig::new(
-                    "Layout",
-                    ChoiceConfig::new([Choice::new(0, "1"), Choice::new(1, "2")]),
-                ),
+                // Only show these testing options for QDDs
+                ContainerStyle::new().hidden(is_bdd),
+                CompositeConfig::new((
+                    LabelConfig::new("Move shared", {
+                        let mut c = ChoiceConfig::new([
+                            Choice::new(true, "enabled"),
+                            Choice::new(false, "disabled"),
+                        ]);
+                        c
+                    }),
+                    LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
+                    ButtonConfig::new_labeled("Change seed"),
+                    LabelConfig::new(
+                        "Layout",
+                        ChoiceConfig::new([Choice::new(0, "1"), Choice::new(1, "2")]),
+                    ),
+                )),
             ),
             ContainerConfig::new(
                 ContainerStyle::new().margin_top(TOP_MARGIN),
@@ -657,14 +666,18 @@ impl QDDDiagramDrawer {
                                 Choice::new(PresenceRemainder::Hide, "hide"),
                             ]),
                         ),
-                        LabelConfig::new("Hide shared true", {
-                            let mut c = ChoiceConfig::new([
-                                Choice::new(false, "show"),
-                                Choice::new(true, "hide"),
-                            ]);
-                            c.set_index(1).commit();
-                            c
-                        }),
+                        // Only show this option for QDDs
+                        ContainerConfig::new(
+                            ContainerStyle::new().hidden(is_bdd),
+                            LabelConfig::new("Shared true visibility", {
+                                let mut c = ChoiceConfig::new([
+                                    Choice::new(false, "show"),
+                                    Choice::new(true, "hide"),
+                                ]);
+                                c.set_index(1).commit();
+                                c
+                            }),
+                        ),
                     )),
                 ),
             ),
@@ -706,8 +719,8 @@ impl QDDDiagramDrawer {
             config,
         };
 
-        let (base_config, layout_config, terminal_config, latex_config) = &*composite_config;
-        let (expand_all, move_shared, seed, change_seed) = &**base_config;
+        let (expand_all, qdd_config, terminal_config, latex_config) = &*composite_config;
+        let (move_shared, seed, change_seed, layout_config) = &***qdd_config;
         let (false_visibility, true_visibility, hide_shared_true) = &****terminal_config;
         let (latex_generate, latex_output, latex_header_output) = &****latex_config;
 
@@ -862,10 +875,12 @@ fn reveal_all<G: GraphStructure>(
     limit: usize,
 ) {
     let nodes = {
-        let explored_group = group_manager
-            .get()
-            .create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
-        group_manager.read().get_nodes_of_group(explored_group)
+        let mut gm = group_manager.get();
+        if !gm.get_groups().contains_key(&from_id) {
+            return;
+        }
+        let explored_group = gm.create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
+        gm.get_nodes_of_group(explored_group)
     };
     let mut count = 0;
     let mut group_manager = group_manager.get();

@@ -16,10 +16,10 @@ export const ContainerConfigComp: FC<{
     return (
         <div
             style={{
-                marginLeft: margin.left,
-                marginRight: margin.right,
-                marginTop: margin.top,
-                marginBottom: margin.bottom,
+                ...(margin.left ? {marginLeft: margin.left} : undefined),
+                ...(margin.right ? {marginRight: margin.right} : undefined),
+                ...(margin.top ? {marginTop: margin.top} : undefined),
+                ...(margin.bottom ? {marginBottom: margin.bottom} : undefined),
             }}>
             <ChildComp value={watch(value.value)} />
         </div>

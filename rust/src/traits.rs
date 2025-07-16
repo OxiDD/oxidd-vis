@@ -24,6 +24,7 @@ pub trait DiagramSection {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer>;
     fn get_level_labels(&self) -> Vec<String>;
     fn get_node_labels(&self, node: NodeID) -> Vec<String>;
+    fn get_meta(&self) -> i128;
 }
 
 pub trait DiagramSectionDrawer {

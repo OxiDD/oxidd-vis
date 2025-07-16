@@ -247,6 +247,9 @@ impl DiagramSection for MTBDDDiagramSection<DummyMTBDDFunction> {
         let diagram = MTBDDDiagramDrawer::new(graph, canvas);
         Box::new(diagram)
     }
+    fn get_meta(&self) -> i128 {
+        0
+    }
 }
 
 #[derive(Clone)]
@@ -539,7 +542,7 @@ impl MTBDDDiagramDrawer {
 
         const TOP_MARGIN: f32 = 40.0;
         let composite_config = CompositeConfig::new((
-            ButtonConfig::new_labeled("Expand all nodes"),
+            ButtonConfig::new_labeled("Expand defaults"),
             ContainerConfig::new(
                 ContainerStyle::new().margin_top(TOP_MARGIN),
                 LabelConfig::new_styled(
