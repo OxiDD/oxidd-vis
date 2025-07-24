@@ -10,7 +10,7 @@ A decision diagram visualization tool. This tool is a work in progress, with man
   - Binary decision diagrams (BDDs)
   - Multi-terminal BDDs (MTBDDs, aka ADDs)
 - **Extensibility**: Due to OxiDD-viz’s composable design, one can implement new decision diagram visualizations without having to reimplement UI-components and layouting approaches.
-- **Ease of use**: Diagrams can be visualized from OxiDD, and viewed direclty in your browser at: TODO.
+- **Ease of use**: Diagrams can be visualized from OxiDD, and viewed direclty in your browser at [oxidd.net/viz](https://oxidd.net/viz).
 - **Scalability**: Grouping nodes together allows for the rendering and explorations of diagrams with millions of nodes.
 - **Customisability**: Without alteration of any code, visualizations and their locations can be customised.
 
