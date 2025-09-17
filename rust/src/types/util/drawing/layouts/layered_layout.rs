@@ -146,16 +146,21 @@ where
             &mut next_free_id,
         );
 
-        let node_widths = &layers
+        let base_node_widths = graph
+            .get_all_groups()
             .iter()
-            .flatten()
-            .map(|(&node, _)| {
-                (
-                    node,
-                    get_node_width(node, graph, &dummy_owners, dummy_group_start_id),
-                )
+            .map(|&node| (node, graph.get_group_label(node).get_width()))
+            .collect::<HashMap<usize, f32>>();
+        let node_widths = graph
+            .get_all_groups()
+            .iter()
+            .cloned()
+            .chain(dummy_group_start_id..next_free_id)
+            .map(|node| {
+                let owner = dummy_owners.get(&node).cloned().unwrap_or(node);
+                (node, base_node_widths.get(&owner).cloned().unwrap_or(0.0))
             })
-            .collect();
+            .collect::<HashMap<usize, f32>>();
 
         // Perform node positioning
         let layers = self.ordering.order_nodes(
@@ -176,6 +181,7 @@ where
             dummy_edge_start_id,
             &dummy_owners,
         );
+
         remove_group_crossings(&layers, &mut edges, &dummy_owners);
 
         // Perform node-positioning
@@ -199,23 +205,6 @@ where
             edge_connection_nodes,
             dummy_group_start_id,
         )
-    }
-}
-
-fn get_node_width<G: GroupedGraphStructure>(
-    node: NodeGroupID,
-    graph: &G,
-    owners: &HashMap<NodeGroupID, NodeGroupID>,
-    dummy_group_start_id: NodeGroupID,
-) -> f32
-where
-    G::GL: WidthLabel,
-{
-    let owner = owners.get(&node).cloned().unwrap_or(node);
-    if owner < dummy_group_start_id {
-        graph.get_group_label(owner).get_width()
-    } else {
-        0.
     }
 }
 
