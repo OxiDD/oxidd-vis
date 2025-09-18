@@ -16,6 +16,7 @@ use crate::{
             composite_config::CompositeConfig,
             container_config::{ContainerConfig, ContainerStyle},
             float_config::FloatConfig,
+            int_config::IntConfig,
             label_config::{LabelConfig, LabelStyle},
             location_config::{Location, LocationConfig},
             panel_config::{OpenSide, PanelConfig},
@@ -363,7 +364,15 @@ pub struct MTBDDDiagramDrawer {
         LocationConfig<
             PanelConfig<
                 CompositeConfig<(
-                    ButtonConfig,
+                    ContainerConfig<
+                        LabelConfig<
+                            CompositeConfig<(
+                                LabelConfig<IntConfig>,
+                                LabelConfig<IntConfig>,
+                                ButtonConfig,
+                            )>,
+                        >,
+                    >,
                     ContainerConfig<
                         LabelConfig<
                             CompositeConfig<(
@@ -542,7 +551,18 @@ impl MTBDDDiagramDrawer {
 
         const TOP_MARGIN: f32 = 40.0;
         let composite_config = CompositeConfig::new((
-            ButtonConfig::new_labeled("Expand defaults"),
+            ContainerConfig::new(
+                ContainerStyle::new(),
+                LabelConfig::new_styled(
+                    "Node expansion",
+                    LabelStyle::Category,
+                    CompositeConfig::new((
+                        LabelConfig::new("Layers", IntConfig::new_min_max(4, Some(1), None)),
+                        LabelConfig::new("Max nodes", IntConfig::new_min_max(100, Some(1), None)),
+                        ButtonConfig::new_labeled("Expand initial group"),
+                    )),
+                ),
+            ),
             ContainerConfig::new(
                 ContainerStyle::new().margin_top(TOP_MARGIN),
                 LabelConfig::new_styled(
@@ -615,10 +635,11 @@ impl MTBDDDiagramDrawer {
             config,
         };
 
-        let (expand_all, terminals, latex_config) = &*composite_config;
+        let (expansion, terminals, latex_config) = &*composite_config;
+        let (_max_expand_layers, _max_expand_nodes, expand_all) = &****expansion;
         let (generate_latex, latex_output, latex_headers_output) = &****latex_config;
         let (expand_terminals, zero_visibility, one_visibility, terminal_range) = &****terminals;
-        let (terminal_range_start, terminal_range_end) = &***terminal_range;
+        let (_terminal_range_start, _terminal_range_end) = &***terminal_range;
 
         let drawer = out.drawer.clone();
         let mut latex_renderer = LatexRenderer::<Layout>::new();
@@ -768,7 +789,13 @@ impl DiagramSectionDrawer for MTBDDDiagramDrawer {
     }
 
     fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
-        self.group_manager.get().split_edges(nodes, fully);
+        let (expansion, _terminals, _latex_config) = &****self.config;
+        let (max_expand_layers, max_expand_nodes, _expand_all) = &****expansion;
+        self.group_manager.get().split_edges(
+            nodes,
+            max_expand_layers.get().unsigned_abs(),
+            max_expand_nodes.get().unsigned_abs(),
+        );
     }
 
     fn get_nodes(&self, area: Rectangle, max_group_expansion: usize) -> Vec<NodeID> {

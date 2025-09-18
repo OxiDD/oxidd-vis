@@ -421,7 +421,6 @@ pub struct QDDDiagramDrawer {
         LocationConfig<
             PanelConfig<
                 CompositeConfig<(
-                    ButtonConfig,
                     ContainerConfig<
                         CompositeConfig<(
                             LabelConfig<ChoiceConfig<bool>>,
@@ -429,6 +428,15 @@ pub struct QDDDiagramDrawer {
                             ButtonConfig,
                             LabelConfig<ChoiceConfig<usize>>,
                         )>,
+                    >,
+                    ContainerConfig<
+                        LabelConfig<
+                            CompositeConfig<(
+                                LabelConfig<IntConfig>,
+                                LabelConfig<IntConfig>,
+                                ButtonConfig,
+                            )>,
+                        >,
                     >,
                     ContainerConfig<
                         LabelConfig<
@@ -623,18 +631,17 @@ impl QDDDiagramDrawer {
 
         const TOP_MARGIN: f32 = 40.0;
         let composite_config = CompositeConfig::new((
-            ButtonConfig::new_labeled("Expand defaults"),
             ContainerConfig::new(
                 // Only show these testing options for QDDs
                 ContainerStyle::new().hidden(is_bdd),
                 CompositeConfig::new((
-                    LabelConfig::new("Move shared", {
-                        let mut c = ChoiceConfig::new([
+                    LabelConfig::new(
+                        "Move shared",
+                        ChoiceConfig::new([
                             Choice::new(true, "enabled"),
                             Choice::new(false, "disabled"),
-                        ]);
-                        c
-                    }),
+                        ]),
+                    ),
                     LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
                     ButtonConfig::new_labeled("Change seed"),
                     LabelConfig::new(
@@ -642,6 +649,18 @@ impl QDDDiagramDrawer {
                         ChoiceConfig::new([Choice::new(0, "1"), Choice::new(1, "2")]),
                     ),
                 )),
+            ),
+            ContainerConfig::new(
+                ContainerStyle::new().margin_top(if is_bdd { 0.0 } else { TOP_MARGIN }),
+                LabelConfig::new_styled(
+                    "Node expansion",
+                    LabelStyle::Category,
+                    CompositeConfig::new((
+                        LabelConfig::new("Layers", IntConfig::new_min_max(4, Some(1), None)),
+                        LabelConfig::new("Max nodes", IntConfig::new_min_max(100, Some(1), None)),
+                        ButtonConfig::new_labeled("Expand initial group"),
+                    )),
+                ),
             ),
             ContainerConfig::new(
                 ContainerStyle::new().margin_top(TOP_MARGIN),
@@ -719,8 +738,9 @@ impl QDDDiagramDrawer {
             config,
         };
 
-        let (expand_all, qdd_config, terminal_config, latex_config) = &*composite_config;
+        let (qdd_config, expansion, terminal_config, latex_config) = &*composite_config;
         let (move_shared, seed, change_seed, layout_config) = &***qdd_config;
+        let (_max_expand_layers, _max_expand_nodes, expand_all) = &****expansion;
         let (false_visibility, true_visibility, hide_shared_true) = &****terminal_config;
         let (latex_generate, latex_output, latex_header_output) = &****latex_config;
 
@@ -923,7 +943,13 @@ impl DiagramSectionDrawer for QDDDiagramDrawer {
     }
 
     fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
-        self.group_manager.get().split_edges(nodes, fully);
+        let (_qdd_config, expansion, _terminal_config, _latex_config) = &****self.config;
+        let (max_expand_layers, max_expand_nodes, _expand_all) = &****expansion;
+        self.group_manager.get().split_edges(
+            nodes,
+            max_expand_layers.get().unsigned_abs(),
+            max_expand_nodes.get().unsigned_abs(),
+        );
     }
 
     fn get_nodes(&self, area: Rectangle, max_group_expansion: usize) -> Vec<NodeID> {

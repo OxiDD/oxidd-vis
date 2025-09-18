@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
     cmp::Reverse,
-    collections::{HashMap, HashSet, LinkedList},
+    collections::{HashMap, HashSet, LinkedList, VecDeque},
     fmt::Display,
     hash::Hash,
     io::{Cursor, Result, Write},
@@ -663,16 +663,49 @@ impl<G: GraphStructure> GroupManager<G> {
         new_id
     }
 
-    pub fn split_edges(&mut self, node_ids: &[NodeID], fully: bool) {
+    pub fn split_edges(&mut self, node_ids: &[NodeID], max_layers: usize, mut max_nodes: usize) {
         // TODO: come up with a better splitting approach that considers nodes together
         let mut split = HashSet::new();
-        for &node_id in node_ids {
-            let neighbors = self
-                .graph
-                .get_children(node_id)
-                .into_iter()
-                .chain(self.graph.get_known_parents(node_id).into_iter());
-            for (_, child) in neighbors {
+
+        // We use expand dir to go both up and down from the root, but only up or down from there forward
+        #[derive(PartialEq, Eq)]
+        enum ExpandDir {
+            Up,
+            Down,
+            Both,
+        };
+
+        let mut queue = node_ids
+            .iter()
+            .map(|&node| (node, 0, ExpandDir::Both))
+            .collect::<VecDeque<_>>();
+
+        while let Some((node_id, depth, dir)) = queue.pop_front() {
+            if max_nodes == 0 {
+                return;
+            }
+            max_nodes -= 1;
+
+            let mut neighbors = Vec::new();
+            if dir != ExpandDir::Up {
+                neighbors.extend(
+                    self.graph
+                        .get_children(node_id)
+                        .into_iter()
+                        .map(|(_, node)| (node, ExpandDir::Down)),
+                )
+            };
+            if dir != ExpandDir::Down {
+                neighbors.extend(
+                    self.graph
+                        .get_known_parents(node_id)
+                        .into_iter()
+                        .map(|(_, node)| (node, ExpandDir::Up)),
+                )
+            };
+
+            let next_depth = depth + 1;
+            for (child, dir) in neighbors {
                 if split.contains(&child) {
                     continue;
                 }
@@ -684,8 +717,33 @@ impl<G: GraphStructure> GroupManager<G> {
                 }
 
                 self.create_group(vec![TargetID(TargetIDType::NodeID, child)]);
+
+                if next_depth < max_layers {
+                    queue.push_back((child, next_depth, dir));
+                }
             }
         }
+
+        // for &node_id in node_ids {
+        //     let neighbors = self
+        //         .graph
+        //         .get_children(node_id)
+        //         .into_iter()
+        //         .chain(self.graph.get_known_parents(node_id).into_iter());
+        //     for (_, child) in neighbors {
+        //         if split.contains(&child) {
+        //             continue;
+        //         }
+
+        //         split.insert(child);
+        //         let group_id = self.get_group(child);
+        //         if self.get_nodes_of_group(group_id).len() == 1 && group_id != 0 {
+        //             continue;
+        //         }
+
+        //         self.create_group(vec![TargetID(TargetIDType::NodeID, child)]);
+        //     }
+        // }
     }
 }
 
