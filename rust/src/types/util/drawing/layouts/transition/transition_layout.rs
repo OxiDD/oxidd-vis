@@ -199,7 +199,8 @@ fn layout_updated_group<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     let duration = durations.transition_duration;
 
     let cur_size = old_group.size.get(time);
-    let cur_position = old_group.position.get(time);
+    let cur_old_group_position = old_group.position.get(time);
+    let old_position = cur_old_group_position + target_data.offset;
     let start_size = if target_data.represents {
         cur_size
     } else {
@@ -219,7 +220,7 @@ fn layout_updated_group<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
         position: Transition {
             old_time,
             duration,
-            old: cur_position + target_data.offset,
+            old: old_position,
             new: group.position.new,
         },
         size: Transition {
@@ -242,7 +243,15 @@ fn layout_updated_group<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
                 (
                     edge_data.clone(),
                     layout_current_edge(
-                        id, edge_data, edge, old_group, &old, &new, &durations, &relations, time,
+                        id,
+                        edge_data,
+                        edge,
+                        old_position,
+                        &old,
+                        &new,
+                        &durations,
+                        &relations,
+                        time,
                     ),
                 )
             })
@@ -426,7 +435,7 @@ fn layout_current_edge<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     from: NodeGroupID,
     edge: &EdgeData<T>,
     edge_layout: &EdgeLayout,
-    old_group: &NodeGroupLayout<T, S>,
+    old_group_position: Point,
     old: &DiagramLayout<T, S, LS>,
     new: &DiagramLayout<T, S, LS>,
     durations: &TransitionDurations,
@@ -550,6 +559,7 @@ fn layout_current_edge<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
             .zip(relations.previous_groups.get(&edge.to))
             .map(|(from_source, to_source)| from_source.id == to_source.id)
             .unwrap_or(false);
+        let start_offset = edge_layout.start_offset.get(time);
         let points = edge_layout
             .points
             .iter()
@@ -557,13 +567,13 @@ fn layout_current_edge<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
                 point: Transition {
                     duration,
                     old_time,
-                    // TODO: could also transition in from the new node's edge start position
-                    old: old_group.position.get(time) + edge_layout.end_offset.get(time),
+                    old: old_group_position + start_offset,
                     new: point.point.new,
                 },
                 exists: point.exists,
             })
             .collect();
+
         EdgeLayout {
             start_offset: edge_layout.start_offset,
             end_offset: edge_layout.end_offset,
