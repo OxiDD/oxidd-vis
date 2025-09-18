@@ -17,7 +17,7 @@ use crate::{
             container_config::{ContainerConfig, ContainerStyle},
             float_config::FloatConfig,
             int_config::IntConfig,
-            label_config::{LabelConfig, LabelStyle},
+            label_config::{LabelConfig, LabelKind},
             location_config::{Location, LocationConfig},
             panel_config::{OpenSide, PanelConfig},
             text_output_config::TextOutputConfig,
@@ -555,7 +555,7 @@ impl MTBDDDiagramDrawer {
                 ContainerStyle::new(),
                 LabelConfig::new_styled(
                     "Node expansion",
-                    LabelStyle::Category,
+                    LabelKind::Category,
                     CompositeConfig::new((
                         LabelConfig::new("Layers", IntConfig::new_min_max(4, Some(1), None)),
                         LabelConfig::new("Max nodes", IntConfig::new_min_max(100, Some(1), None)),
@@ -567,7 +567,7 @@ impl MTBDDDiagramDrawer {
                 ContainerStyle::new().margin_top(TOP_MARGIN),
                 LabelConfig::new_styled(
                     "Terminals",
-                    LabelStyle::Category,
+                    LabelKind::Category,
                     CompositeConfig::new((
                         ButtonConfig::new_labeled("Expand"),
                         LabelConfig::new("0 visibility", {
@@ -601,7 +601,7 @@ impl MTBDDDiagramDrawer {
                 ContainerStyle::new().margin_top(TOP_MARGIN),
                 LabelConfig::new_styled(
                     "Latex",
-                    LabelStyle::Category,
+                    LabelKind::Category,
                     CompositeConfig::new((
                         ButtonConfig::new_labeled("Generate"),
                         TextOutputConfig::new(true),

@@ -48,7 +48,7 @@ export const TextOutputConfigComp: FC<{
             {copyStatus}
             {output.text && (
                 <>
-                    <Stack horizontal>
+                    <Stack horizontal style={{flexWrap: "wrap"}}>
                         <DefaultButton style={{flexGrow: 1}} onClick={revealTextModal}>
                             Show
                         </DefaultButton>

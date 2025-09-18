@@ -15,7 +15,9 @@ export const CompositeConfigComp: FC<{
     return (
         <Stack
             tokens={{childrenGap: theme.spacing.s1}}
-            className={isHorizontal ? css({">*": {flex: 1}}) : undefined}
+            className={
+                isHorizontal ? css({">*": {flex: 1}, flexWrap: "wrap"}) : undefined
+            }
             horizontal={isHorizontal}>
             {watch(value.children).map((child, i) => (
                 <ChildComp key={i} value={child} />

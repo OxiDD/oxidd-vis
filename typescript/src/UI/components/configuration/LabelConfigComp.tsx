@@ -1,5 +1,5 @@
-import React, {FC} from "react";
-import {Label, Stack, useTheme} from "@fluentui/react";
+import React, {FC, useEffect, useRef, useState} from "react";
+import {ILabel, Label, Stack, useTheme} from "@fluentui/react";
 import {useWatch} from "../../../watchables/react/useWatch";
 import {LabelConfig, LabelStyle} from "../../../state/configuration/types/LabelConfig";
 import {IConfigObjectType} from "../../../state/configuration/_types/IConfigObjectType";
@@ -13,6 +13,12 @@ export const LabelConfigComp: FC<{
     const text = watch(value.label);
     const type = watch(value.style);
     const theme = useTheme();
+
+    const [width, setWidth] = useState<number | undefined>();
+    const labelRef = useRef<HTMLSpanElement | null>(null);
+    useEffect(() => {
+        setWidth(labelRef.current?.getBoundingClientRect().width);
+    }, [text]);
     if (type == LabelStyle.Category) {
         return (
             <>
@@ -32,8 +38,13 @@ export const LabelConfigComp: FC<{
             <Stack
                 horizontal
                 tokens={{childrenGap: theme.spacing.s1}}
-                className={css({">:nth-child(2)": {flexGrow: 1}})}>
-                <Label>{text}</Label>
+                className={css({">:nth-child(3)": {flex: "1 1"}, flexWrap: "wrap"})}>
+                <Label style={{flex: "1 1", maxWidth: width}}>{text}</Label>
+                <Label style={{position: "absolute", visibility: "hidden"}}>
+                    <span style={{display: "inline-block"}} ref={labelRef}>
+                        {text}
+                    </span>
+                </Label>
                 <ChildComp value={watch(value.value)} />
             </Stack>
         );

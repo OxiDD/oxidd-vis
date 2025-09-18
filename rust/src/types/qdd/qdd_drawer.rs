@@ -31,7 +31,7 @@ use crate::configuration::types::container_config::ContainerConfig;
 use crate::configuration::types::container_config::ContainerStyle;
 use crate::configuration::types::int_config::IntConfig;
 use crate::configuration::types::label_config::LabelConfig;
-use crate::configuration::types::label_config::LabelStyle;
+use crate::configuration::types::label_config::LabelKind;
 use crate::configuration::types::location_config::Location;
 use crate::configuration::types::location_config::LocationConfig;
 use crate::configuration::types::panel_config::OpenSide;
@@ -654,7 +654,7 @@ impl QDDDiagramDrawer {
                 ContainerStyle::new().margin_top(if is_bdd { 0.0 } else { TOP_MARGIN }),
                 LabelConfig::new_styled(
                     "Node expansion",
-                    LabelStyle::Category,
+                    LabelKind::Category,
                     CompositeConfig::new((
                         LabelConfig::new("Layers", IntConfig::new_min_max(4, Some(1), None)),
                         LabelConfig::new("Max nodes", IntConfig::new_min_max(100, Some(1), None)),
@@ -666,7 +666,7 @@ impl QDDDiagramDrawer {
                 ContainerStyle::new().margin_top(TOP_MARGIN),
                 LabelConfig::new_styled(
                     "Terminals",
-                    LabelStyle::Category,
+                    LabelKind::Category,
                     CompositeConfig::new((
                         LabelConfig::new("False visibility", {
                             let mut c = ChoiceConfig::new([
@@ -704,7 +704,7 @@ impl QDDDiagramDrawer {
                 ContainerStyle::new().margin_top(TOP_MARGIN),
                 LabelConfig::new_styled(
                     "Latex",
-                    LabelStyle::Category,
+                    LabelKind::Category,
                     CompositeConfig::new((
                         ButtonConfig::new_labeled("Generate"),
                         TextOutputConfig::new(true),
