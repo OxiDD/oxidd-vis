@@ -23,10 +23,10 @@ export const Info: FC<{app: AppState}> = ({app}) => {
                         root: {marginRight: 10, fontSize: 45, verticalAlign: "bottom"},
                     }}
                 />
-                OxiDD-viz
+                OxiDD-vis
             </h1>
             <p>
-                OxiDD-viz is a Decision Diagram (DD) visualization tool. It is in active
+                OxiDD-vis is a Decision Diagram (DD) visualization tool. It is in active
                 development, and more features will be added over time. Two types of
                 diagrams are currently supported:
                 <ul>
@@ -81,12 +81,12 @@ export const Info: FC<{app: AppState}> = ({app}) => {
                 type. When no new diagrams have been created, this request should return a
                 404. OxiDD provides a visualize function in the <code>oxidd-dump</code>{" "}
                 crate which temporarily hosts such a server until the contents are read by
-                OxiDD-viz.
+                OxiDD-vis.
             </p>
 
             <h2>Features</h2>
             <p>
-                Despite being unfinished, OxiDD-viz already includes several great
+                Despite being unfinished, OxiDD-vis already includes several great
                 features. Some of these will be briefly introduced here.
             </p>
             <h3>Tabs</h3>

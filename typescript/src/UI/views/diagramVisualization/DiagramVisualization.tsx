@@ -8,7 +8,7 @@ import {useToolbar} from "../../providers/ToolbarContext";
 import {useWatch} from "../../../watchables/react/useWatch";
 import {ActionButton, PrimaryButton, useTheme} from "@fluentui/react";
 import {Toolbar} from "../toolbar/Toolbar";
-import {PresenceRemainder} from "oxidd-viz-rust";
+import {PresenceRemainder} from "oxidd-vis-rust";
 import {ConfigTypeComp} from "../../components/configuration/ConfigTypeComp";
 
 export const DiagramVisualization: FC<{visualization: DiagramVisualizationState}> = ({

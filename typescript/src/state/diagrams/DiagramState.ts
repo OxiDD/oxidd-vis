@@ -1,4 +1,4 @@
-import {DiagramBox} from "oxidd-viz-rust";
+import {DiagramBox} from "oxidd-vis-rust";
 import {Field} from "../../watchables/Field";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
@@ -77,8 +77,8 @@ export class DiagramState extends ViewState {
             push(this._sections.set([...this._sections.get(), section]));
             if (name)
                 try {
-                    const viz = section.visualization.get();
-                    if (viz) push(viz.name.set(name));
+                    const vis = section.visualization.get();
+                    if (vis) push(vis.name.set(name));
                 } catch (e) {
                     console.error(e);
                 }
@@ -103,8 +103,8 @@ export class DiagramState extends ViewState {
             push(this._sections.set([...this._sections.get(), section]));
             if (name)
                 try {
-                    const viz = section.visualization.get();
-                    if (viz) push(viz.name.set(name));
+                    const vis = section.visualization.get();
+                    if (vis) push(vis.name.set(name));
                 } catch (e) {
                     console.error(e);
                 }
@@ -123,10 +123,10 @@ export class DiagramState extends ViewState {
             const section = new ReferenceSource(this, this.diagram, parents, nodes);
             push(this._sections.set([...this._sections.get(), section]));
             try {
-                const viz = section.visualization.get();
-                if (viz)
+                const vis = section.visualization.get();
+                if (vis)
                     push(
-                        viz.name.set(
+                        vis.name.set(
                             "Node" +
                                 (nodes.length > 1 ? "s" : "") +
                                 " " +

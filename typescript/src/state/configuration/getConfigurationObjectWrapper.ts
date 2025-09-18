@@ -1,4 +1,4 @@
-import {AbstractConfigurationObject, ConfigurationObjectType} from "oxidd-viz-rust";
+import {AbstractConfigurationObject, ConfigurationObjectType} from "oxidd-vis-rust";
 import {IConfigObjectType} from "./_types/IConfigObjectType";
 import {IntConfig} from "./types/IntConfig";
 import {LabelConfig} from "./types/LabelConfig";

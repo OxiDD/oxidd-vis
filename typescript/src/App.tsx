@@ -83,7 +83,7 @@ export const App: FC = () => {
                     <div style={{display: "flex", height: "100%"}}>
                         <Sidebar
                             state={app}
-                            projectUrl="https://github.com/OxiDD/oxidd-viz"
+                            projectUrl="https://github.com/OxiDD/oxidd-vis"
                         />
                         <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
                             <UserLayout state={app} />

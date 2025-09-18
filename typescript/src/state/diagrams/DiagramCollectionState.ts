@@ -1,4 +1,4 @@
-import {create_qdd_diagram, DiagramBox} from "oxidd-viz-rust";
+import {create_qdd_diagram, DiagramBox} from "oxidd-vis-rust";
 import {Constant} from "../../watchables/Constant";
 import {Derived} from "../../watchables/Derived";
 import {PlainField} from "../../watchables/PlainField";

@@ -1,4 +1,4 @@
-import {AbstractConfigurationObject} from "oxidd-viz-rust";
+import {AbstractConfigurationObject} from "oxidd-vis-rust";
 import {ConfigurationObject, IOwnedAbstractConfig} from "../ConfigurationObject";
 import {Derived} from "../../../watchables/Derived";
 import {IMutator} from "../../../watchables/mutator/_types/IMutator";

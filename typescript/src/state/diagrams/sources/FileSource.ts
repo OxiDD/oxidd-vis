@@ -1,4 +1,4 @@
-import {DiagramBox} from "oxidd-viz-rust";
+import {DiagramBox} from "oxidd-vis-rust";
 import {Derived} from "../../../watchables/Derived";
 import {Field} from "../../../watchables/Field";
 import {IMutator} from "../../../watchables/mutator/_types/IMutator";

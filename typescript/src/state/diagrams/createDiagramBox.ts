@@ -1,4 +1,4 @@
-import {create_mtbdd_diagram, create_qdd_diagram, DiagramBox} from "oxidd-viz-rust";
+import {create_mtbdd_diagram, create_qdd_diagram, DiagramBox} from "oxidd-vis-rust";
 import {IDiagramType} from "./_types/IDiagramTypeSerialization";
 
 /**

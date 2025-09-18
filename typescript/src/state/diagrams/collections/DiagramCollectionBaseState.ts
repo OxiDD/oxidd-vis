@@ -7,12 +7,12 @@ import {PlainField} from "../../../watchables/PlainField";
 import {Constant} from "../../../watchables/Constant";
 import {chain} from "../../../watchables/mutator/chain";
 import {IDiagramType} from "../_types/IDiagramTypeSerialization";
-import {create_qdd_diagram, DiagramBox} from "oxidd-viz-rust";
+import {create_qdd_diagram, DiagramBox} from "oxidd-vis-rust";
 import {IDiagramCollectionConfig} from "./_types/IDiagramCollectionType";
 import {Derived} from "../../../watchables/Derived";
 import {v4 as uuid} from "uuid";
 import {createDiagramBox} from "../createDiagramBox";
-import { IDiagramCollectionBaseSerialization } from "./_types/IDiagramCollectionBaseSerialization";
+import {IDiagramCollectionBaseSerialization} from "./_types/IDiagramCollectionBaseSerialization";
 
 export class DiagramCollectionBaseState
     implements IDiagramCollection<IDiagramCollectionBaseSerialization>

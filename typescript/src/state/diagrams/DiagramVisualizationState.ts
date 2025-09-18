@@ -1,23 +1,23 @@
-import { DiagramBox, DiagramSectionDrawerBox, PresenceRemainder } from "oxidd-viz-rust";
-import { IViewGroup, ViewState } from "../views/ViewState";
-import { IPoint } from "../../utils/_types/IPoint";
-import { DerivedField } from "../../utils/DerivedField";
-import { Field } from "../../watchables/Field";
-import { chain } from "../../watchables/mutator/chain";
-import { IBaseViewSerialization } from "../_types/IBaseViewSerialization";
-import { IDiagramVisualizationSerialization } from "./_types/IDiagramVisualizationSerialization";
-import { IMutator } from "../../watchables/mutator/_types/IMutator";
-import { Observer } from "../../watchables/Observer";
-import { ISharedVisualizationState } from "./_types/ISharedVisualizationState";
-import { IRectangle } from "../../utils/_types/IRectangle";
-import { ITool } from "../toolbar/_types/ITool";
-import { IToolEvent } from "../toolbar/_types/IToolEvent";
-import { Derived } from "../../watchables/Derived";
-import { binaryToString, stringToBinary } from "../../utils/binarySerialization";
-import { ITerminalState } from "./_types/ITerminalState";
-import { Mutator } from "../../watchables/mutator/Mutator";
-import { getConfigurationObjectWrapper } from "../configuration/getConfigurationObjectWrapper";
-import { IWatchable } from "../../watchables/_types/IWatchable";
+import {DiagramBox, DiagramSectionDrawerBox, PresenceRemainder} from "oxidd-vis-rust";
+import {IViewGroup, ViewState} from "../views/ViewState";
+import {IPoint} from "../../utils/_types/IPoint";
+import {DerivedField} from "../../utils/DerivedField";
+import {Field} from "../../watchables/Field";
+import {chain} from "../../watchables/mutator/chain";
+import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
+import {IDiagramVisualizationSerialization} from "./_types/IDiagramVisualizationSerialization";
+import {IMutator} from "../../watchables/mutator/_types/IMutator";
+import {Observer} from "../../watchables/Observer";
+import {ISharedVisualizationState} from "./_types/ISharedVisualizationState";
+import {IRectangle} from "../../utils/_types/IRectangle";
+import {ITool} from "../toolbar/_types/ITool";
+import {IToolEvent} from "../toolbar/_types/IToolEvent";
+import {Derived} from "../../watchables/Derived";
+import {binaryToString, stringToBinary} from "../../utils/binarySerialization";
+import {ITerminalState} from "./_types/ITerminalState";
+import {Mutator} from "../../watchables/mutator/Mutator";
+import {getConfigurationObjectWrapper} from "../configuration/getConfigurationObjectWrapper";
+import {IWatchable} from "../../watchables/_types/IWatchable";
 
 /** The state of a single visualization of a diagram */
 export class DiagramVisualizationState extends ViewState {
@@ -27,10 +27,12 @@ export class DiagramVisualizationState extends ViewState {
     /** The configuration object to change settings of this visualization */
     public readonly config = new Derived(() =>
         getConfigurationObjectWrapper({
-            owner: new Derived(watch => ([{
-                name: watch(this.name),
-                id: this.ID
-            }])),
+            owner: new Derived(watch => [
+                {
+                    name: watch(this.name),
+                    id: this.ID,
+                },
+            ]),
             config: this.drawer.get_configuration(),
         })
     );
@@ -42,13 +44,13 @@ export class DiagramVisualizationState extends ViewState {
     protected start = Date.now();
 
     /** The local transformation */
-    public readonly transform = new Field({ offset: { x: 0, y: 0 }, scale: 15 });
+    public readonly transform = new Field({offset: {x: 0, y: 0}, scale: 15});
     protected transformObserver = new Observer(this.transform).add(() =>
         this.sendTransform()
     );
 
     /** The size of the canvas */
-    public readonly size = new Field({ x: 0, y: 0 });
+    public readonly size = new Field({x: 0, y: 0});
     protected sizeObserver = new Observer(this.size).add(() => this.sendTransform());
 
     /** Visualization state shared between visualizations of this diagram */
@@ -65,7 +67,7 @@ export class DiagramVisualizationState extends ViewState {
 
     /** @override */
     public readonly groups: IWatchable<IViewGroup[]> = new Derived(watch => [
-        { targets: [this.ID, ...watch(this.descendants).map(group => group.ID)] },
+        {targets: [this.ID, ...watch(this.descendants).map(group => group.ID)]},
     ]);
 
     /**
@@ -137,7 +139,7 @@ export class DiagramVisualizationState extends ViewState {
      * @param event The event to activate the tool for, defaults to {type: "release"}
      */
     public applyTool(tool: ITool, nodes: Uint32Array, event?: IToolEvent): void {
-        const layout = tool.apply(this, this.drawer, nodes, event ?? { type: "release" });
+        const layout = tool.apply(this, this.drawer, nodes, event ?? {type: "release"});
         if (layout) this.relayout();
     }
 

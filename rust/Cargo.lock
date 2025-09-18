@@ -1274,7 +1274,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "oxidd-viz-rust"
+name = "oxidd-vis-rust"
 version = "0.1.0"
 dependencies = [
  "byteorder",

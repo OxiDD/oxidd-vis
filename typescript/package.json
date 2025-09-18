@@ -1,5 +1,5 @@
 {
-    "name": "oxidd-viz",
+    "name": "oxidd-vis",
     "version": "0.0.0",
     "description": "A webpage for exploring BDDs",
     "private": true,
@@ -21,7 +21,7 @@
         "@types/color": "^3.0.6",
         "@types/react-syntax-highlighter": "^15.5.13",
         "color": "^4.2.3",
-        "oxidd-viz-rust": "file:../rust/pkg",
+        "oxidd-vis-rust": "file:../rust/pkg",
         "parsimmon": "^1.18.1",
         "react": "^17.0.1",
         "react-dom": "^17.0.1",

@@ -1,16 +1,16 @@
-# OxiDD-viz
+# OxiDD-vis
 
 A decision diagram visualization tool. This tool is a work in progress, with many more possible features coming in the future, as well as code refactors that simplify adding support for new decision diagram types.
 
-![Banner image of OxiDD-viz](./docs/banner.png)
+![Banner image of OxiDD-vis](./docs/banner.png)
 
 ## Features
 
 - **Several kinds of (reduced ordered) decision diagrams** are implemented, with more to come:
   - Binary decision diagrams (BDDs)
   - Multi-terminal BDDs (MTBDDs, aka ADDs)
-- **Extensibility**: Due to OxiDD-viz’s composable design, one can implement new decision diagram visualizations without having to reimplement UI-components and layouting approaches.
-- **Ease of use**: Diagrams can be visualized from OxiDD, and viewed direclty in your browser at [oxidd.net/viz](https://oxidd.net/viz).
+- **Extensibility**: Due to OxiDD-vis’s composable design, one can implement new decision diagram visualizations without having to reimplement UI-components and layouting approaches.
+- **Ease of use**: Diagrams can be visualized from OxiDD, and viewed directly in your browser at [oxidd.net/vis](https://oxidd.net/vis).
 - **Scalability**: Grouping nodes together allows for the rendering and explorations of diagrams with millions of nodes.
 - **Customisability**: Without alteration of any code, visualizations and their locations can be customised.
 
@@ -49,15 +49,15 @@ manager_ref.with_manager_shared(|manager| {
 });
 ```
 
-In OxiDD-viz add a diagram source listening to `localhost:4000` and the diagram will automatically be read by the tool:
+In OxiDD-vis add a diagram source listening to `localhost:4000` and the diagram will automatically be read by the tool:
 
 ![Diagram syncing](docs/diagram-source.png)
 
-Alternatively, any tool can provide a BDD or MTBDD DDDMP file, which can be imported into OxiDD-viz manually.
+Alternatively, any tool can provide a BDD or MTBDD DDDMP file, which can be imported into OxiDD-vis manually.
 
 ## Project structure
 
-OxiDD-viz is divided into two parts:
+OxiDD-vis is divided into two parts:
 
 - The overall user interface, written in TypeScript using React, and
 - The diagram rendering an interactions, written in Rust rendered with WebGL
@@ -108,7 +108,7 @@ Finally, a given `DiagramLayout` can be visualized using a [`Renderer`](./rust/s
 
 ### Graph manipulation
 
-In order to provide easy to interpret visualizations, the actual decision diagram being visualized might need to be manipulated. It is for instance common to leave out one of the terminals from BDD visualizations to reduce clutter. `OxiDD-viz` provides two abstractions over decision diagram structures:
+In order to provide easy to interpret visualizations, the actual decision diagram being visualized might need to be manipulated. It is for instance common to leave out one of the terminals from BDD visualizations to reduce clutter. `OxiDD-vis` provides two abstractions over decision diagram structures:
 
 - [`GraphStructure`](./rust/src/types/util/graph_structure/graph_structure.rs) representing the node and edge structure of a decision diagram
 - [`GroupedGraphStructure`](./rust/src/types/util/graph_structure/grouped_graph_structure.rs) which represents the node-group and edge structure of a decision diagram where nodes have been grouped together

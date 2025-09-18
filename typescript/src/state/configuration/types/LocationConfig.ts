@@ -1,17 +1,23 @@
-import {AbstractConfigurationObject} from "oxidd-viz-rust";
+import {AbstractConfigurationObject} from "oxidd-vis-rust";
 import {Derived} from "../../../watchables/Derived";
 import {IConfigObjectType} from "../_types/IConfigObjectType";
 import {ConfigurationObject, IOwnedAbstractConfig} from "../ConfigurationObject";
 import {getConfigurationObjectWrapper} from "../getConfigurationObjectWrapper";
 
-export class LocationConfig extends ConfigurationObject<{horizontal: number, vertical: number, padding: number}> {
+export class LocationConfig extends ConfigurationObject<{
+    horizontal: number;
+    vertical: number;
+    padding: number;
+}> {
     /** The value that is being positioned */
     public readonly value = new Derived<IConfigObjectType>(
         watch => watch(this._children)[0]
     );
 
     /** The horizontal position */
-    public readonly horizontal = new Derived<number>(watch => watch(this._value).horizontal);
+    public readonly horizontal = new Derived<number>(
+        watch => watch(this._value).horizontal
+    );
     /** The vertical position */
     public readonly vertical = new Derived<number>(watch => watch(this._value).vertical);
     /** The padding to put on the parent container */
