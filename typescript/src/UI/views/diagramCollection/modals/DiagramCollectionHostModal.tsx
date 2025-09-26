@@ -24,17 +24,11 @@ export const DiagramCollectionHostModal: FC<{
     onSelect: (host: string) => void;
     onCancel: () => void;
 }> = ({visible, onSelect, onCancel}) => {
-    const [host, _setHost] = useState("localhost:4000");
+    const [host, setHost] = useState("http://localhost:4000");
     const theme = useTheme();
-    const sitePrefix = "http://";
-    const setHost = useCallback((val: string) => {
-        if (val.substring(0, sitePrefix.length) == sitePrefix)
-            val = val.substring(sitePrefix.length);
-        _setHost(val);
-    }, []);
 
     const onSubmit = useCallback(() => {
-        onSelect(sitePrefix + host);
+        onSelect(host);
     }, [host, onSelect]);
     const onKeyDown = useCallback(
         (event: KeyboardEvent<unknown>) => {
@@ -50,7 +44,6 @@ export const DiagramCollectionHostModal: FC<{
                 label="Host"
                 styles={{root: {marginBottom: theme.spacing.m}}}
                 onKeyDown={onKeyDown}
-                prefix={sitePrefix}
             />
             <PrimaryButton onClick={onSubmit} disabled={!host}>
                 Add
