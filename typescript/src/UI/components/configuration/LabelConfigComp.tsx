@@ -1,5 +1,5 @@
 import React, {FC, useEffect, useRef, useState} from "react";
-import {ILabel, Label, Stack, useTheme} from "@fluentui/react";
+import {Label, Stack, useTheme} from "@fluentui/react";
 import {useWatch} from "../../../watchables/react/useWatch";
 import {LabelConfig, LabelStyle} from "../../../state/configuration/types/LabelConfig";
 import {IConfigObjectType} from "../../../state/configuration/_types/IConfigObjectType";
@@ -17,7 +17,17 @@ export const LabelConfigComp: FC<{
     const [width, setWidth] = useState<number | undefined>();
     const labelRef = useRef<HTMLSpanElement | null>(null);
     useEffect(() => {
-        setWidth(labelRef.current?.getBoundingClientRect().width);
+        if (!labelRef.current) return;
+
+        const observer = new ResizeObserver(([entry]) => {
+            const newWidth = entry.contentRect.width;
+            if (newWidth > 0) {
+                setWidth(newWidth);
+            }
+        });
+
+        observer.observe(labelRef.current);
+        return () => observer.disconnect();
     }, [text]);
     if (type == LabelStyle.Category) {
         return (
