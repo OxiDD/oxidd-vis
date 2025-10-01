@@ -243,26 +243,27 @@ impl DummyBDDFunction {
                     .filter(|t| supp_var_names.contains(t))
                     .collect::<Vec<_>>()
             } else {
-                let ids = get_text(".ids", ".permids").trim().split(" ").collect_vec();
+                let supp_vars = get_text(".ids", ".permids")
+                    .trim()
+                    .split(" ")
+                    .filter_map(|var| var.parse::<usize>().ok())
+                    .collect::<Vec<_>>();
                 let id_positions = get_text(".permids", ".nroots");
-                let map = id_positions
+                let mut var_levels = id_positions
                     .trim()
                     .split(" ")
                     .enumerate()
-                    .filter_map(|(layer, pos)| pos.parse::<usize>().ok().map(|pos| (pos, layer)))
-                    .collect::<HashMap<_, _>>();
-
-                console::log!(
-                    "Test {}; {}; {}",
-                    (0..ids.len())
-                        .filter_map(|index| map.get(&index).map(|layer| format!("x{layer}")))
-                        .collect::<Vec<_>>()
-                        .len(),
-                    id_positions,
-                    ids.len()
-                );
-                (0..ids.len())
-                    .filter_map(|index| map.get(&index).map(|layer| format!("x{layer}")))
+                    .filter_map(|(id, level)| {
+                        level
+                            .parse::<usize>()
+                            .ok()
+                            .and_then(|level| supp_vars.get(id).map(|var| (level, var)))
+                    })
+                    .collect::<Vec<_>>();
+                var_levels.sort_by_key(|(level, _var)| *level);
+                var_levels
+                    .iter()
+                    .map(|(_level, var)| format!("x{var}"))
                     .collect::<Vec<_>>()
             };
 

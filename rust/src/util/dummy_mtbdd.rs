@@ -209,18 +209,47 @@ impl DummyMTBDDFunction {
             let funcs = func_map.values().cloned().collect_vec();
 
             let var_names = if data.find(".suppvarnames").is_some() {
-                let var_names_text = get_text(".suppvarnames", ".orderedvarnames");
-                var_names_text
+                let supp_names_text = get_text(".suppvarnames", ".orderedvarnames");
+                let supp_var_names = supp_names_text
                     .trim()
                     .split(" ")
                     .map(|t| t.to_string())
-                    .collect_vec()
+                    .collect::<HashSet<_>>();
+
+                let ord_names_text = if data.find(".orderedvarnames").is_some() {
+                    get_text(".orderedvarnames", ".ids")
+                } else {
+                    supp_names_text
+                };
+                ord_names_text
+                    .trim()
+                    .split(" ")
+                    .map(|t| t.to_string())
+                    .filter(|t| supp_var_names.contains(t))
+                    .collect::<Vec<_>>()
             } else {
-                let var_count = get_text(".nsuppvars", ".").trim().parse().unwrap_or(0);
-                (0..var_count)
-                    .into_iter()
-                    .map(|i| format!("{}", i))
-                    .collect_vec()
+                let supp_vars = get_text(".ids", ".permids")
+                    .trim()
+                    .split(" ")
+                    .filter_map(|var| var.parse::<usize>().ok())
+                    .collect::<Vec<_>>();
+                let id_positions = get_text(".permids", ".nroots");
+                let mut var_levels = id_positions
+                    .trim()
+                    .split(" ")
+                    .enumerate()
+                    .filter_map(|(id, level)| {
+                        level
+                            .parse::<usize>()
+                            .ok()
+                            .and_then(|level| supp_vars.get(id).map(|var| (level, var)))
+                    })
+                    .collect::<Vec<_>>();
+                var_levels.sort_by_key(|(level, _var)| *level);
+                var_levels
+                    .iter()
+                    .map(|(_level, var)| format!("x{var}"))
+                    .collect::<Vec<_>>()
             };
 
             (funcs, var_names)
