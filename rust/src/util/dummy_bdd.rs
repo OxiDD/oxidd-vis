@@ -223,16 +223,49 @@ impl DummyBDDFunction {
             }
             let funcs = func_map.values().cloned().collect_vec();
 
-            let var_names_text = if data.find(".suppvarnames").is_some() {
-                get_text(".suppvarnames", ".orderedvarnames")
+            let var_names = if data.find(".suppvarnames").is_some() {
+                let supp_names_text = get_text(".suppvarnames", ".orderedvarnames");
+                let supp_var_names = supp_names_text
+                    .trim()
+                    .split(" ")
+                    .map(|t| t.to_string())
+                    .collect::<HashSet<_>>();
+
+                let ord_names_text = if data.find(".orderedvarnames").is_some() {
+                    get_text(".orderedvarnames", ".ids")
+                } else {
+                    supp_names_text
+                };
+                ord_names_text
+                    .trim()
+                    .split(" ")
+                    .map(|t| t.to_string())
+                    .filter(|t| supp_var_names.contains(t))
+                    .collect::<Vec<_>>()
             } else {
-                get_text(".permids", ".nroots")
+                let ids = get_text(".ids", ".permids").trim().split(" ").collect_vec();
+                let id_positions = get_text(".permids", ".nroots");
+                let map = id_positions
+                    .trim()
+                    .split(" ")
+                    .enumerate()
+                    .filter_map(|(layer, pos)| pos.parse::<usize>().ok().map(|pos| (pos, layer)))
+                    .collect::<HashMap<_, _>>();
+
+                console::log!(
+                    "Test {}; {}; {}",
+                    (0..ids.len())
+                        .filter_map(|index| map.get(&index).map(|layer| format!("x{layer}")))
+                        .collect::<Vec<_>>()
+                        .len(),
+                    id_positions,
+                    ids.len()
+                );
+                (0..ids.len())
+                    .filter_map(|index| map.get(&index).map(|layer| format!("x{layer}")))
+                    .collect::<Vec<_>>()
             };
-            let var_names = var_names_text
-                .trim()
-                .split(" ")
-                .map(|t| t.to_string())
-                .collect_vec();
+
             (funcs, var_names, is_bdd)
         })
     }
