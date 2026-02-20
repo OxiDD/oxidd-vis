@@ -10,7 +10,7 @@ import {
     useTheme,
 } from "@fluentui/react";
 import {css} from "@emotion/css";
-import {InputOption} from "./DDDMPSelectionModal";
+import {InputOption, FileLoader, IFileData} from "./DDDMPSelectionModal";
 
 export const BuddySelectionModal: FC<{
     visible: boolean;
@@ -146,98 +146,5 @@ export const BuddySelectionModal: FC<{
                 Load
             </PrimaryButton>
         </StyledModal>
-    );
-};
-
-type IFileData = {data: string; name: string; type: string};
-
-const FileLoader: FC<{
-    onLoad: (data: IFileData[]) => void;
-    accept: string;
-    expanded: boolean;
-}> = ({onLoad, expanded, accept}) => {
-    const [fileLoading, setFileLoading] = useState(false);
-    const [fileTitles, setFileTitles] = useState<string[]>([]);
-    const onFileChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
-        setFileLoading(true);
-        const rawFiles = event.target.files;
-        if (!rawFiles || rawFiles.length == 0) return;
-        const files = [...rawFiles];
-
-        setFileTitles(files.map(file => file.name));
-
-        const textPromises = files.map(
-            file =>
-                new Promise<{data: string; name: string; type: string}>((res, rej) => {
-                    const reader = new FileReader();
-                    reader.readAsText(file);
-                    reader.onload = () => {
-                        const result = reader.result;
-                        const nameParts = file.name.split(".");
-                        res({
-                            data: result as string,
-                            name: file.name,
-                            type: nameParts[nameParts.length - 1],
-                        });
-                    };
-                    reader.onerror = rej;
-                })
-        );
-
-        Promise.all(textPromises)
-            .then(data => {
-                setFileLoading(false);
-                onLoad(data);
-            })
-            .catch(() => {
-                setFileLoading(false);
-            });
-    }, []);
-
-    return (
-        <div
-            className={css({
-                position: "relative",
-                cursor: "pointer",
-                input: {
-                    position: "absolute",
-                    cursor: "pointer",
-                    zIndex: 1,
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    opacity: 0,
-                },
-            })}>
-            {!fileLoading && (
-                <input
-                    type="file"
-                    id="image"
-                    name="image"
-                    multiple
-                    accept={accept}
-                    onChange={onFileChange}
-                />
-            )}
-            <div
-                className={css({
-                    height: expanded ? 100 : 30,
-                    width: "100%",
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    flexDirection: "column",
-                    fontSize: 30,
-                })}>
-                {fileLoading ? (
-                    <Spinner />
-                ) : fileTitles.length > 0 ? (
-                    fileTitles.map((t, i) => <div key={i}>{t}</div>)
-                ) : (
-                    <FontIcon aria-label="Upload" iconName="Upload" />
-                )}
-            </div>
-        </div>
     );
 };

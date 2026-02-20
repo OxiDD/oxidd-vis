@@ -8,7 +8,7 @@ import {IFileSourceSerialization} from "./_types/IFileSourceSerialization";
 
 /** The diagram source, coming from textual input  */
 export class FileSource extends AbstractDiagramSectionState<IFileSourceSerialization> {
-    protected data = new Field<IFileSourceSerialization>({dddmp: ""});
+    protected data = new Field<IFileSourceSerialization>({dddmp: {data: ""}});
 
     /**
      * Creates a new diagram source
@@ -28,7 +28,10 @@ export class FileSource extends AbstractDiagramSectionState<IFileSourceSerializa
                 try {
                     const diagram =
                         "dddmp" in data
-                            ? diagramBox.create_section_from_dddmp(data.dddmp)
+                            ? diagramBox.create_section_from_dddmp(
+                                  data.dddmp.data,
+                                  data.dddmp.colors
+                              )
                             : diagramBox.create_section_from_other(
                                   data.buddy.data,
                                   data.buddy.vars

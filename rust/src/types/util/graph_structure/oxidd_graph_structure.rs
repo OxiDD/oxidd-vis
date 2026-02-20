@@ -9,7 +9,10 @@ use std::{
 use oxidd::{Edge, Function, InnerNode, LevelNo, Manager, NodeID};
 use oxidd_core::{DiagramRules, HasLevel, Node};
 
-use crate::{types::util::storage::state_storage::StateStorage, util::logging::console};
+use crate::{
+    types::util::storage::state_storage::StateStorage,
+    util::{color::Color, logging::console},
+};
 
 use super::{
     graph_manipulators::pointer_node_adjuster::WithPointerLabels,
@@ -24,6 +27,7 @@ where
 {
     roots: Vec<F>,
     node_by_id: HashMap<NodeID, F>,
+    color_labels: HashMap<NodeID, Color>,
     pointers: HashMap<NodeID, Vec<String>>,
     node_parents: HashMap<NodeID, HashSet<(EdgeType<DT>, NodeID)>>,
     level_labels: Vec<String>,
@@ -34,6 +38,7 @@ where
 #[derive(Clone)]
 pub struct NodeLabel<T> {
     pub pointers: Vec<String>,
+    pub color: Option<Color>,
     pub kind: NodeType<T>,
 }
 impl<T> WithPointerLabels for NodeLabel<T> {
@@ -54,6 +59,7 @@ where
 {
     pub fn new(
         roots: Vec<(F, Vec<String>)>,
+        color_labels: HashMap<NodeID, Color>,
         level_labels: Vec<String>,
     ) -> OxiddGraphStructure<DT, F, T> {
         OxiddGraphStructure {
@@ -80,6 +86,7 @@ where
             node_parents: HashMap::new(),
             event_writer: GraphEventsWriter::new(),
             terminal: PhantomData,
+            color_labels,
         }
     }
 
@@ -218,6 +225,7 @@ where
 
         NodeLabel {
             pointers: self.pointers.get(&node).cloned().unwrap_or_else(|| vec![]),
+            color: self.color_labels.get(&node).cloned(),
             kind,
         }
     }

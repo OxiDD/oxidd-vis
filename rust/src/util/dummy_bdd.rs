@@ -27,6 +27,7 @@ use oxidd_core::ReducedOrNew;
 use oxidd_core::WorkerManager;
 use oxidd_core::{BroadcastContext, HasLevel};
 
+use crate::util::color::Color;
 use crate::util::logging::console;
 
 // #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -102,7 +103,13 @@ impl DummyBDDFunction {
     pub fn from_dddmp(
         manager_ref: &mut DummyBDDManagerRef,
         data: &str,
-    ) -> (Vec<(DummyBDDFunction, Vec<String>)>, Vec<String>, bool) {
+        colors: Option<&str>,
+    ) -> (
+        Vec<(DummyBDDFunction, Vec<String>)>,
+        Vec<String>,
+        HashMap<NodeID, Color>,
+        bool,
+    ) {
         manager_ref.with_manager_exclusive(|manager| {
             let mut terminals = HashMap::new();
 
@@ -267,7 +274,47 @@ impl DummyBDDFunction {
                     .collect::<Vec<_>>()
             };
 
-            (funcs, var_names, is_bdd)
+            let colors = if let Some(color_data) = colors {
+                let lines = color_data.split("\n");
+                let mut colors = HashMap::new();
+                for line in lines {
+                    let mut parts = line.split(" ");
+                    let Some(id_text) = parts.next() else {
+                        continue;
+                    };
+                    let Some(color_text) = parts.next() else {
+                        continue;
+                    };
+                    let Ok(id) = id_text.parse::<NodeID>() else {
+                        continue;
+                    };
+                    let Some((h, r1, r2, g1, g2, b1, b2)) = color_text.chars().collect_tuple()
+                    else {
+                        continue;
+                    };
+                    if h != '#' {
+                        continue;
+                    }
+                    let (Ok(r_int), Ok(g_int), Ok(b_int)) = (
+                        u32::from_str_radix(&format!("{}{}", r1, r2), 16),
+                        u32::from_str_radix(&format!("{}{}", g1, g2), 16),
+                        u32::from_str_radix(&format!("{}{}", b1, b2), 16),
+                    ) else {
+                        continue;
+                    };
+                    let color = Color(
+                        (r_int as f32) / 256.0,
+                        (g_int as f32) / 256.0,
+                        (b_int as f32) / 256.0,
+                    );
+                    colors.insert(id, color);
+                }
+                colors
+            } else {
+                HashMap::new()
+            };
+
+            (funcs, var_names, colors, is_bdd)
         })
     }
     pub fn from_buddy(

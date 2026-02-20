@@ -1,4 +1,5 @@
-export const bddDddmpSample = `.ver DDDMP-2.0
+export const bddDddmpSample = [
+    `.ver DDDMP-2.0
 .mode A
 .varinfo 4
 .nnodes 213
@@ -225,4 +226,6 @@ export const bddDddmpSample = `.ver DDDMP-2.0
 211 1 208 210
 212 1 209 1
 213 0 212 211
-.end`;
+.end`,
+    `197 #FF0000`,
+] as [string, string];

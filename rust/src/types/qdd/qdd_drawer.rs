@@ -142,9 +142,19 @@ impl QDDDiagram<DummyBDDManagerRef> {
 }
 
 impl Diagram for QDDDiagram<DummyBDDManagerRef> {
-    fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
-        let (roots, levels, is_bdd) = DummyBDDFunction::from_dddmp(&mut self.manager_ref, &dddmp);
-        Some(Box::new(QDDDiagramSection::new(roots, is_bdd, levels)))
+    fn create_section_from_dddmp(
+        &mut self,
+        dddmp: String,
+        color_text: Option<String>,
+    ) -> Option<Box<dyn DiagramSection>> {
+        let (roots, levels, colors, is_bdd) = DummyBDDFunction::from_dddmp(
+            &mut self.manager_ref,
+            &dddmp,
+            color_text.as_ref().map(|s| s.as_str()),
+        );
+        Some(Box::new(QDDDiagramSection::new(
+            roots, is_bdd, levels, colors,
+        )))
     }
     // Other == Buddy
     fn create_section_from_other(
@@ -154,23 +164,33 @@ impl Diagram for QDDDiagram<DummyBDDManagerRef> {
     ) -> Option<Box<dyn DiagramSection>> {
         let (roots, levels, is_bdd) =
             DummyBDDFunction::from_buddy(&mut self.manager_ref, &data, vars.as_deref());
-        Some(Box::new(QDDDiagramSection::new(roots, is_bdd, levels)))
+        Some(Box::new(QDDDiagramSection::new(
+            roots,
+            is_bdd,
+            levels,
+            HashMap::new(),
+        )))
     }
     fn create_section_from_ids(
         &self,
         sources: &[(oxidd::NodeID, &Box<dyn DiagramSection>)],
     ) -> Option<Box<dyn DiagramSection>> {
         let mut levels = Vec::new();
+        let mut colors = HashMap::new();
         let roots = sources
             .iter()
             .map(|&(id, section)| {
                 let root_edge = DummyBDDEdge::new(Arc::new(id), self.manager_ref.clone());
                 levels = section.get_level_labels();
+                colors = section.get_node_colors();
+                // colors = ;
                 (DummyBDDFunction(root_edge), section.get_node_labels(id))
             })
             .collect_vec();
         let is_bdd = sources.iter().all(|&(_, section)| section.get_meta() == 1);
-        Some(Box::new(QDDDiagramSection::new(roots, is_bdd, levels)))
+        Some(Box::new(QDDDiagramSection::new(
+            roots, is_bdd, levels, colors,
+        )))
     }
 }
 
@@ -181,6 +201,7 @@ where
     roots: Vec<(F, Vec<String>)>,
     labels: HashMap<NodeID, Vec<String>>,
     levels: Vec<String>,
+    colors: HashMap<NodeID, Color>,
     is_bdd: bool,
 }
 
@@ -188,7 +209,12 @@ impl<F: Function> QDDDiagramSection<F>
 where
     for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
 {
-    fn new(roots: Vec<(F, Vec<String>)>, is_bdd: bool, levels: Vec<String>) -> Self {
+    fn new(
+        roots: Vec<(F, Vec<String>)>,
+        is_bdd: bool,
+        levels: Vec<String>,
+        colors: HashMap<NodeID, Color>,
+    ) -> Self {
         let s = QDDDiagramSection {
             labels: roots
                 .iter()
@@ -200,6 +226,7 @@ where
                 })
                 .collect(),
             roots,
+            colors,
             is_bdd,
             levels,
         };
@@ -280,9 +307,16 @@ impl DiagramSection for QDDDiagramSection<DummyBDDFunction> {
     fn get_node_labels(&self, node: NodeID) -> Vec<String> {
         self.labels.get(&node).cloned().unwrap_or_else(|| vec![])
     }
+
+    fn get_node_colors(&self) -> HashMap<NodeID, Color> {
+        self.colors.clone()
+    }
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
-        let graph =
-            OxiddGraphStructure::new(self.roots.iter().cloned().collect(), self.levels.clone());
+        let graph = OxiddGraphStructure::new(
+            self.roots.iter().cloned().collect(),
+            self.colors.clone(),
+            self.levels.clone(),
+        );
 
         let diagram = QDDDiagramDrawer::new(graph, self.is_bdd, canvas);
         Box::new(diagram)
@@ -577,6 +611,7 @@ impl QDDDiagramDrawer {
                             original_label:
                                 PointerLabel::Node(NodeLabel {
                                     pointers: _,
+                                    color: _,
                                     kind: NodeType::Terminal(ref terminal),
                                 }),
                             original_id: _,
@@ -596,6 +631,19 @@ impl QDDDiagramDrawer {
                         }),
                         None,
                     ) => (None, false, colors.node_label),
+
+                    (
+                        Some(&PresenceLabel {
+                            original_label:
+                                PointerLabel::Node(NodeLabel {
+                                    pointers: _,
+                                    color: Some(color),
+                                    kind: _,
+                                }),
+                            original_id: _,
+                        }),
+                        None,
+                    ) => (None, false, color),
                     (Some(_), None) => (None, false, colors.node_default),
                     _ => (None, true, colors.node_group),
                 };
@@ -820,6 +868,7 @@ impl QDDDiagramDrawer {
                 match adjuster.get_node_label(node).original_label {
                     PointerLabel::Node(NodeLabel {
                         pointers: _,
+                        color: _,
                         kind: NodeType::Terminal(t),
                     }) if target_terminals.iter().any(|terminal| &t == terminal) => Some(node),
                     _ => None,
@@ -860,6 +909,7 @@ impl QDDDiagramDrawer {
                     .filter_map(|node| match edge_to_adjuster.get_node_label(node) {
                         PointerLabel::Node(NodeLabel {
                             pointers: _,
+                            color: _,
                             kind: NodeType::Terminal(t),
                         }) if t == "T" => Some((node, EdgeType::new((), 2))),
                         _ => None,
@@ -995,6 +1045,7 @@ fn move_shared_edge<T: DrawTag + 'static>(
         .map(|(edge, to, label)| {
             if let PointerLabel::Node(NodeLabel {
                 pointers: _,
+                color: _,
                 kind: NodeType::Terminal(t),
             }) = label
             {

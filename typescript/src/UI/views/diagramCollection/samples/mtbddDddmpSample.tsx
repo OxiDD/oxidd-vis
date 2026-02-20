@@ -1,4 +1,5 @@
-export const mtbddDddmpSample = `.ver DDDMP-2.0
+export const mtbddDddmpSample = [
+    `.ver DDDMP-2.0
 .mode A
 .varinfo 4
 .dd test
@@ -24,4 +25,5 @@ export const mtbddDddmpSample = `.ver DDDMP-2.0
 9 1 7 3
 10 0 8 9
 .end
-`;
+`,
+] as [string];

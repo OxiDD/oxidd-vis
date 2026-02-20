@@ -1,14 +1,21 @@
+use std::collections::HashMap;
+
 use crate::{
     configuration::configuration_object::AbstractConfigurationObject,
     types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder,
-    util::rectangle::Rectangle, wasm_interface::NodeID,
+    util::{color::Color, rectangle::Rectangle},
+    wasm_interface::NodeID,
 };
 
 use super::wasm_interface::{NodeGroupID, StepData, TargetID};
 use web_sys::HtmlCanvasElement;
 
 pub trait Diagram {
-    fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>>; // TODO: error type
+    fn create_section_from_dddmp(
+        &mut self,
+        dddmp: String,
+        colors: Option<String>,
+    ) -> Option<Box<dyn DiagramSection>>; // TODO: error type
     fn create_section_from_other(
         &mut self,
         data: String,
@@ -24,6 +31,7 @@ pub trait DiagramSection {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer>;
     fn get_level_labels(&self) -> Vec<String>;
     fn get_node_labels(&self, node: NodeID) -> Vec<String>;
+    fn get_node_colors(&self) -> HashMap<NodeID, Color>;
     fn get_meta(&self) -> i128;
 }
 

@@ -22,8 +22,14 @@ impl DiagramBox {
 // Mirror Diagram trait in terms of interface, but using non-dynamic structs
 #[wasm_bindgen()]
 impl DiagramBox {
-    pub fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<DiagramSectionBox> {
-        Some(DiagramSectionBox(self.0.create_section_from_dddmp(dddmp)?))
+    pub fn create_section_from_dddmp(
+        &mut self,
+        dddmp: String,
+        colors: Option<String>,
+    ) -> Option<DiagramSectionBox> {
+        Some(DiagramSectionBox(
+            self.0.create_section_from_dddmp(dddmp, colors)?,
+        ))
     }
     pub fn create_section_from_other(
         &mut self,

@@ -68,12 +68,19 @@ export class DiagramState extends ViewState {
     /**
      * Creates a new section for this diagram, based on the given decision diagram dump
      * @param dddmp The dddmp contents
+     * @param colors The node color contents
      * @param name The name of the diagram to load
      * @returns The mutator to commit the change, resulting in the created section
      */
-    public createSectionFromDDDMP(dddmp: string, name?: string): IMutator<FileSource> {
+    public createSectionFromDDDMP(
+        dddmp: string,
+        colors?: string,
+        name?: string
+    ): IMutator<FileSource> {
         return chain(push => {
-            const section = new FileSource(this, this.diagram, {dddmp});
+            const section = new FileSource(this, this.diagram, {
+                dddmp: {data: dddmp, colors},
+            });
             push(this._sections.set([...this._sections.get(), section]));
             if (name)
                 try {

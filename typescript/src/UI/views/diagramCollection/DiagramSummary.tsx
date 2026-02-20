@@ -35,9 +35,9 @@ export const DiagramSummary: FC<{diagram: DiagramState; onDelete: () => void}> =
         setShowDDDMPInputModal(false);
     }, []);
     const createDDDMPSection = useCallback(
-        (input: string, name?: string) => {
+        (input: string, colors?: string, name?: string) => {
             setShowDDDMPInputModal(false);
-            diagram.createSectionFromDDDMP(input, name).commit();
+            diagram.createSectionFromDDDMP(input, colors, name).commit();
         },
         [diagram]
     );

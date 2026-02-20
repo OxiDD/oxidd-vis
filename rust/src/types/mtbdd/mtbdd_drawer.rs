@@ -108,6 +108,7 @@ impl Diagram for MTBDDDiagram<DummyMTBDDManagerRef> {
     fn create_section_from_dddmp(
         &mut self,
         dddmp: String,
+        colors: Option<String>,
     ) -> Option<Box<dyn crate::traits::DiagramSection>> {
         let (roots, levels) = DummyMTBDDFunction::from_dddmp(&mut self.manager_ref, &dddmp);
         Some(Box::new(MTBDDDiagramSection::new(roots, levels)))
@@ -242,9 +243,15 @@ impl DiagramSection for MTBDDDiagramSection<DummyMTBDDFunction> {
     fn get_node_labels(&self, node: NodeID) -> Vec<String> {
         self.labels.get(&node).cloned().unwrap_or_else(|| vec![])
     }
+    fn get_node_colors(&self) -> HashMap<NodeID, Color> {
+        HashMap::new()
+    }
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
-        let graph =
-            OxiddGraphStructure::new(self.roots.iter().cloned().collect(), self.levels.clone());
+        let graph = OxiddGraphStructure::new(
+            self.roots.iter().cloned().collect(),
+            HashMap::new(),
+            self.levels.clone(),
+        );
         let diagram = MTBDDDiagramDrawer::new(graph, canvas);
         Box::new(diagram)
     }
@@ -493,6 +500,7 @@ impl MTBDDDiagramDrawer {
                             original_label:
                                 PointerLabel::Node(NodeLabel {
                                     pointers: _,
+                                    color: _,
                                     kind: NodeType::Terminal(ref terminal),
                                 }),
                             original_id: _,
@@ -694,6 +702,7 @@ impl MTBDDDiagramDrawer {
                 match adjuster.get_node_label(node).original_label {
                     PointerLabel::Node(NodeLabel {
                         pointers: _,
+                        color: _,
                         kind: NodeType::Terminal(t),
                     }) if t == terminal => Some(node),
                     _ => None,

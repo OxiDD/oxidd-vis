@@ -13,55 +13,70 @@ import {css} from "@emotion/css";
 
 export const DDDMPSelectionModal: FC<{
     visible: boolean;
-    example: string;
-    onSelect: (text: string, name?: string) => void;
+    example: [string, string] | [string];
+    onSelect: (text: string, colors?: string, name?: string) => void;
     onCancel: () => void;
-}> = ({visible, example, onSelect, onCancel}) => {
+}> = ({visible, example: [sample, sampleColors = undefined], onSelect, onCancel}) => {
+    const canSelectColors = sampleColors != undefined;
     const textRef = useRef<ITextField>(null);
+    const colorTextRef = useRef<ITextField>(null);
     const [selected, setSelected] = useState<"text" | "file" | "sample">("sample");
     const selectText = useCallback(() => setSelected("text"), []);
 
-    const [fileLoading, setFileLoading] = useState(false);
+    const [fileID, setFileID] = useState(0);
     const [fileTitle, setFileTitle] = useState("");
-    const [fileContent, setFileContent] = useState<null | string>(null);
-    const onFileChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
-        setFileLoading(true);
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        setFileTitle(file.name);
+    const [selectedFileType, setSelectedFileType] = useState("");
+    const [textContent, setTextContent] = useState<null | string>(null);
+    const [colorsTextContent, setColorTextContent] = useState<null | string>(null);
+    const onFileSelect = useCallback((primary: boolean, files: IFileData[]) => {
         setSelected("file");
+        if (primary) {
+            if (files.length == 1) setSelectedFileType(files[0].type);
+        }
 
-        const reader = new FileReader();
-        reader.readAsText(file);
-        reader.onload = () => {
-            const result = reader.result;
-            setFileLoading(false);
-            if (result) setFileContent(result as string);
-        };
-        reader.onerror = () => setFileLoading(false);
+        for (const {data, name, type} of files) {
+            if (type == "dddmp") {
+                setFileTitle(name);
+                setTextContent(data);
+            } else {
+                setColorTextContent(data);
+            }
+        }
     }, []);
+    const onPrimaryFileSelect = useCallback(
+        (files: IFileData[]) => onFileSelect(true, files),
+        []
+    );
+    const onSecondaryFileSelect = useCallback(
+        (files: IFileData[]) => onFileSelect(false, files),
+        []
+    );
+
     const onSubmit = useCallback(() => {
-        if (selected == "sample") onSelect(example);
+        if (selected == "sample") onSelect(sample, sampleColors);
         else if (selected == "text") {
             const field = textRef.current;
-            if (field?.value) onSelect(field.value);
+            const varField = colorTextRef.current;
+            if (field?.value) onSelect(field.value, varField?.value?.trim() || undefined);
         } else {
-            if (fileContent) onSelect(fileContent, fileTitle);
+            if (textContent)
+                onSelect(textContent, colorsTextContent ?? undefined, fileTitle);
         }
-    }, [selected, onSelect, fileContent, fileTitle, example]);
+    }, [selected, onSelect, textContent, colorsTextContent, fileTitle]);
+
     useEffect(() => {
         if (!visible) {
             setTimeout(() => {
                 setSelected("sample");
-                setFileTitle("");
-                setFileContent(null);
+                setFileID(id => id + 1);
+                setTextContent(null);
+                setColorTextContent(null);
             }, 500);
         }
     }, [visible]);
 
     return (
-        <StyledModal title="Enter DDDMP file" isOpen={visible} onDismiss={onCancel}>
+        <StyledModal title="Enter Buddy file" isOpen={visible} onDismiss={onCancel}>
             <div className={css({minWidth: 500})}>
                 <InputOption
                     name="Text contents"
@@ -70,56 +85,41 @@ export const DDDMPSelectionModal: FC<{
                     <TextField
                         onChange={selectText}
                         multiline
-                        rows={selected == "text" ? 8 : 2}
+                        rows={selected == "text" ? 5 : 2}
                         componentRef={textRef}
+                    />
+                    <TextField
+                        onChange={selectText}
+                        multiline
+                        label="optional node colors"
+                        rows={selected == "text" ? 5 : 2}
+                        componentRef={colorTextRef}
                     />
                 </InputOption>
                 <InputOption
                     name="File selection"
                     selected={selected == "file"}
                     onSelect={() => setSelected("file")}>
-                    <div
-                        className={css({
-                            position: "relative",
-                            cursor: "pointer",
-                            input: {
-                                position: "absolute",
-                                cursor: "pointer",
-                                zIndex: 1,
-                                left: 0,
-                                right: 0,
-                                top: 0,
-                                bottom: 0,
-                                opacity: 0,
-                            },
-                        })}>
-                        {!fileLoading && (
-                            <input
-                                type="file"
-                                id="image"
-                                name="image"
-                                accept=".dddmp"
-                                onChange={onFileChange}
-                            />
-                        )}
-                        <div
-                            className={css({
-                                height: selected == "file" ? 100 : 30,
-                                width: "100%",
-                                display: "flex",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                fontSize: 30,
-                            })}>
-                            {fileLoading ? (
-                                <Spinner />
-                            ) : fileTitle ? (
-                                fileTitle
-                            ) : (
-                                <FontIcon aria-label="Upload" iconName="Upload" />
-                            )}
-                        </div>
-                    </div>
+                    <FileLoader
+                        key={fileID}
+                        onLoad={onPrimaryFileSelect}
+                        accept="*"
+                        expanded={selected == "file"}
+                    />
+                    {selectedFileType == "dddmp" && (
+                        <FileLoader
+                            onLoad={onSecondaryFileSelect}
+                            accept=".dddmp"
+                            expanded={selected == "file"}
+                        />
+                    )}
+                    {selectedFileType != "" && selectedFileType != "dddmp" && (
+                        <FileLoader
+                            onLoad={onSecondaryFileSelect}
+                            accept="*"
+                            expanded={selected == "file"}
+                        />
+                    )}
                 </InputOption>
                 <InputOption
                     name="Load example"
@@ -128,14 +128,21 @@ export const DDDMPSelectionModal: FC<{
                     <TextField
                         readOnly
                         multiline
-                        rows={selected == "sample" ? 8 : 2}
-                        defaultValue={example}
+                        rows={selected == "sample" ? 5 : 2}
+                        defaultValue={sample}
+                    />
+                    <TextField
+                        readOnly
+                        multiline
+                        label="optional variable names"
+                        rows={selected == "sample" ? 5 : 2}
+                        defaultValue={sampleColors}
                     />
                 </InputOption>
             </div>
             <PrimaryButton
                 onClick={onSubmit}
-                disabled={selected == "file" && !fileContent}>
+                disabled={selected == "file" && !textContent}>
                 Load
             </PrimaryButton>
         </StyledModal>
@@ -176,6 +183,99 @@ export const InputOption: FC<{selected: boolean; onSelect: () => void; name: str
                     padding: 10,
                 }}>
                 {children}
+            </div>
+        </div>
+    );
+};
+
+export type IFileData = {data: string; name: string; type: string};
+
+export const FileLoader: FC<{
+    onLoad: (data: IFileData[]) => void;
+    accept: string;
+    expanded: boolean;
+}> = ({onLoad, expanded, accept}) => {
+    const [fileLoading, setFileLoading] = useState(false);
+    const [fileTitles, setFileTitles] = useState<string[]>([]);
+    const onFileChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+        setFileLoading(true);
+        const rawFiles = event.target.files;
+        if (!rawFiles || rawFiles.length == 0) return;
+        const files = [...rawFiles];
+
+        setFileTitles(files.map(file => file.name));
+
+        const textPromises = files.map(
+            file =>
+                new Promise<{data: string; name: string; type: string}>((res, rej) => {
+                    const reader = new FileReader();
+                    reader.readAsText(file);
+                    reader.onload = () => {
+                        const result = reader.result;
+                        const nameParts = file.name.split(".");
+                        res({
+                            data: result as string,
+                            name: file.name,
+                            type: nameParts[nameParts.length - 1],
+                        });
+                    };
+                    reader.onerror = rej;
+                })
+        );
+
+        Promise.all(textPromises)
+            .then(data => {
+                setFileLoading(false);
+                onLoad(data);
+            })
+            .catch(() => {
+                setFileLoading(false);
+            });
+    }, []);
+
+    return (
+        <div
+            className={css({
+                position: "relative",
+                cursor: "pointer",
+                input: {
+                    position: "absolute",
+                    cursor: "pointer",
+                    zIndex: 1,
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    opacity: 0,
+                },
+            })}>
+            {!fileLoading && (
+                <input
+                    type="file"
+                    id="image"
+                    name="image"
+                    multiple
+                    accept={accept}
+                    onChange={onFileChange}
+                />
+            )}
+            <div
+                className={css({
+                    height: expanded ? 100 : 30,
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    flexDirection: "column",
+                    fontSize: 30,
+                })}>
+                {fileLoading ? (
+                    <Spinner />
+                ) : fileTitles.length > 0 ? (
+                    fileTitles.map((t, i) => <div key={i}>{t}</div>)
+                ) : (
+                    <FontIcon aria-label="Upload" iconName="Upload" />
+                )}
             </div>
         </div>
     );
