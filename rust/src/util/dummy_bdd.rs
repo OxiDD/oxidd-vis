@@ -102,7 +102,7 @@ impl DummyBDDFunction {
     pub fn from_dddmp(
         manager_ref: &mut DummyBDDManagerRef,
         data: &str,
-    ) -> (Vec<(DummyBDDFunction, Vec<String>)>, Vec<String>) {
+    ) -> (Vec<(DummyBDDFunction, Vec<String>)>, Vec<String>, bool) {
         manager_ref.with_manager_exclusive(|manager| {
             let mut terminals = HashMap::new();
 
@@ -132,18 +132,25 @@ impl DummyBDDFunction {
                     .collect_vec()
             };
 
+            let mut is_bdd = true;
             let node_text = get_text(".nodes", ".end");
-            let nodes_data = node_text.split("\n").filter_map(|node| {
-                let parts = node.trim().split(" ").collect::<Vec<&str>>();
-                if parts.len() >= 4 {
-                    let id: NodeID = parts[0].parse().unwrap();
-                    let level = parts[1];
-                    let children = parts[2..].iter().map(|v| v.parse().unwrap()).collect_vec();
-                    Some((id, level, children))
-                } else {
-                    None
-                }
-            });
+            let nodes_data = node_text
+                .split("\n")
+                .filter_map(|node| {
+                    let parts = node.trim().split(" ").collect::<Vec<&str>>();
+                    if parts.len() >= 4 {
+                        let id: NodeID = parts[0].parse().unwrap();
+                        let level = parts[1];
+                        let children = parts[2..].iter().map(|v| v.parse().unwrap()).collect_vec();
+                        if children.len() > 2 {
+                            is_bdd = false;
+                        }
+                        Some((id, level, children))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
             let mut max_level = 0;
             for (_, level, _) in nodes_data.clone() {
                 let Ok(level) = level.parse() else { continue };
@@ -216,24 +223,58 @@ impl DummyBDDFunction {
             }
             let funcs = func_map.values().cloned().collect_vec();
 
-            let var_names_text = if data.find(".suppvarnames").is_some() {
-                get_text(".suppvarnames", ".orderedvarnames")
+            let var_names = if data.find(".suppvarnames").is_some() {
+                let supp_names_text = get_text(".suppvarnames", ".orderedvarnames");
+                let supp_var_names = supp_names_text
+                    .trim()
+                    .split(" ")
+                    .map(|t| t.to_string())
+                    .collect::<HashSet<_>>();
+
+                let ord_names_text = if data.find(".orderedvarnames").is_some() {
+                    get_text(".orderedvarnames", ".ids")
+                } else {
+                    supp_names_text
+                };
+                ord_names_text
+                    .trim()
+                    .split(" ")
+                    .map(|t| t.to_string())
+                    .filter(|t| supp_var_names.contains(t))
+                    .collect::<Vec<_>>()
             } else {
-                get_text(".permids", ".nroots")
+                let supp_vars = get_text(".ids", ".permids")
+                    .trim()
+                    .split(" ")
+                    .filter_map(|var| var.parse::<usize>().ok())
+                    .collect::<Vec<_>>();
+                let id_positions = get_text(".permids", ".nroots");
+                let mut var_levels = id_positions
+                    .trim()
+                    .split(" ")
+                    .enumerate()
+                    .filter_map(|(id, level)| {
+                        level
+                            .parse::<usize>()
+                            .ok()
+                            .and_then(|level| supp_vars.get(id).map(|var| (level, var)))
+                    })
+                    .collect::<Vec<_>>();
+                var_levels.sort_by_key(|(level, _var)| *level);
+                var_levels
+                    .iter()
+                    .map(|(_level, var)| format!("x{var}"))
+                    .collect::<Vec<_>>()
             };
-            let var_names = var_names_text
-                .trim()
-                .split(" ")
-                .map(|t| t.to_string())
-                .collect_vec();
-            (funcs, var_names)
+
+            (funcs, var_names, is_bdd)
         })
     }
     pub fn from_buddy(
         manager_ref: &mut DummyBDDManagerRef,
         data: &str,
         var_data: Option<&str>,
-    ) -> (Vec<(DummyBDDFunction, Vec<String>)>, Vec<String>) {
+    ) -> (Vec<(DummyBDDFunction, Vec<String>)>, Vec<String>, bool) {
         manager_ref.with_manager_exclusive(|manager| {
             let mut variables = Vec::new();
             let mut layer_levels = Vec::<usize>::new(); // Specifies per "layer", what level it should have. Variable names and nodes refer to layers, not levels.
@@ -331,6 +372,7 @@ impl DummyBDDFunction {
                 .into_iter()
                 .collect(),
                 variables,
+                true,
             )
         })
     }

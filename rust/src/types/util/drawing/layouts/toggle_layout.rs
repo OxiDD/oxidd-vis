@@ -18,55 +18,22 @@ use crate::{
 ///
 /// A higher level layout that toggles between a set of other layout types, every time that the layout function is called. Intended for testing/demoing purposes
 ///
-pub struct ToggleLayout<
-    T: DrawTag,
-    S: NodeStyle,
-    LS: LayerStyle,
-    G: GroupedGraphStructure<T, S, LS>,
-    L1: LayoutRules<T, S, LS, G>,
-    L2: LayoutRules<T, S, LS, G>,
-> {
+pub struct ToggleLayout<L1: LayoutRules, L2: LayoutRules<G = L1::G>> {
     layout1: L1,
     layout2: L2,
     selected_one: bool,
-    tag: PhantomData<T>,
-    node_style: PhantomData<S>,
-    layer_style: PhantomData<LS>,
-    graph: PhantomData<G>,
 }
 
-pub struct ToggleLayoutUnit<
-    T: DrawTag,
-    S: NodeStyle,
-    LS: LayerStyle,
-    G: GroupedGraphStructure<T, S, LS>,
-    L: LayoutRules<T, S, LS, G>,
-> {
+pub struct ToggleLayoutUnit<L: LayoutRules> {
     layout: L,
-    tag: PhantomData<T>,
-    node_style: PhantomData<S>,
-    layer_style: PhantomData<LS>,
-    graph: PhantomData<G>,
 }
 
-impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L1: LayoutRules<T, S, LS, G>,
-        L2: LayoutRules<T, S, LS, G>,
-    > ToggleLayout<T, S, LS, G, L1, L2>
-{
-    pub fn new(layout1: L1, layout2: L2) -> ToggleLayout<T, S, LS, G, L1, L2> {
+impl<L1: LayoutRules, L2: LayoutRules<G = L1::G>> ToggleLayout<L1, L2> {
+    pub fn new(layout1: L1, layout2: L2) -> Self {
         ToggleLayout {
             layout1,
             layout2,
             selected_one: true,
-            tag: PhantomData,
-            node_style: PhantomData,
-            layer_style: PhantomData,
-            graph: PhantomData,
         }
     }
 
@@ -84,22 +51,9 @@ impl<
     }
 }
 
-impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L: LayoutRules<T, S, LS, G>,
-    > ToggleLayoutUnit<T, S, LS, G, L>
-{
-    pub fn new(layout: L) -> ToggleLayoutUnit<T, S, LS, G, L> {
-        ToggleLayoutUnit {
-            layout: layout,
-            tag: PhantomData,
-            node_style: PhantomData,
-            layer_style: PhantomData,
-            graph: PhantomData,
-        }
+impl<L: LayoutRules> ToggleLayoutUnit<L> {
+    pub fn new(layout: L) -> Self {
+        ToggleLayoutUnit { layout: layout }
     }
     pub fn get_layout_rules(&mut self) -> &mut L {
         &mut self.layout
@@ -111,14 +65,8 @@ pub trait IndexedSelect {
     fn get_selected_layout(&self) -> usize;
 }
 
-impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L1: LayoutRules<T, S, LS, G>,
-        L2: LayoutRules<T, S, LS, G> + IndexedSelect,
-    > IndexedSelect for ToggleLayout<T, S, LS, G, L1, L2>
+impl<L1: LayoutRules, L2: LayoutRules<G = L1::G> + IndexedSelect> IndexedSelect
+    for ToggleLayout<L1, L2>
 {
     fn select_layout(&mut self, index: usize) -> () {
         if index == 0 {
@@ -137,56 +85,48 @@ impl<
     }
 }
 
-impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L: LayoutRules<T, S, LS, G>,
-    > IndexedSelect for ToggleLayoutUnit<T, S, LS, G, L>
-{
+impl<L: LayoutRules> IndexedSelect for ToggleLayoutUnit<L> {
     fn select_layout(&mut self, index: usize) -> () {}
     fn get_selected_layout(&self) -> usize {
         0
     }
 }
 
-impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L: LayoutRules<T, S, LS, G>,
-    > LayoutRules<T, S, LS, G> for ToggleLayoutUnit<T, S, LS, G, L>
-{
+impl<L: LayoutRules> LayoutRules for ToggleLayoutUnit<L> {
+    type T = L::T;
+    type NS = L::NS;
+    type LS = L::LS;
+    type Tracker = L::Tracker;
+    type G = L::G;
     fn layout(
         &mut self,
-        graph: &G,
-        old: &DiagramLayout<T, S, LS>,
+        graph: &Self::G,
+        old: &DiagramLayout<Self::T, Self::NS, Self::LS>,
         /* Sources for new nodes that did not yet exist in the previous layout iteration */
-        new_sources: &G::Tracker,
+        new_sources: &Self::Tracker,
         time: u32,
-    ) -> DiagramLayout<T, S, LS> {
+    ) -> DiagramLayout<Self::T, Self::NS, Self::LS> {
         self.layout.layout(graph, old, new_sources, time)
     }
 }
 
 impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L1: LayoutRules<T, S, LS, G>,
-        L2: LayoutRules<T, S, LS, G>,
-    > LayoutRules<T, S, LS, G> for ToggleLayout<T, S, LS, G, L1, L2>
+        L1: LayoutRules,
+        L2: LayoutRules<G = L1::G, LS = L1::LS, NS = L1::NS, T = L1::T, Tracker = L1::Tracker>,
+    > LayoutRules for ToggleLayout<L1, L2>
 {
+    type T = L1::T;
+    type NS = L1::NS;
+    type LS = L1::LS;
+    type Tracker = L1::Tracker;
+    type G = L1::G;
     fn layout(
         &mut self,
-        graph: &G,
-        old: &DiagramLayout<T, S, LS>,
-        new_sources: &G::Tracker,
+        graph: &Self::G,
+        old: &DiagramLayout<Self::T, Self::NS, Self::LS>,
+        new_sources: &Self::Tracker,
         time: u32,
-    ) -> DiagramLayout<T, S, LS> {
+    ) -> DiagramLayout<Self::T, Self::NS, Self::LS> {
         if self.is_layout_one_selected() {
             self.layout1.layout(graph, old, new_sources, time)
         } else {

@@ -21,10 +21,10 @@ use crate::{
 pub struct OrderingGroupAlignment;
 
 /// Sorts each layer according to the group order in the previous layer. This attempts to retain the original ordering, while fulfilling the requirement: No two groups can cross (it's always either fully before or fully after another group, or does not occur on the same layer).
-impl<T: DrawTag, GL, LL> LayerGroupSorting<T, GL, LL> for OrderingGroupAlignment {
+impl<G: GroupedGraphStructure> LayerGroupSorting<G> for OrderingGroupAlignment {
     fn align_cross_layer_nodes(
         &self,
-        _graph: &impl GroupedGraphStructure<T, GL, LL>,
+        _graph: &G,
         layers: &Vec<Order>,
         _edges: &EdgeMap,
         // The ID such that any ID in the range [dummy_group_start_id, dummy_edge_start_id) represents a dummy node of a group

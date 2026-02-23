@@ -1,14 +1,5 @@
-import React, {
-    FC,
-    FormEvent,
-    KeyboardEvent,
-    SyntheticEvent,
-    useCallback,
-    useEffect,
-    useRef,
-} from "react";
-import {IntConfig} from "../../../state/configuration/types/IntConfig";
-import {Label, SpinButton, Stack, useTheme} from "@fluentui/react";
+import React, {FC, useEffect, useRef, useState} from "react";
+import {Label, Stack, useTheme} from "@fluentui/react";
 import {useWatch} from "../../../watchables/react/useWatch";
 import {LabelConfig, LabelStyle} from "../../../state/configuration/types/LabelConfig";
 import {IConfigObjectType} from "../../../state/configuration/_types/IConfigObjectType";
@@ -22,7 +13,30 @@ export const LabelConfigComp: FC<{
     const text = watch(value.label);
     const type = watch(value.style);
     const theme = useTheme();
-    if (type == LabelStyle.Above) {
+
+    const [width, setWidth] = useState<number | undefined>();
+    const labelRef = useRef<HTMLSpanElement | null>(null);
+    useEffect(() => {
+        if (!labelRef.current) return;
+
+        const observer = new ResizeObserver(([entry]) => {
+            const newWidth = entry.contentRect.width;
+            if (newWidth > 0) {
+                setWidth(newWidth);
+            }
+        });
+
+        observer.observe(labelRef.current);
+        return () => observer.disconnect();
+    }, [text]);
+    if (type == LabelStyle.Category) {
+        return (
+            <>
+                <Label className={css({marginBottom: 10, fontSize: 20})}>{text}</Label>
+                <ChildComp value={watch(value.value)} />
+            </>
+        );
+    } else if (type == LabelStyle.Above) {
         return (
             <>
                 <Label>{text}</Label>
@@ -34,9 +48,13 @@ export const LabelConfigComp: FC<{
             <Stack
                 horizontal
                 tokens={{childrenGap: theme.spacing.s1}}
-                styles={{root: {paddingLeft: theme.spacing.s1}}}
-                className={css({">:nth-child(2)": {flexGrow: 1}})}>
-                <Label>{text}</Label>
+                className={css({">:nth-child(3)": {flex: "1 1"}, flexWrap: "wrap"})}>
+                <Label style={{flex: "1 1", maxWidth: width}}>{text}</Label>
+                <Label style={{position: "absolute", visibility: "hidden"}}>
+                    <span style={{display: "inline-block"}} ref={labelRef}>
+                        {text}
+                    </span>
+                </Label>
                 <ChildComp value={watch(value.value)} />
             </Stack>
         );

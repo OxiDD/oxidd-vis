@@ -25,22 +25,26 @@ pub struct LabelConfig<C: Abstractable + Clone> {
 struct LabelValue<C: Abstractable> {
     child: C,
     label: String,
-    style: LabelStyle,
+    kind: LabelKind,
 }
 
 #[derive(Copy, Clone)]
-pub enum LabelStyle {
+pub enum LabelKind {
     Inline = 0,
     Above = 1,
+    Category = 2,
 }
 
 impl<C: Abstractable + Clone + 'static> LabelConfig<C> {
     pub fn new(label: &str, data: C) -> LabelConfig<C> {
+        Self::new_styled(label, LabelKind::Inline, data)
+    }
+    pub fn new_styled(label: &str, style: LabelKind, data: C) -> LabelConfig<C> {
         LabelConfig {
             data: ConfigurationObject::new(LabelValue {
                 child: data.clone(),
                 label: label.to_string(),
-                style: LabelStyle::Inline,
+                kind: style,
             }),
             child: data,
         }
@@ -57,13 +61,13 @@ impl<C: Abstractable + Clone + 'static> LabelConfig<C> {
             })
         })
     }
-    pub fn get_style(&self) -> LabelStyle {
-        self.data.with_value(|v| v.style.clone())
+    pub fn get_style(&self) -> LabelKind {
+        self.data.with_value(|v| v.kind.clone())
     }
-    pub fn set_style(&mut self, style: LabelStyle) -> Mutator<(), ()> {
+    pub fn set_style(&mut self, style: LabelKind) -> Mutator<(), ()> {
         self.data.set_value(move |cur| {
             Some(LabelValue {
-                style,
+                kind: style,
                 ..cur.clone()
             })
         })
@@ -111,7 +115,7 @@ impl<C: Abstractable + Clone> ValueMapping<LabelValue<C>> for LabelConfig<C> {
     fn to_js_value(val: &LabelValue<C>) -> wasm_bindgen::JsValue {
         JsObject::new()
             .set("label", val.label.clone())
-            .set("style", val.style as u8)
+            .set("style", val.kind as u8)
             .into()
     }
 

@@ -1,30 +1,28 @@
-import { MessageBarType } from "@fluentui/react";
-import { IWatchable } from "../../../watchables/_types/IWatchable";
-import { IMutator } from "../../../watchables/mutator/_types/IMutator";
-import { ICollectionStatus, IDiagramCollection } from "../_types/IDiagramCollection";
-import { DiagramState } from "../DiagramState";
-import { v4 as uuid } from "uuid";
-import { Derived } from "../../../watchables/Derived";
-import { IHttpDiagramCollectionSerialization } from "./_types/IHttpDiagramCollectionSerialization";
-import { chain } from "../../../watchables/mutator/chain";
-import { dummyMutator } from "../../../watchables/mutator/Mutator";
-import { Field } from "../../../watchables/Field";
-import { Constant } from "../../../watchables/Constant";
-import { createDiagramBox } from "../createDiagramBox";
-import { IDiagramType } from "../_types/IDiagramTypeSerialization";
-import { ViewState } from "../../views/ViewState";
-import { Observer } from "../../../watchables/Observer";
-import { all } from "../../../watchables/mutator/all";
-import { ManualDiagramCollectionState } from "./ManualDiagramCollectionState";
-import { DiagramCollectionBaseState } from "./DiagramCollectionBaseState";
+import {MessageBarType} from "@fluentui/react";
+import {IWatchable} from "../../../watchables/_types/IWatchable";
+import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {ICollectionStatus, IDiagramCollection} from "../_types/IDiagramCollection";
+import {DiagramState} from "../DiagramState";
+import {v4 as uuid} from "uuid";
+import {Derived} from "../../../watchables/Derived";
+import {IHttpDiagramCollectionSerialization} from "./_types/IHttpDiagramCollectionSerialization";
+import {chain} from "../../../watchables/mutator/chain";
+import {dummyMutator} from "../../../watchables/mutator/Mutator";
+import {Field} from "../../../watchables/Field";
+import {Constant} from "../../../watchables/Constant";
+import {createDiagramBox} from "../createDiagramBox";
+import {IDiagramType} from "../_types/IDiagramTypeSerialization";
+import {ViewState} from "../../views/ViewState";
+import {Observer} from "../../../watchables/Observer";
+import {all} from "../../../watchables/mutator/all";
+import {ManualDiagramCollectionState} from "./ManualDiagramCollectionState";
+import {DiagramCollectionBaseState} from "./DiagramCollectionBaseState";
 
-export class HttpDiagramCollectionState
-    extends DiagramCollectionBaseState {
-
+export class HttpDiagramCollectionState extends DiagramCollectionBaseState {
     protected readonly _status = new Field<ICollectionStatus>(undefined);
 
     /** The current status of the collection */
-    public readonly status: IWatchable<{ text: string; type: MessageBarType } | undefined> =
+    public readonly status: IWatchable<{text: string; type: MessageBarType} | undefined> =
         this._status.readonly();
 
     /** All the diagrams that can be reached from this collection */
@@ -73,29 +71,31 @@ export class HttpDiagramCollectionState
         }, 1000) as any;
     }
 
+    /** @override */
+    public dispose(): void {
+        super.dispose();
+        clearInterval(this.pollID);
+    }
+
     /** Performs a single poll */
     protected async poll() {
         this.pollNum++;
         // Check if the host can be reached first
         try {
-            await fetch(
-                `${this.host}`, { method: 'HEAD', mode: 'no-cors' });
+            await fetch(`${this.host}`, {method: "HEAD", mode: "no-cors"});
         } catch (error) {
-            return
+            return;
         }
 
         // Obtain the data from the host
         let diagrams;
         try {
-            const diagramsText = await fetch(
-                `${this.host}/diagrams`
-            );
-            ( diagrams = (await diagramsText.json()) as {
-                    name: string;
-                    type: IDiagramType;
-                    diagram: string;
-                }[]
-            );
+            const diagramsText = await fetch(`${this.host}/diagrams`);
+            diagrams = (await diagramsText.json()) as {
+                name: string;
+                type: IDiagramType;
+                diagram: string;
+            }[];
         } catch (e) {
             this._status
                 .set({
@@ -108,10 +108,10 @@ export class HttpDiagramCollectionState
 
         chain(push => {
             try {
-                for (const { name, type, diagram } of diagrams) {
-                    const oldDiagramState = this.diagrams.get().find(
-                        d => d.sourceName.get() == name
-                    );
+                for (const {name, type, diagram} of diagrams) {
+                    const oldDiagramState = this.diagrams
+                        .get()
+                        .find(d => d.sourceName.get() == name);
                     if (oldDiagramState && this.replaceOld.get()) {
                         push(this.removeDiagram(oldDiagramState));
                     }
@@ -124,8 +124,7 @@ export class HttpDiagramCollectionState
                     push(this._diagrams.set([...this.diagrams.get(), diagramState]));
                 }
 
-                if (this._status.get() != undefined)
-                    push(this._status.set(undefined));
+                if (this._status.get() != undefined) push(this._status.set(undefined));
             } catch (e) {
                 console.error(e);
                 push(
@@ -137,7 +136,6 @@ export class HttpDiagramCollectionState
             }
         }).commit();
     }
-
 
     /** @override */
     public serialize(): IHttpDiagramCollectionSerialization {

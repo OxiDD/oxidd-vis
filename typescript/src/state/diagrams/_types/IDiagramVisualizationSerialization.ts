@@ -1,4 +1,4 @@
-import {PresenceRemainder} from "oxidd-viz-rust";
+import {PresenceRemainder} from "oxidd-vis-rust";
 import {IPoint} from "../../../utils/_types/IPoint";
 import {IBaseViewSerialization} from "../../_types/IBaseViewSerialization";
 import {IConfigObjectSerialization} from "../../configuration/_types/IConfigObjectSerialization";

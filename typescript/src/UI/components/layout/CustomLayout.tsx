@@ -75,6 +75,7 @@ export const CloseHeaderButton: FC<{onClose: () => void}> = ({onClose}) => {
             className={css({
                 alignSelf: "stretch",
                 height: "auto",
+                marginLeft: -10,
                 width: 44,
                 display: "flex",
                 justifyContent: "center",

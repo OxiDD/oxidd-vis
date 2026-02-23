@@ -44,11 +44,5 @@ module.exports = env => ({
         filename: "bundle.js",
         path: build,
     },
-    plugins: [
-        // new CopyPlugin({
-        //   patterns: [
-        //     { from: "node_modules/oxidd-viz-rust/oxidd_viz_rust_bg.wasm.map", to: "" },
-        //   ],
-        // }),
-    ],
+    plugins: [],
 });

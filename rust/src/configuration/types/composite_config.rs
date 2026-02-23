@@ -18,6 +18,10 @@ pub struct CompositeConfig<C> {
     readonly_data: Rc<C>,
 }
 
+pub trait GetConfigChildren {
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>>;
+}
+
 struct CompositeValue {
     children: Vec<Box<dyn Abstractable>>,
     style: CompositeDirection,
@@ -29,14 +33,11 @@ pub enum CompositeDirection {
     Horizontal = 1,
 }
 
-impl<C: 'static> CompositeConfig<C> {
-    pub fn new<F: Fn(&C) -> Vec<Box<dyn Abstractable>>>(
-        data: C,
-        children: F,
-    ) -> CompositeConfig<C> {
+impl<C: GetConfigChildren + 'static> CompositeConfig<C> {
+    pub fn new(data: C) -> CompositeConfig<C> {
         CompositeConfig {
             config: ConfigurationObject::new(CompositeValue {
-                children: children(&data),
+                children: data.get_children(),
                 style: CompositeDirection::Vertical,
             }),
             readonly_data: Rc::new(data),
@@ -84,5 +85,174 @@ impl<C> ValueMapping<CompositeValue> for CompositeConfig<C> {
 
     fn from_js_value(js_val: JsValue, cur_val: &CompositeValue) -> Option<CompositeValue> {
         None
+    }
+}
+
+// Some default "GetConfigChildren" implementations for ease of use
+impl<A: Abstractable + Clone + 'static> GetConfigChildren for A {
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        vec![Box::new(self.clone())]
+    }
+}
+
+impl<A: GetConfigChildren, B: GetConfigChildren> GetConfigChildren for (A, B) {
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        let mut out = self.0.get_children();
+        out.extend(self.1.get_children());
+        out
+    }
+}
+
+impl<A: GetConfigChildren, B: GetConfigChildren, C: GetConfigChildren> GetConfigChildren
+    for (A, B, C)
+{
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        let mut out = self.0.get_children();
+        out.extend(self.1.get_children());
+        out.extend(self.2.get_children());
+        out
+    }
+}
+impl<A: GetConfigChildren, B: GetConfigChildren, C: GetConfigChildren, D: GetConfigChildren>
+    GetConfigChildren for (A, B, C, D)
+{
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        let mut out = self.0.get_children();
+        out.extend(self.1.get_children());
+        out.extend(self.2.get_children());
+        out.extend(self.3.get_children());
+        out
+    }
+}
+impl<
+        A: GetConfigChildren,
+        B: GetConfigChildren,
+        C: GetConfigChildren,
+        D: GetConfigChildren,
+        E: GetConfigChildren,
+    > GetConfigChildren for (A, B, C, D, E)
+{
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        let mut out = self.0.get_children();
+        out.extend(self.1.get_children());
+        out.extend(self.2.get_children());
+        out.extend(self.3.get_children());
+        out.extend(self.4.get_children());
+        out
+    }
+}
+impl<
+        A: GetConfigChildren,
+        B: GetConfigChildren,
+        C: GetConfigChildren,
+        D: GetConfigChildren,
+        E: GetConfigChildren,
+        F: GetConfigChildren,
+    > GetConfigChildren for (A, B, C, D, E, F)
+{
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        let mut out = self.0.get_children();
+        out.extend(self.1.get_children());
+        out.extend(self.2.get_children());
+        out.extend(self.3.get_children());
+        out.extend(self.4.get_children());
+        out.extend(self.5.get_children());
+        out
+    }
+}
+impl<
+        A: GetConfigChildren,
+        B: GetConfigChildren,
+        C: GetConfigChildren,
+        D: GetConfigChildren,
+        E: GetConfigChildren,
+        F: GetConfigChildren,
+        G: GetConfigChildren,
+    > GetConfigChildren for (A, B, C, D, E, F, G)
+{
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        let mut out = self.0.get_children();
+        out.extend(self.1.get_children());
+        out.extend(self.2.get_children());
+        out.extend(self.3.get_children());
+        out.extend(self.4.get_children());
+        out.extend(self.5.get_children());
+        out.extend(self.6.get_children());
+        out
+    }
+}
+impl<
+        A: GetConfigChildren,
+        B: GetConfigChildren,
+        C: GetConfigChildren,
+        D: GetConfigChildren,
+        E: GetConfigChildren,
+        F: GetConfigChildren,
+        G: GetConfigChildren,
+        H: GetConfigChildren,
+    > GetConfigChildren for (A, B, C, D, E, F, G, H)
+{
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        let mut out = self.0.get_children();
+        out.extend(self.1.get_children());
+        out.extend(self.2.get_children());
+        out.extend(self.3.get_children());
+        out.extend(self.4.get_children());
+        out.extend(self.5.get_children());
+        out.extend(self.6.get_children());
+        out.extend(self.7.get_children());
+        out
+    }
+}
+impl<
+        A: GetConfigChildren,
+        B: GetConfigChildren,
+        C: GetConfigChildren,
+        D: GetConfigChildren,
+        E: GetConfigChildren,
+        F: GetConfigChildren,
+        G: GetConfigChildren,
+        H: GetConfigChildren,
+        I: GetConfigChildren,
+    > GetConfigChildren for (A, B, C, D, E, F, G, H, I)
+{
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        let mut out = self.0.get_children();
+        out.extend(self.1.get_children());
+        out.extend(self.2.get_children());
+        out.extend(self.3.get_children());
+        out.extend(self.4.get_children());
+        out.extend(self.5.get_children());
+        out.extend(self.6.get_children());
+        out.extend(self.7.get_children());
+        out.extend(self.8.get_children());
+        out
+    }
+}
+impl<
+        A: GetConfigChildren,
+        B: GetConfigChildren,
+        C: GetConfigChildren,
+        D: GetConfigChildren,
+        E: GetConfigChildren,
+        F: GetConfigChildren,
+        G: GetConfigChildren,
+        H: GetConfigChildren,
+        I: GetConfigChildren,
+        J: GetConfigChildren,
+    > GetConfigChildren for (A, B, C, D, E, F, G, H, I, J)
+{
+    fn get_children(&self) -> Vec<Box<dyn Abstractable>> {
+        let mut out = self.0.get_children();
+        out.extend(self.1.get_children());
+        out.extend(self.2.get_children());
+        out.extend(self.3.get_children());
+        out.extend(self.4.get_children());
+        out.extend(self.5.get_children());
+        out.extend(self.6.get_children());
+        out.extend(self.7.get_children());
+        out.extend(self.8.get_children());
+        out.extend(self.9.get_children());
+        out
     }
 }

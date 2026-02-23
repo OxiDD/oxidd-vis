@@ -71,7 +71,7 @@ export const HttpDiagramCollection: FC<{
             </Stack>
             {diagrams.length == 0 && watch(collection.status) == undefined && (
                 <div style={{marginBottom: theme.spacing.m}}>
-                    Host does not have any diagrams
+                    Host has no diagrams, or is unreachable from this browser
                 </div>
             )}
             <Stack horizontal tokens={{childrenGap: theme.spacing.m}}>

@@ -1,4 +1,4 @@
-import {AbstractConfigurationObject} from "oxidd-viz-rust";
+import {AbstractConfigurationObject} from "oxidd-vis-rust";
 import {IWatchable} from "../../../watchables/_types/IWatchable";
 import {ConfigurationObject, IOwnedAbstractConfig} from "../ConfigurationObject";
 import {Derived} from "../../../watchables/Derived";

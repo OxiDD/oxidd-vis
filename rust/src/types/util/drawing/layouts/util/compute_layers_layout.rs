@@ -22,16 +22,14 @@ use crate::{
     },
 };
 
-pub fn compute_layers_layout<
-    T: DrawTag,
-    NS: NodeStyle,
-    LS: LayerStyle,
-    G: GroupedGraphStructure<T, NS, LS>,
-    I: Iterator<Item = (usize, Rectangle)>,
->(
+pub fn compute_layers_layout<G: GroupedGraphStructure, I: Iterator<Item = (usize, Rectangle)>>(
     graph: &G,
     node_positions: I,
-) -> Vec<LayerLayout<LS>> {
+) -> Vec<LayerLayout<G::LL>>
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
+{
     let mut layer_start_positions = HashMap::<LevelNo, f32>::new();
     let mut layer_end_positions = HashMap::<LevelNo, f32>::new();
     for (group_id, point) in node_positions {
@@ -71,7 +69,7 @@ pub fn compute_layers_layout<
             )
         });
 
-    let mut layout: Vec<LayerLayout<LS>> = Vec::new();
+    let mut layout: Vec<LayerLayout<G::LL>> = Vec::new();
     let mut min: Option<f32> = None;
     let mut index = 0;
     for ((start_layer, start_y), (end_layer, end_y)) in
@@ -88,7 +86,7 @@ pub fn compute_layers_layout<
             top: Transition::plain(start_y),
             bottom: Transition::plain(end_y),
             exists: Transition::plain(1.),
-            style: Transition::plain(LS::squash(
+            style: Transition::plain(G::LL::squash(
                 (start_layer..end_layer)
                     .map(|level| graph.get_level_label(level))
                     .collect_vec(),

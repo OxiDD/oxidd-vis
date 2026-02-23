@@ -18,42 +18,32 @@ use crate::{
     wasm_interface::{NodeGroupID, NodeID},
 };
 
-pub struct LevelLabelAdjuster<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> {
+pub struct LevelLabelAdjuster<NLL, G: GroupedGraphStructure> {
     graph: MutRcRefCell<G>,
-    adjuster: Box<dyn Fn(LL) -> NLL>,
-    tag: PhantomData<T>,
-    group_label: PhantomData<GL>,
-    level_label: PhantomData<LL>,
+    adjuster: Box<dyn Fn(G::LL) -> NLL>,
     new_level_label: PhantomData<NLL>,
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL>
-    LevelLabelAdjuster<T, GL, LL, G, NLL>
-{
-    pub fn new<A: Fn(LL) -> NLL + 'static>(
-        graph: G,
-        adjuster: A,
-    ) -> LevelLabelAdjuster<T, GL, LL, G, NLL> {
+impl<NLL, G: GroupedGraphStructure> LevelLabelAdjuster<NLL, G> {
+    pub fn new<A: Fn(G::LL) -> NLL + 'static>(graph: G, adjuster: A) -> LevelLabelAdjuster<NLL, G> {
         LevelLabelAdjuster::new_shared(MutRcRefCell::new(graph), adjuster)
     }
-    pub fn new_shared<A: Fn(LL) -> NLL + 'static>(
+    pub fn new_shared<A: Fn(G::LL) -> NLL + 'static>(
         graph: MutRcRefCell<G>,
         adjuster: A,
-    ) -> LevelLabelAdjuster<T, GL, LL, G, NLL> {
+    ) -> LevelLabelAdjuster<NLL, G> {
         LevelLabelAdjuster {
             graph,
             adjuster: Box::new(adjuster),
-            tag: PhantomData,
-            group_label: PhantomData,
-            level_label: PhantomData,
             new_level_label: PhantomData,
         }
     }
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> GroupedGraphStructure<T, GL, NLL>
-    for LevelLabelAdjuster<T, GL, LL, G, NLL>
-{
+impl<G: GroupedGraphStructure, NLL> GroupedGraphStructure for LevelLabelAdjuster<NLL, G> {
+    type T = G::T;
+    type GL = G::GL;
+    type LL = NLL;
     type Tracker = G::Tracker;
 
     fn get_roots(&self) -> Vec<NodeGroupID> {
@@ -72,15 +62,15 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> GroupedGraphS
         self.graph.read().get_group(node)
     }
 
-    fn get_group_label(&self, node: NodeID) -> GL {
+    fn get_group_label(&self, node: NodeID) -> G::GL {
         self.graph.read().get_group_label(node)
     }
 
-    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
+    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<G::T>> {
         self.graph.read().get_parents(group)
     }
 
-    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
+    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<G::T>> {
         self.graph.read().get_children(group)
     }
 
@@ -105,11 +95,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> GroupedGraphS
     }
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>, NLL> StateStorage
-    for LevelLabelAdjuster<T, GL, LL, G, NLL>
-where
-    G: StateStorage,
-{
+impl<G: GroupedGraphStructure + StateStorage, NLL> StateStorage for LevelLabelAdjuster<NLL, G> {
     fn write(&self, stream: &mut Cursor<&mut Vec<u8>>) -> Result<()> {
         self.graph.read().write(stream)?;
         Ok(())

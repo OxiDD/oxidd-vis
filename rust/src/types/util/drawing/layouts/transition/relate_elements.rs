@@ -78,23 +78,22 @@ pub struct TargetEdge<T: DrawTag> {
 }
 
 /// Relates new elements and old elements to one and another, to be used in making smooth transitions
-pub fn relate_elements<
-    T: DrawTag,
-    S: NodeStyle,
-    LS: LayerStyle,
-    G: GroupedGraphStructure<T, S, LS>,
->(
+pub fn relate_elements<G: GroupedGraphStructure>(
     graph: &G,
-    old: &DiagramLayout<T, S, LS>,
-    new: &DiagramLayout<T, S, LS>,
+    old: &DiagramLayout<G::T, G::GL, G::LL>,
+    new: &DiagramLayout<G::T, G::GL, G::LL>,
     sources: &G::Tracker,
     time: u32,
-) -> ElementRelations<T> {
-    let mut previous_nodes = map_groups::<T, S, LS, G>(old, new, sources, time);
+) -> ElementRelations<G::T>
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
+{
+    let mut previous_nodes = map_groups::<G>(old, new, sources, time);
     select_node_representation(&mut previous_nodes, &new);
-    let deleted_nodes = find_deleted_nodes::<T, S, LS, G>(old, new, sources, &previous_nodes, time);
+    let deleted_nodes = find_deleted_nodes::<G>(old, new, sources, &previous_nodes, time);
     let previous_edges = map_edges(graph, old, new, sources, &previous_nodes, time);
-    let deleted_edges = find_deleted_edges::<T, S, LS, G>(
+    let deleted_edges = find_deleted_edges::<G>(
         old,
         new,
         sources,
@@ -113,12 +112,16 @@ pub fn relate_elements<
     }
 }
 
-pub fn map_groups<T: DrawTag, S: NodeStyle, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>(
-    old: &DiagramLayout<T, S, LS>,
-    new: &DiagramLayout<T, S, LS>,
+pub fn map_groups<G: GroupedGraphStructure>(
+    old: &DiagramLayout<G::T, G::GL, G::LL>,
+    new: &DiagramLayout<G::T, G::GL, G::LL>,
     sources: &G::Tracker,
     time: u32,
-) -> HashMap<NodeGroupID, TargetGroup> {
+) -> HashMap<NodeGroupID, TargetGroup>
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
+{
     new.groups
         .iter()
         .map(|(&group_id, data)| {
@@ -213,15 +216,19 @@ pub fn select_node_representation<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     }
 }
 
-pub fn map_edges<T: DrawTag, S: NodeStyle, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>(
+pub fn map_edges<G: GroupedGraphStructure>(
     graph: &G,
-    old: &DiagramLayout<T, S, LS>,
-    new: &DiagramLayout<T, S, LS>,
+    old: &DiagramLayout<G::T, G::GL, G::LL>,
+    new: &DiagramLayout<G::T, G::GL, G::LL>,
     sources: &G::Tracker,
     previous_nodes: &HashMap<NodeGroupID, TargetGroup>,
     time: u32,
-) -> HashMap<(NodeGroupID, EdgeData<T>), TargetEdge<T>> {
-    let mut edge_mapping = HashMap::<(NodeGroupID, EdgeData<T>), TargetEdge<T>>::new();
+) -> HashMap<(NodeGroupID, EdgeData<G::T>), TargetEdge<G::T>>
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
+{
+    let mut edge_mapping = HashMap::<(NodeGroupID, EdgeData<G::T>), TargetEdge<G::T>>::new();
     for (&group_id, _group_layout) in new.groups.iter() {
         let group_sources = sources.get_sources(group_id);
         let group_sources = group_sources.iter().chain(once(&group_id));
@@ -314,18 +321,17 @@ pub fn map_edges<T: DrawTag, S: NodeStyle, LS: LayerStyle, G: GroupedGraphStruct
     edge_mapping
 }
 
-pub fn find_deleted_nodes<
-    T: DrawTag,
-    S: NodeStyle,
-    LS: LayerStyle,
-    G: GroupedGraphStructure<T, S, LS>,
->(
-    old: &DiagramLayout<T, S, LS>,
-    new: &DiagramLayout<T, S, LS>,
+pub fn find_deleted_nodes<G: GroupedGraphStructure>(
+    old: &DiagramLayout<G::T, G::GL, G::LL>,
+    new: &DiagramLayout<G::T, G::GL, G::LL>,
     sources: &G::Tracker,
     previous_nodes: &HashMap<NodeGroupID, TargetGroup>,
     time: u32,
-) -> HashMap<NodeGroupID, Option<TargetGroup>> {
+) -> HashMap<NodeGroupID, Option<TargetGroup>>
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
+{
     let all_images = new
         .groups
         .keys()
@@ -381,24 +387,23 @@ pub fn find_deleted_nodes<
         .collect()
 }
 
-pub fn find_deleted_edges<
-    T: DrawTag,
-    S: NodeStyle,
-    LS: LayerStyle,
-    G: GroupedGraphStructure<T, S, LS>,
->(
-    old: &DiagramLayout<T, S, LS>,
-    new: &DiagramLayout<T, S, LS>,
+pub fn find_deleted_edges<G: GroupedGraphStructure>(
+    old: &DiagramLayout<G::T, G::GL, G::LL>,
+    new: &DiagramLayout<G::T, G::GL, G::LL>,
     sources: &G::Tracker,
     previous_nodes: &HashMap<NodeGroupID, TargetGroup>,
     deleted_nodes: &HashMap<NodeGroupID, Option<TargetGroup>>,
-    previous_edges: &HashMap<(NodeGroupID, EdgeData<T>), TargetEdge<T>>,
+    previous_edges: &HashMap<(NodeGroupID, EdgeData<G::T>), TargetEdge<G::T>>,
     time: u32,
-) -> HashMap<NodeGroupID, Vec<DeletedEdge<T>>> {
+) -> HashMap<NodeGroupID, Vec<DeletedEdge<G::T>>>
+where
+    G::GL: NodeStyle,
+    G::LL: LayerStyle,
+{
     let mut reverse_node_mapping: HashMap<usize, usize> = HashMap::new();
 
     // let mut reverse_node_mapping: HashMap<usize, usize> = HashMap::new();
-    let mut deleted_edges: HashSet<(NodeGroupID, &EdgeData<T>)> = old
+    let mut deleted_edges: HashSet<(NodeGroupID, &EdgeData<G::T>)> = old
         .groups
         .iter()
         .map(|(&group_id, group_layout)| {

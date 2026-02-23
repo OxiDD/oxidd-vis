@@ -19,31 +19,20 @@ use crate::{
 
 ///
 /// Can remove edges to children, or swap which edge goes to which child. Is not allowed to add new children.
-pub struct ChildEdgeAdjuster<
-    T: DrawTag + 'static,
-    NL: Clone,
-    LL: Clone,
-    G: GraphStructure<T, NL, LL>,
-> {
+pub struct ChildEdgeAdjuster<G: GraphStructure> {
     graph: G,
 
-    adjuster: fn(Vec<(EdgeType<T>, NodeID, NL)>) -> Option<Vec<(EdgeType<T>, NodeID)>>,
+    adjuster: fn(Vec<(EdgeType<G::T>, NodeID, G::NL)>) -> Option<Vec<(EdgeType<G::T>, NodeID)>>,
     enabled: bool,
     event_writer: GraphEventsWriter,
     graph_events: GraphEventsReader,
-    replacement_cache: HashMap<NodeID, Option<Vec<(EdgeType<T>, NodeID)>>>,
-
-    edge_tag: PhantomData<T>,
-    node_label: PhantomData<NL>,
-    level_label: PhantomData<LL>,
+    replacement_cache: HashMap<NodeID, Option<Vec<(EdgeType<G::T>, NodeID)>>>,
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-    ChildEdgeAdjuster<T, NL, LL, G>
-{
+impl<G: GraphStructure> ChildEdgeAdjuster<G> {
     pub fn new(
         mut graph: G,
-        replacer: fn(Vec<(EdgeType<T>, NodeID, NL)>) -> Option<Vec<(EdgeType<T>, NodeID)>>,
+        replacer: fn(Vec<(EdgeType<G::T>, NodeID, G::NL)>) -> Option<Vec<(EdgeType<G::T>, NodeID)>>,
     ) -> Self {
         ChildEdgeAdjuster {
             graph_events: graph.create_event_reader(),
@@ -53,10 +42,6 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
             enabled: true,
             event_writer: GraphEventsWriter::new(),
             replacement_cache: HashMap::new(),
-
-            node_label: PhantomData,
-            level_label: PhantomData,
-            edge_tag: PhantomData,
         }
     }
 
@@ -103,7 +88,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
         }
     }
 
-    fn get_children_replacement(&mut self, node: NodeID) -> Option<Vec<(EdgeType<T>, NodeID)>> {
+    fn get_children_replacement(&mut self, node: NodeID) -> Option<Vec<(EdgeType<G::T>, NodeID)>> {
         if let Some(hit) = self.replacement_cache.get(&node) {
             return hit.clone();
         }
@@ -138,9 +123,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStructure<T, NL, LL>
-    for ChildEdgeAdjuster<T, NL, LL, G>
-{
+impl<G: GraphStructure> GraphStructure for ChildEdgeAdjuster<G> {
+    type T = G::T;
+    type NL = G::NL;
+    type LL = G::LL;
+
     fn get_roots(&self) -> Vec<NodeID> {
         self.graph.get_roots()
     }
@@ -149,7 +136,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
         self.graph.get_terminals()
     }
 
-    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<G::T>, NodeID)> {
         let parents = self.graph.get_known_parents(node);
         if !self.enabled {
             return parents;
@@ -187,7 +174,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
             .collect()
     }
 
-    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<G::T>, NodeID)> {
         let children = self.graph.get_children(node);
         if !self.enabled {
             return children;
@@ -201,11 +188,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
         self.graph.get_level(node)
     }
 
-    fn get_node_label(&self, node: NodeID) -> NL {
+    fn get_node_label(&self, node: NodeID) -> G::NL {
         self.graph.get_node_label(node)
     }
 
-    fn get_level_label(&self, level: oxidd::LevelNo) -> LL {
+    fn get_level_label(&self, level: oxidd::LevelNo) -> G::LL {
         self.graph.get_level_label(level)
     }
 
@@ -230,10 +217,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
     }
 }
 
-impl<T: DrawTag + Serializable<T>, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
-    for ChildEdgeAdjuster<T, NL, LL, G>
+impl<G: GraphStructure + StateStorage> StateStorage for ChildEdgeAdjuster<G>
 where
-    G: StateStorage,
+    G::T: Serializable,
 {
     fn write(&self, stream: &mut std::io::Cursor<&mut Vec<u8>>) -> std::io::Result<()> {
         self.graph.write(stream)?;

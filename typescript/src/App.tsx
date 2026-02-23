@@ -1,4 +1,4 @@
-import React, {FC} from "react";
+import React, {FC, useEffect, useState} from "react";
 import {DefaultLayout} from "./layout/DefaultLayout";
 import {LayoutState} from "./layout/LayoutState";
 import {usePersistentMemo} from "./utils/usePersistentMemo";
@@ -7,7 +7,7 @@ import {AppState} from "./state/AppState";
 import {all} from "./watchables/mutator/all";
 import {chain} from "./watchables/mutator/chain";
 import {Derived} from "./watchables/Derived";
-import {Toggle} from "@fluentui/react";
+import {Spinner, SpinnerSize, Toggle, useTheme} from "@fluentui/react";
 import {useWatch} from "./watchables/react/useWatch";
 import {CustomLayout} from "./UI/components/layout/CustomLayout";
 import {SettingsState} from "./state/SettingsState";
@@ -34,6 +34,28 @@ import {DiagramCollectionTarget} from "./UI/views/diagramCollection/types/util/D
 import {PanelConfigViewState} from "./state/configuration/types/PanelConfig";
 import {PanelConfigView} from "./UI/components/configuration/PanelConfigComp";
 
+export const AppWithLoader: FC = () => {
+    const [showingLoader, setShowingLoader] = useState(true);
+    useEffect(() => {
+        setShowingLoader(false);
+    }, []);
+
+    if (showingLoader)
+        return (
+            <div
+                style={{
+                    display: "flex",
+                    width: "100%",
+                    height: "100%",
+                    alignItems: "center",
+                    justifyContent: "center",
+                }}>
+                <Spinner size={SpinnerSize.large} />
+            </div>
+        );
+    return <App />;
+};
+
 export const App: FC = () => {
     const app = usePersistentMemo(() => {
         const appState = new AppState();
@@ -59,7 +81,10 @@ export const App: FC = () => {
             <ViewManagerProvider value={app.views}>
                 <ToolbarProvider value={app.toolbar}>
                     <div style={{display: "flex", height: "100%"}}>
-                        <Sidebar state={app} projectUrl="https://google.com" />
+                        <Sidebar
+                            state={app}
+                            projectUrl="https://github.com/OxiDD/oxidd-vis"
+                        />
                         <div style={{flexGrow: 1, flexShrink: 1, minWidth: 0}}>
                             <UserLayout state={app} />
                         </div>
@@ -100,7 +125,7 @@ const UserLayout: FC<{state: AppState}> = ({state}) => {
                         // new Derived(watch =>
                         //     watch(app.settings.layout.deleteUnusedPanels) ? "never" : "always"
                         // )
-                        new Constant("whenEmpty")
+                        new Constant("always")
                     }
                     state={state.views.layoutState}
                     getContent={id => state.views.getPanelUI(id, Component, onContext)}

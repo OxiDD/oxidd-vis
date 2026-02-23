@@ -11,7 +11,7 @@ import {SelectionToolState} from "./SelectionToolState";
 import {ExpansionToolState} from "./ExpansionToolState";
 import {Constant} from "../../watchables/Constant";
 import {IToolEvent} from "./_types/IToolEvent";
-import {DiagramSectionDrawerBox} from "oxidd-viz-rust";
+import {DiagramSectionDrawerBox} from "oxidd-vis-rust";
 import {GroupingToolState} from "./GroupingToolState";
 
 export class ToolbarState extends ViewState implements ITool {

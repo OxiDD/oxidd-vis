@@ -27,8 +27,11 @@ use crate::configuration::types::choice_config::Choice;
 use crate::configuration::types::choice_config::ChoiceConfig;
 use crate::configuration::types::composite_config;
 use crate::configuration::types::composite_config::CompositeConfig;
+use crate::configuration::types::container_config::ContainerConfig;
+use crate::configuration::types::container_config::ContainerStyle;
 use crate::configuration::types::int_config::IntConfig;
 use crate::configuration::types::label_config::LabelConfig;
+use crate::configuration::types::label_config::LabelKind;
 use crate::configuration::types::location_config::Location;
 use crate::configuration::types::location_config::LocationConfig;
 use crate::configuration::types::panel_config::OpenSide;
@@ -38,6 +41,8 @@ use crate::traits::Diagram;
 use crate::traits::DiagramSection;
 use crate::traits::DiagramSectionDrawer;
 use crate::types::util::drawing::layouts::layer_orderings::edge_layer_ordering::EdgeLayerOrdering;
+use crate::types::util::drawing::renderers::latex_renderer::latex_headers;
+use crate::types::util::drawing::renderers::webgl_renderer::LayerRenderingColorConfig;
 use crate::types::util::drawing::renderers::webgl_renderer::WebglLayerStyle;
 use crate::types::util::graph_structure::graph_manipulators::child_edge_adjuster::ChildEdgeAdjuster;
 use crate::types::util::graph_structure::graph_manipulators::edge_to_adjuster::EdgeToAdjuster;
@@ -50,6 +55,7 @@ use crate::util::dummy_bdd::DummyBDDEdge;
 use crate::util::dummy_bdd::DummyBDDFunction;
 use crate::util::dummy_bdd::DummyBDDManager;
 use crate::util::dummy_bdd::DummyBDDManagerRef;
+use crate::util::dummy_bdd::DummyBDDNode;
 use crate::util::free_id_manager::FreeIdManager;
 use crate::util::logging::console;
 use crate::util::rc_refcell::MutRcRefCell;
@@ -120,6 +126,8 @@ use super::super::util::group_manager::GroupManager;
 use super::super::util::storage::state_storage::Serializable;
 use super::super::util::storage::state_storage::StateStorage;
 
+// The drawers for QDD and BDD decision diagrams
+// Note that we should eventually add reusable helper structure to reduce the perceived complexity of the entries to different diagram visualization implementations
 pub struct QDDDiagram<MR: ManagerRef>
 where
     for<'id> <<MR as oxidd::ManagerRef>::Manager<'id> as Manager>::InnerNode: HasLevel,
@@ -135,17 +143,18 @@ impl QDDDiagram<DummyBDDManagerRef> {
 
 impl Diagram for QDDDiagram<DummyBDDManagerRef> {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>> {
-        let (roots, levels) = DummyBDDFunction::from_dddmp(&mut self.manager_ref, &dddmp);
-        Some(Box::new(QDDDiagramSection::new(roots, levels)))
+        let (roots, levels, is_bdd) = DummyBDDFunction::from_dddmp(&mut self.manager_ref, &dddmp);
+        Some(Box::new(QDDDiagramSection::new(roots, is_bdd, levels)))
     }
-    fn create_section_from_buddy(
+    // Other == Buddy
+    fn create_section_from_other(
         &mut self,
         data: String,
         vars: Option<String>,
     ) -> Option<Box<dyn DiagramSection>> {
-        let (roots, levels) =
+        let (roots, levels, is_bdd) =
             DummyBDDFunction::from_buddy(&mut self.manager_ref, &data, vars.as_deref());
-        Some(Box::new(QDDDiagramSection::new(roots, levels)))
+        Some(Box::new(QDDDiagramSection::new(roots, is_bdd, levels)))
     }
     fn create_section_from_ids(
         &self,
@@ -160,7 +169,8 @@ impl Diagram for QDDDiagram<DummyBDDManagerRef> {
                 (DummyBDDFunction(root_edge), section.get_node_labels(id))
             })
             .collect_vec();
-        Some(Box::new(QDDDiagramSection::new(roots, levels)))
+        let is_bdd = sources.iter().all(|&(_, section)| section.get_meta() == 1);
+        Some(Box::new(QDDDiagramSection::new(roots, is_bdd, levels)))
     }
 }
 
@@ -171,13 +181,14 @@ where
     roots: Vec<(F, Vec<String>)>,
     labels: HashMap<NodeID, Vec<String>>,
     levels: Vec<String>,
+    is_bdd: bool,
 }
 
 impl<F: Function> QDDDiagramSection<F>
 where
     for<'id> <<F as oxidd::Function>::Manager<'id> as Manager>::InnerNode: HasLevel,
 {
-    fn new(roots: Vec<(F, Vec<String>)>, levels: Vec<String>) -> Self {
+    fn new(roots: Vec<(F, Vec<String>)>, is_bdd: bool, levels: Vec<String>) -> Self {
         let s = QDDDiagramSection {
             labels: roots
                 .iter()
@@ -189,6 +200,7 @@ where
                 })
                 .collect(),
             roots,
+            is_bdd,
             levels,
         };
         console::log!(
@@ -202,16 +214,66 @@ where
     }
 }
 
-impl<
-        E: Edge<Tag = ()> + 'static,
-        N: InnerNode<E> + HasLevel + 'static,
-        R: DiagramRules<E, N, String> + 'static,
-        F: Function + 'static,
-    > DiagramSection for QDDDiagramSection<F>
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = String>,
-{
+#[derive(Clone)]
+struct QDDColors {
+    edge_true: Color,
+    edge_false: Color,
+    edge_both: Color,
+    node_true: Color,
+    node_false: Color,
+    node_group: Color,
+    node_default: Color,
+    node_text: Color,
+    node_label: Color,
+    layer_background1: Color,
+    layer_background2: Color,
+    layer_text: Color,
+    selection: TransparentColor,
+    selection_partial: TransparentColor,
+    selection_hover: TransparentColor,
+    selection_hover_partial: TransparentColor,
+}
+impl QDDColors {
+    const DARK: QDDColors = QDDColors {
+        edge_true: Color(0.631, 0.749, 0.423),
+        edge_false: Color(0.835, 0.341, 0.341),
+        edge_both: Color(0.6, 0.6, 0.6),
+        node_true: Color(0.631, 0.749, 0.423),
+        node_false: Color(0.835, 0.341, 0.341),
+        node_group: Color(0.45, 0.45, 0.45),
+        node_default: Color(0.35, 0.35, 0.35),
+        node_text: Color(0.0, 0.0, 0.0),
+        node_label: Color(0.5, 0.5, 1.0),
+        layer_background1: Color(0.125, 0.125, 0.125),
+        layer_background2: Color(0.1875, 0.1875, 0.1875),
+        layer_text: Color(1.0, 1.0, 1.0),
+        selection: TransparentColor(0.6, 0.0, 1.0, 0.7),
+        selection_partial: TransparentColor(0.6, 0.0, 1.0, 0.7),
+        selection_hover: TransparentColor(0.0, 0.0, 1.0, 0.3),
+        selection_hover_partial: TransparentColor(1.0, 0.0, 0.8, 0.2),
+    };
+
+    const LIGHT: QDDColors = QDDColors {
+        edge_true: Color(0.2, 1.0, 0.2),
+        edge_false: Color(1.0, 0.2, 0.2),
+        edge_both: Color(0.6, 0.6, 0.6),
+        node_true: Color(0.2, 1.0, 0.2),
+        node_false: Color(1.0, 0.2, 0.2),
+        node_group: Color(0.45, 0.45, 0.45),
+        node_default: Color(0.1, 0.1, 0.1),
+        node_text: Color(0.0, 0.0, 0.0),
+        node_label: Color(0.5, 0.5, 1.0),
+        layer_background1: Color(0.98, 0.98, 0.98),
+        layer_background2: Color(0.9, 0.9, 0.9),
+        layer_text: Color(0.0, 0.0, 0.0),
+        selection: TransparentColor(0.6, 0.0, 1.0, 0.7),
+        selection_partial: TransparentColor(0.6, 0.0, 1.0, 0.7),
+        selection_hover: TransparentColor(0.0, 0.0, 1.0, 0.3),
+        selection_hover_partial: TransparentColor(1.0, 0.0, 0.8, 0.2),
+    };
+}
+
+impl DiagramSection for QDDDiagramSection<DummyBDDFunction> {
     fn get_level_labels(&self) -> Vec<String> {
         self.levels.clone()
     }
@@ -219,196 +281,14 @@ where
         self.labels.get(&node).cloned().unwrap_or_else(|| vec![])
     }
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer> {
-        let c0 = Color(1.0, 0.2, 0.2);
-        let c1 = Color(0.2, 1.0, 0.2);
-        let c2 = Color(0.6, 0.6, 0.6);
+        let graph =
+            OxiddGraphStructure::new(self.roots.iter().cloned().collect(), self.levels.clone());
 
-        let select_color = (Color(0.3, 0.3, 1.0), 0.8);
-        let partial_select_color = (Color(0.6, 0.0, 1.0), 0.7);
-        let hover_color = (Color(0.0, 0.0, 1.0), 0.3);
-        let partial_hover_color = (Color(1.0, 0.0, 0.8), 0.2);
-
-        let font = Rc::new(Font::new(
-            include_bytes!("../../../resources/Roboto-Bold.ttf").to_vec(),
-            1.0,
-        ));
-        let renderer = WebglRenderer::from_canvas(
-            canvas,
-            HashMap::from([
-                // True edge
-                (
-                    EdgeType::new((), 0),
-                    EdgeRenderingType {
-                        hover_color: c1.mix(&hover_color.0, hover_color.1),
-                        select_color: c1.mix(&select_color.0, select_color.1),
-                        partial_hover_color: c1.mix(&partial_hover_color.0, partial_hover_color.1),
-                        partial_select_color: c1
-                            .mix(&partial_select_color.0, partial_select_color.1),
-                        color: c1,
-                        width: 0.2,
-                        dash_solid: 1.0,
-                        dash_transparent: 0.0, // No dashing
-                    },
-                ),
-                // False edge
-                (
-                    EdgeType::new((), 1),
-                    EdgeRenderingType {
-                        hover_color: c0.mix(&hover_color.0, hover_color.1),
-                        select_color: c0.mix(&select_color.0, select_color.1),
-                        partial_hover_color: c0.mix(&partial_hover_color.0, partial_hover_color.1),
-                        partial_select_color: c0
-                            .mix(&partial_select_color.0, partial_select_color.1),
-                        color: c0,
-                        width: 0.2,
-                        dash_solid: 0.3,
-                        dash_transparent: 0.15,
-                    },
-                ),
-                // Both edge
-                (
-                    EdgeType::new((), 2),
-                    EdgeRenderingType {
-                        hover_color: c2.mix(&hover_color.0, hover_color.1),
-                        select_color: c2.mix(&select_color.0, select_color.1),
-                        partial_hover_color: c2.mix(&partial_hover_color.0, partial_hover_color.1),
-                        partial_select_color: c2
-                            .mix(&partial_select_color.0, partial_select_color.1),
-                        color: c2,
-                        width: 0.15,
-                        dash_solid: 1.0,
-                        dash_transparent: 0.0,
-                    },
-                ),
-            ]),
-            NodeRenderingColorConfig {
-                select: select_color,
-                partial_select: partial_select_color,
-                hover: hover_color,
-                partial_hover: partial_hover_color,
-            },
-            font.clone(),
-        )
-        .unwrap();
-        let layout = ToggleLayout::new(
-            LayeredLayout::new(
-                // SugiyamaOrdering::new(2, 2),
-                SequenceOrdering::new(
-                    PseudoRandomLayerOrdering::new(2, 0),
-                    SequenceOrdering::new(EdgeLayerOrdering, SugiyamaOrdering::new(2, 2)),
-                ),
-                // AverageGroupAlignment,
-                OrderingGroupAlignment,
-                // BrandesKopfPositioning,
-                BrandesKopfPositioningCorrected,
-                // DummyLayerPositioning,
-                0.3,
-            ),
-            ToggleLayoutUnit::new(LayeredLayout::new(
-                // SugiyamaOrdering::new(2, 2),
-                SequenceOrdering::new(
-                    PseudoRandomLayerOrdering::new(2, 0),
-                    SugiyamaOrdering::new(2, 2),
-                ),
-                // AverageGroupAlignment,
-                OrderingGroupAlignment,
-                // BrandesKopfPositioning,
-                BrandesKopfPositioning,
-                // DummyLayerPositioning,
-                0.1,
-            )),
-        );
-        let layout = TransitionLayout::new(layout);
-        let graph = OxiddGraphStructure::new(
-            self.roots.iter().cloned().collect(),
-            self.levels.clone(),
-            terminal_to_string,
-        );
-        let diagram = QDDDiagramDrawer::new(graph, renderer, layout, font);
+        let diagram = QDDDiagramDrawer::new(graph, self.is_bdd, canvas);
         Box::new(diagram)
     }
-}
-
-fn terminal_to_string<T: ToString>(terminal: &T) -> String {
-    terminal.to_string()
-}
-
-trait LayoutEditing {
-    fn set_seed(&mut self, seed: usize) -> ();
-    fn select_layout(&mut self, layout: usize) -> ();
-}
-impl<
-        E: Edge<Tag = ()> + 'static,
-        N: InnerNode<E> + HasLevel + 'static,
-        R: DiagramRules<E, N, String> + 'static,
-        F: Function + 'static,
-        S: Fn(&String) -> String,
-    > LayoutEditing
-    for TransitionLayout<
-        (),
-        NodeData,
-        LayerData,
-        GMGraph<(), OxiddGraphStructure<(), F, String, S>>,
-        ToggleLayout<
-            (),
-            NodeData,
-            LayerData,
-            GMGraph<(), OxiddGraphStructure<(), F, String, S>>,
-            LayeredLayout<
-                (),
-                NodeData,
-                LayerData,
-                SequenceOrdering<
-                    (),
-                    NodeData,
-                    LayerData,
-                    PseudoRandomLayerOrdering,
-                    SequenceOrdering<(), NodeData, LayerData, EdgeLayerOrdering, SugiyamaOrdering>,
-                >,
-                OrderingGroupAlignment,
-                BrandesKopfPositioningCorrected,
-            >,
-            ToggleLayoutUnit<
-                (),
-                NodeData,
-                LayerData,
-                GMGraph<(), OxiddGraphStructure<(), F, String, S>>,
-                LayeredLayout<
-                    (),
-                    NodeData,
-                    LayerData,
-                    SequenceOrdering<
-                        (),
-                        NodeData,
-                        LayerData,
-                        PseudoRandomLayerOrdering,
-                        SugiyamaOrdering,
-                    >,
-                    OrderingGroupAlignment,
-                    BrandesKopfPositioning,
-                >,
-            >,
-        >,
-    >
-where
-    for<'id> F::Manager<'id>:
-        Manager<EdgeTag = (), Edge = E, InnerNode = N, Rules = R, Terminal = String>,
-{
-    fn set_seed(&mut self, seed: usize) -> () {
-        self.get_layout_rules()
-            .get_layout_rules1()
-            .get_ordering()
-            .get_ordering1()
-            .set_seed(seed);
-        self.get_layout_rules()
-            .get_layout_rules2()
-            .get_layout_rules()
-            .get_ordering()
-            .get_ordering1()
-            .set_seed(seed);
-    }
-    fn select_layout(&mut self, layout: usize) -> () {
-        self.get_layout_rules().select_layout(layout);
+    fn get_meta(&self) -> i128 {
+        self.is_bdd as i128
     }
 }
 
@@ -496,71 +376,613 @@ impl LatexLayerStyle for LayerData {
     }
 }
 
-pub struct QDDDiagramDrawer<
-    T: DrawTag + Serializable<T> + 'static,
-    G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
-    R: Renderer<T, NodeData, LayerData>,
-    L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>>,
-> {
-    graph: MGraph<T, G>,
-    group_manager: MutRcRefCell<GM<T, G>>,
-    presence_adjuster: MPresenceAdjuster<T, G>,
+type GroupedGraph =
+    GroupPresenceAdjuster<GroupLabelAdjuster<NodeData, LayerData, GroupManager<Graph>>>;
+type Graph = RCGraph<TerminalLevelAdjuster<PresenceAdjuster>>;
+type PresenceAdjuster = RCGraph<
+    NodePresenceAdjuster<
+        RCGraph<
+            EdgeToAdjuster<
+                RCGraph<ChildEdgeAdjuster<PointerNodeAdjuster<TerminalLevelAdjuster<BaseGraph>>>>,
+            >,
+        >,
+    >,
+>;
+type BaseGraph = OxiddGraphStructure<(), DummyBDDFunction, String>;
+type Layout = TransitionLayout<ToggleLayout<Layout1, ToggleLayoutUnit<Layout2>>>;
+type Layout1 = LayeredLayout<
+    GroupedGraph,
+    SequenceOrdering<
+        GroupedGraph,
+        PseudoRandomLayerOrdering,
+        SequenceOrdering<GroupedGraph, EdgeLayerOrdering, SugiyamaOrdering>,
+    >,
+    OrderingGroupAlignment,
+    BrandesKopfPositioningCorrected,
+>;
+type Layout2 = LayeredLayout<
+    GroupedGraph,
+    SequenceOrdering<
+        GroupedGraph,
+        PseudoRandomLayerOrdering,
+        SequenceOrdering<GroupedGraph, EdgeLayerOrdering, SugiyamaOrdering>,
+    >,
+    OrderingGroupAlignment,
+    BrandesKopfPositioning,
+>;
+
+pub struct QDDDiagramDrawer {
+    graph: Graph,
+    group_manager: MutRcRefCell<GroupManager<Graph>>,
+    presence_adjuster: PresenceAdjuster,
     time: MutRcRefCell<u32>,
-    drawer: MutRcRefCell<Drawer<T, NodeData, LayerData, R, L, GMGraph<T, G>>>,
+    drawer: MutRcRefCell<Drawer<WebglRenderer<()>, Layout, GroupedGraph>>,
     config: Configuration<
         LocationConfig<
             PanelConfig<
                 CompositeConfig<(
-                    LabelConfig<ChoiceConfig<usize>>,
-                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
-                    LabelConfig<ChoiceConfig<PresenceRemainder>>,
-                    LabelConfig<ChoiceConfig<bool>>,
-                    LabelConfig<ChoiceConfig<bool>>,
-                    LabelConfig<IntConfig>,
-                    ButtonConfig,
-                    ButtonConfig,
-                    TextOutputConfig,
-                    ButtonConfig,
+                    ContainerConfig<
+                        CompositeConfig<(
+                            LabelConfig<ChoiceConfig<bool>>,
+                            LabelConfig<IntConfig>,
+                            ButtonConfig,
+                            LabelConfig<ChoiceConfig<usize>>,
+                        )>,
+                    >,
+                    ContainerConfig<
+                        LabelConfig<
+                            CompositeConfig<(
+                                LabelConfig<IntConfig>,
+                                LabelConfig<IntConfig>,
+                                ButtonConfig,
+                            )>,
+                        >,
+                    >,
+                    ContainerConfig<
+                        LabelConfig<
+                            CompositeConfig<(
+                                LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                                LabelConfig<ChoiceConfig<PresenceRemainder>>,
+                                ContainerConfig<LabelConfig<ChoiceConfig<bool>>>,
+                            )>,
+                        >,
+                    >,
+                    ContainerConfig<
+                        LabelConfig<
+                            CompositeConfig<(
+                                ButtonConfig,
+                                TextOutputConfig,
+                                LabelConfig<TextOutputConfig>,
+                            )>,
+                        >,
+                    >,
                 )>,
             >,
         >,
     >,
 }
 
-type GraphLabel = PresenceLabel<PointerLabel<NodeLabel<String>>>;
-type GM<T, G> = GroupManager<T, GraphLabel, String, MGraph<T, G>>;
-type MGraph<T, G> = RCGraph<
-    T,
-    GraphLabel,
-    String,
-    TerminalLevelAdjuster<T, GraphLabel, String, MPresenceAdjuster<T, G>>,
->;
-type MPresenceAdjuster<T, G> = RCGraph<
-    T,
-    GraphLabel,
-    String,
-    NodePresenceAdjuster<T, PointerLabel<NodeLabel<String>>, String, MEdgeToAdjuster<T, G>>,
->;
-type MEdgeToAdjuster<T, G> = RCGraph<
-    T,
-    PointerLabel<NodeLabel<String>>,
-    String,
-    EdgeToAdjuster<T, PointerLabel<NodeLabel<String>>, String, MChildEdgeAdjuster<T, G>>,
->;
-type MChildEdgeAdjuster<T, G> = RCGraph<
-    T,
-    PointerLabel<NodeLabel<String>>,
-    String,
-    ChildEdgeAdjuster<T, PointerLabel<NodeLabel<String>>, String, MPointerAdjuster<T, G>>,
->;
-type MPointerAdjuster<T, G> = PointerNodeAdjuster<T, NodeLabel<String>, String, MBaseGraph<T, G>>;
-type MBaseGraph<T, G> = TerminalLevelAdjuster<T, NodeLabel<String>, String, G>;
-type GMGraph<T, G> = GroupPresenceAdjuster<
-    T,
-    NodeData,
-    LayerData,
-    GroupLabelAdjuster<T, Vec<GraphLabel>, String, GM<T, G>, NodeData, LayerData>,
->;
+impl QDDDiagramDrawer {
+    pub fn new(graph: BaseGraph, is_bdd: bool, canvas: HtmlCanvasElement) -> Self {
+        let colors = &QDDColors::LIGHT;
+        let edge_rendering_type =
+            |color: Color, width: f32, dash_solid: f32, dash_transparent: f32| EdgeRenderingType {
+                select_color: color.mix_transparent(&colors.selection),
+                partial_select_color: color.mix_transparent(&colors.selection_partial),
+                hover_color: color.mix_transparent(&colors.selection_hover),
+                partial_hover_color: color.mix_transparent(&colors.selection_hover_partial),
+                color,
+                width,
+                dash_solid,
+                dash_transparent,
+            };
+        let font = Rc::new(Font::new(
+            include_bytes!("../../../resources/Roboto-Bold.ttf").to_vec(),
+            1.0,
+        ));
+        let renderer = WebglRenderer::from_canvas(
+            canvas,
+            HashMap::from([
+                // True edge
+                (
+                    EdgeType::new((), 0),
+                    edge_rendering_type(
+                        colors.edge_true,
+                        0.2,
+                        1.0,
+                        0.0, // No dashing
+                    ),
+                ),
+                // False edge
+                (
+                    EdgeType::new((), 1),
+                    edge_rendering_type(colors.edge_false, 0.2, 0.3, 0.15),
+                ),
+                // Label edge
+                (
+                    EdgeType::new((), 2),
+                    edge_rendering_type(colors.edge_both, 0.15, 1.0, 0.0),
+                ),
+            ]),
+            NodeRenderingColorConfig {
+                select: colors.selection,
+                partial_select: colors.selection_partial,
+                hover: colors.selection_hover,
+                partial_hover: colors.selection_hover_partial,
+                text: colors.node_text,
+            },
+            LayerRenderingColorConfig {
+                background1: colors.layer_background1.into(),
+                background2: colors.layer_background2.into(),
+                text: colors.layer_text,
+            },
+            font.clone(),
+        )
+        .unwrap();
+
+        let layout_opt1: Layout1 = LayeredLayout::new(
+            // SugiyamaOrdering::new(2, 2),
+            SequenceOrdering::new(
+                PseudoRandomLayerOrdering::new(2, 0),
+                SequenceOrdering::new(EdgeLayerOrdering, SugiyamaOrdering::new(2, 2)),
+            ),
+            // AverageGroupAlignment,
+            OrderingGroupAlignment,
+            // BrandesKopfPositioning,
+            BrandesKopfPositioningCorrected,
+            // DummyLayerPositioning,
+            0.3,
+        );
+        let layout_opt2: Layout2 = LayeredLayout::new(
+            // SugiyamaOrdering::new(2, 2),
+            SequenceOrdering::new(
+                PseudoRandomLayerOrdering::new(2, 0),
+                SequenceOrdering::new(EdgeLayerOrdering, SugiyamaOrdering::new(2, 2)),
+            ),
+            // AverageGroupAlignment,
+            OrderingGroupAlignment,
+            // BrandesKopfPositioning,
+            BrandesKopfPositioning,
+            // DummyLayerPositioning,
+            0.1,
+        );
+        let layout = ToggleLayout::new(layout_opt1, ToggleLayoutUnit::new(layout_opt2));
+        let layout: Layout = TransitionLayout::new(layout);
+
+        let original_roots = graph.get_roots().clone();
+        let base_graph = TerminalLevelAdjuster::new(graph); // Make sure that terminal levels make sense before possibly adding pointers to these terminals
+        let pointer_adjuster = PointerNodeAdjuster::new(
+            base_graph,
+            EdgeType { tag: (), index: 2 },
+            true,
+            "".to_string(),
+        );
+        let child_edge_adjuster =
+            RCGraph::new(ChildEdgeAdjuster::new(pointer_adjuster, move_shared_edge));
+        let edge_to_adjuster = RCGraph::new(EdgeToAdjuster::new(child_edge_adjuster.clone()));
+        let presence_adjuster: PresenceAdjuster =
+            RCGraph::new(NodePresenceAdjuster::new(edge_to_adjuster.clone()));
+        let modified_graph: Graph =
+            RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
+        let roots = modified_graph.get_roots();
+        let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
+
+        let mut grouped_graph = GroupPresenceAdjuster::new(GroupLabelAdjuster::new_shared(
+            group_manager.clone(),
+            move |nodes| {
+                // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
+                let (is_terminal, is_group, color) = match (nodes.get(0), nodes.get(1)) {
+                    (
+                        Some(&PresenceLabel {
+                            original_label:
+                                PointerLabel::Node(NodeLabel {
+                                    pointers: _,
+                                    kind: NodeType::Terminal(ref terminal),
+                                }),
+                            original_id: _,
+                        }),
+                        None,
+                    ) => {
+                        if terminal == "T" || terminal == "B" {
+                            (Some(1), false, colors.node_true)
+                        } else {
+                            (Some(0), false, colors.node_false)
+                        }
+                    }
+                    (
+                        Some(&PresenceLabel {
+                            original_label: PointerLabel::Pointer(_),
+                            original_id: _,
+                        }),
+                        None,
+                    ) => (None, false, colors.node_label),
+                    (Some(_), None) => (None, false, colors.node_default),
+                    _ => (None, true, colors.node_group),
+                };
+                let name: Option<String> = match (nodes.get(0), nodes.get(1)) {
+                    (
+                        Some(&PresenceLabel {
+                            original_label: PointerLabel::Pointer(ref text),
+                            original_id: _,
+                        }),
+                        None,
+                    ) => Some(text.clone()),
+                    _ => None,
+                };
+
+                NodeData {
+                    color,
+                    border_color: TransparentColor(0.0, 0.0, 0.0, 0.0),
+                    width: 1.
+                        + match name {
+                            Some(ref text) => font.measure_width(&text),
+                            None => 0.,
+                        },
+                    name,
+                    is_terminal,
+                    is_group,
+                }
+            },
+            move |layer_label| LayerData {
+                name: layer_label.clone(),
+            },
+        ));
+        grouped_graph.hide(0);
+
+        const TOP_MARGIN: f32 = 40.0;
+        let composite_config = CompositeConfig::new((
+            ContainerConfig::new(
+                // Only show these testing options for QDDs
+                ContainerStyle::new().hidden(is_bdd),
+                CompositeConfig::new((
+                    LabelConfig::new(
+                        "Move shared",
+                        ChoiceConfig::new([
+                            Choice::new(true, "enabled"),
+                            Choice::new(false, "disabled"),
+                        ]),
+                    ),
+                    LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
+                    ButtonConfig::new_labeled("Change seed"),
+                    LabelConfig::new(
+                        "Layout",
+                        ChoiceConfig::new([Choice::new(0, "1"), Choice::new(1, "2")]),
+                    ),
+                )),
+            ),
+            ContainerConfig::new(
+                ContainerStyle::new().margin_top(if is_bdd { 0.0 } else { TOP_MARGIN }),
+                LabelConfig::new_styled(
+                    "Node expansion",
+                    LabelKind::Category,
+                    CompositeConfig::new((
+                        LabelConfig::new("Layers", IntConfig::new_min_max(4, Some(1), None)),
+                        LabelConfig::new("Max nodes", IntConfig::new_min_max(100, Some(1), None)),
+                        ButtonConfig::new_labeled("Expand initial group"),
+                    )),
+                ),
+            ),
+            ContainerConfig::new(
+                ContainerStyle::new().margin_top(TOP_MARGIN),
+                LabelConfig::new_styled(
+                    "Terminals",
+                    LabelKind::Category,
+                    CompositeConfig::new((
+                        LabelConfig::new("False visibility", {
+                            let mut c = ChoiceConfig::new([
+                                Choice::new(PresenceRemainder::Show, "show"),
+                                Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                                Choice::new(PresenceRemainder::Hide, "hide"),
+                            ]);
+                            c.set_index(2).commit();
+                            c
+                        }),
+                        LabelConfig::new(
+                            "True visibility",
+                            ChoiceConfig::new([
+                                Choice::new(PresenceRemainder::Show, "show"),
+                                Choice::new(PresenceRemainder::Duplicate, "duplicate"),
+                                Choice::new(PresenceRemainder::Hide, "hide"),
+                            ]),
+                        ),
+                        // Only show this option for QDDs
+                        ContainerConfig::new(
+                            ContainerStyle::new().hidden(is_bdd),
+                            LabelConfig::new("Shared true visibility", {
+                                let mut c = ChoiceConfig::new([
+                                    Choice::new(false, "show"),
+                                    Choice::new(true, "hide"),
+                                ]);
+                                c.set_index(1).commit();
+                                c
+                            }),
+                        ),
+                    )),
+                ),
+            ),
+            ContainerConfig::new(
+                ContainerStyle::new().margin_top(TOP_MARGIN),
+                LabelConfig::new_styled(
+                    "Latex",
+                    LabelKind::Category,
+                    CompositeConfig::new((
+                        ButtonConfig::new_labeled("Generate"),
+                        TextOutputConfig::new(true),
+                        LabelConfig::new("Headers", TextOutputConfig::new(false)),
+                    )),
+                ),
+            ),
+        ));
+        let config = Configuration::new(LocationConfig::new(
+            Location::BOTTOM_RIGHT,
+            PanelConfig::builder()
+                .set_button_icon("Settings")
+                .set_button_icon_description("Open visualization settings")
+                .set_name("Settings")
+                .set_category("visualization-settings")
+                .set_open_side(OpenSide::Right)
+                .set_open_size(0.3)
+                .build(composite_config.clone()),
+        ));
+
+        let mut out = QDDDiagramDrawer {
+            group_manager,
+            presence_adjuster,
+            graph: modified_graph,
+            time: MutRcRefCell::new(0),
+            drawer: MutRcRefCell::new(Drawer::new(
+                renderer,
+                layout,
+                MutRcRefCell::new(grouped_graph),
+            )),
+            config,
+        };
+
+        let (qdd_config, expansion, terminal_config, latex_config) = &*composite_config;
+        let (move_shared, seed, change_seed, layout_config) = &***qdd_config;
+        let (_max_expand_layers, _max_expand_nodes, expand_all) = &****expansion;
+        let (false_visibility, true_visibility, hide_shared_true) = &****terminal_config;
+        let (latex_generate, latex_output, latex_header_output) = &****latex_config;
+
+        let drawer = out.drawer.clone();
+        let layout_config_copy = layout_config.clone();
+        let _ = on_configuration_change(&*layout_config, move || {
+            drawer
+                .get()
+                .get_layout_rules()
+                .get_layout_rules()
+                .select_layout(layout_config_copy.get());
+        });
+
+        let drawer = out.drawer.clone();
+        let mut seed_copy = seed.clone();
+        change_seed.clone().add_press_listener(move || {
+            let new_seed = seed_copy.get() + 1;
+            seed_copy.set(new_seed).commit();
+        });
+
+        let seed_copy = seed.clone();
+        let _ = on_configuration_change(&*seed, move || {
+            let mut drawer = drawer.get();
+            let p = drawer.get_layout_rules().get_layout_rules();
+            p.get_layout_rules1()
+                .get_ordering()
+                .get_ordering1()
+                .set_seed(seed_copy.get() as usize);
+            p.get_layout_rules2()
+                .get_layout_rules()
+                .get_ordering()
+                .get_ordering1()
+                .set_seed(seed_copy.get() as usize);
+        });
+
+        let drawer = out.drawer.clone();
+        let mut latex_renderer = LatexRenderer::<Layout>::new();
+        let mut output = latex_output.clone();
+        latex_generate.clone().add_press_listener(move || {
+            latex_renderer.update_layout(&drawer.get().get_current_layout());
+            latex_renderer.render(u32::MAX);
+            let out = latex_renderer.get_output();
+            output.set(out.into()).commit();
+        });
+        latex_header_output
+            .clone()
+            .set(latex_headers.to_string())
+            .commit();
+
+        let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
+        // let from = 0;
+        for root in roots {
+            out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
+        }
+
+        let max = 500;
+        if out.group_manager.read().get_nodes_of_group(from).len() < max {
+            reveal_all(&out.group_manager, from, max);
+        }
+
+        let group_manager = out.group_manager.clone();
+        expand_all
+            .clone()
+            .add_press_listener(move || reveal_all(&group_manager, from, 10_000_000));
+
+        // Connect the config
+        let drawer = out.drawer.clone();
+        let time = out.time.clone();
+        fn set_terminal_presence<const P: usize>(
+            presence_adjuster: &PresenceAdjuster,
+            target_terminals: [String; P],
+            presence: PresenceRemainder,
+        ) -> () {
+            let mut adjuster = presence_adjuster.get();
+            let terminals = adjuster.get_terminals();
+            let mut terminals = terminals.iter().filter_map(|&node| {
+                match adjuster.get_node_label(node).original_label {
+                    PointerLabel::Node(NodeLabel {
+                        pointers: _,
+                        kind: NodeType::Terminal(t),
+                    }) if target_terminals.iter().any(|terminal| &t == terminal) => Some(node),
+                    _ => None,
+                }
+            });
+            let Some(target_terminal) = terminals.next() else {
+                return;
+            };
+
+            adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(presence));
+        }
+
+        let false_presence_adjuster = out.presence_adjuster.clone();
+        let false_visibility_copy = false_visibility.clone();
+        let _ = on_configuration_change(&*false_visibility, move || {
+            set_terminal_presence(
+                &false_presence_adjuster,
+                ["F".into(), "E".into()],
+                false_visibility_copy.get(),
+            );
+        });
+        let true_presence_adjuster = out.presence_adjuster.clone();
+        let true_visibility_copy = true_visibility.clone();
+        let _ = on_configuration_change(&*true_visibility, move || {
+            set_terminal_presence(
+                &true_presence_adjuster,
+                ["T".into(), "B".into()],
+                true_visibility_copy.get(),
+            );
+        });
+
+        let hide_shared_true_copy = hide_shared_true.clone();
+        let _ = on_configuration_change(&*hide_shared_true, move || {
+            if hide_shared_true_copy.get() {
+                let hide_edges = edge_to_adjuster
+                    .get_terminals()
+                    .into_iter()
+                    .filter_map(|node| match edge_to_adjuster.get_node_label(node) {
+                        PointerLabel::Node(NodeLabel {
+                            pointers: _,
+                            kind: NodeType::Terminal(t),
+                        }) if t == "T" => Some((node, EdgeType::new((), 2))),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter();
+                edge_to_adjuster.get().set_remove_to_edges(hide_edges);
+            } else {
+                edge_to_adjuster
+                    .get()
+                    .set_remove_to_edges(HashSet::new().into_iter());
+            }
+        });
+
+        let move_shared_copy = move_shared.clone();
+        let _ = on_configuration_change(&*move_shared, move || {
+            child_edge_adjuster
+                .get()
+                .set_enabled(move_shared_copy.get());
+        });
+
+        let _ = after_configuration_change(&composite_config, move || {
+            drawer.get().layout(*time.get());
+        });
+
+        out
+    }
+}
+
+fn reveal_all<G: GraphStructure>(
+    group_manager: &MutRcRefCell<GroupManager<G>>,
+    from_id: NodeGroupID,
+    limit: usize,
+) {
+    let nodes = {
+        let mut gm = group_manager.get();
+        if !gm.get_groups().contains_key(&from_id) {
+            return;
+        }
+        let explored_group = gm.create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
+        gm.get_nodes_of_group(explored_group)
+    };
+    let mut count = 0;
+    let mut group_manager = group_manager.get();
+    for node_id in nodes.into_iter().rev() {
+        // console::log!("{node_id}");
+        group_manager.create_group(vec![TargetID(TargetIDType::NodeID, node_id)]);
+
+        count = count + 1;
+        if limit > 0 && count >= limit {
+            break;
+        }
+    }
+}
+
+impl DiagramSectionDrawer for QDDDiagramDrawer {
+    fn render(&mut self, time: u32) -> () {
+        *self.time.get() = time;
+        self.drawer.get().render(time);
+    }
+
+    fn layout(&mut self, time: u32) -> () {
+        self.drawer.get().layout(time);
+    }
+
+    fn set_transform(&mut self, width: u32, height: u32, x: f32, y: f32, scale: f32) -> () {
+        self.drawer.get().set_transform(width, height, x, y, scale);
+    }
+
+    fn set_step(&mut self, step: i32) -> Option<StepData> {
+        todo!()
+    }
+
+    fn set_group(&mut self, from: Vec<TargetID>, to: NodeGroupID) -> bool {
+        self.group_manager.get().set_group(from, to)
+    }
+
+    fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
+        // self.config.
+        self.group_manager.get().create_group(from)
+    }
+
+    fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
+        let (_qdd_config, expansion, _terminal_config, _latex_config) = &****self.config;
+        let (max_expand_layers, max_expand_nodes, _expand_all) = &****expansion;
+        self.group_manager.get().split_edges(
+            nodes,
+            max_expand_layers.get().unsigned_abs(),
+            max_expand_nodes.get().unsigned_abs(),
+        );
+    }
+
+    fn get_nodes(&self, area: Rectangle, max_group_expansion: usize) -> Vec<NodeID> {
+        self.drawer.read().get_nodes(area, max_group_expansion)
+    }
+
+    fn set_selected_nodes(&mut self, selected_ids: &[NodeID], hovered_ids: &[NodeID]) {
+        self.drawer.get().select_nodes(selected_ids, hovered_ids);
+    }
+
+    fn local_nodes_to_sources(&self, nodes: &[NodeID]) -> Vec<NodeID> {
+        self.graph
+            .local_nodes_to_sources(nodes.iter().cloned().collect())
+    }
+
+    fn source_nodes_to_local(&self, nodes: &[NodeID]) -> Vec<NodeID> {
+        self.graph
+            .source_nodes_to_local(nodes.iter().cloned().collect())
+    }
+    fn serialize_state(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        let _ = self.group_manager.read().write(&mut Cursor::new(&mut out));
+        out
+    }
+
+    fn deserialize_state(&mut self, state: Vec<u8>) -> () {
+        let _ = self.group_manager.get().read(&mut Cursor::new(&state));
+    }
+
+    fn get_configuration(&self) -> AbstractConfigurationObject {
+        self.config.get_abstract()
+    }
+}
 
 fn move_shared_edge<T: DrawTag + 'static>(
     children: Vec<(EdgeType<T>, NodeID, PointerLabel<NodeLabel<String>>)>,
@@ -602,399 +1024,4 @@ fn move_shared_edge<T: DrawTag + 'static>(
         (to_false_edge.clone(), *false_node),
     ]);
     // return Some(vec![]);
-}
-
-impl<
-        T: DrawTag + Serializable<T> + 'static,
-        G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
-        R: Renderer<T, NodeData, LayerData> + 'static,
-        L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>> + LayoutEditing + 'static,
-    > QDDDiagramDrawer<T, G, R, L>
-{
-    pub fn new(graph: G, renderer: R, layout: L, font: Rc<Font>) -> QDDDiagramDrawer<T, G, R, L> {
-        let original_roots = graph.get_roots().clone();
-        let base_graph = TerminalLevelAdjuster::new(graph); // Make sure that terminal levels make sense before possibly adding pointers to these terminals
-        let pointer_adjuster = PointerNodeAdjuster::new(
-            base_graph,
-            EdgeType {
-                tag: T::default(),
-                index: 2,
-            },
-            true,
-            "".to_string(),
-        );
-        let child_edge_adjuster =
-            RCGraph::new(ChildEdgeAdjuster::new(pointer_adjuster, move_shared_edge));
-        let edge_to_adjuster = RCGraph::new(EdgeToAdjuster::new(child_edge_adjuster.clone()));
-        let presence_adjuster = RCGraph::new(NodePresenceAdjuster::new(edge_to_adjuster.clone()));
-        let modified_graph = RCGraph::new(TerminalLevelAdjuster::new(presence_adjuster.clone()));
-        let roots = modified_graph.get_roots();
-        let group_manager = MutRcRefCell::new(GroupManager::new(modified_graph.clone()));
-
-        let mut grouped_graph = GMGraph::new(GroupLabelAdjuster::new_shared(
-            group_manager.clone(),
-            move |nodes| {
-                // TODO: make this adjuster lazy, e.g. don't recompute for the same list of nodes
-                let (is_terminal, is_group, color) = match (nodes.get(0), nodes.get(1)) {
-                    (
-                        Some(&PresenceLabel {
-                            original_label:
-                                PointerLabel::Node(NodeLabel {
-                                    pointers: _,
-                                    kind: NodeType::Terminal(ref terminal),
-                                }),
-                            original_id: _,
-                        }),
-                        None,
-                    ) => {
-                        if terminal == "T" {
-                            (Some(1), false, Color(0.2, 1., 0.2))
-                        } else {
-                            (Some(0), false, Color(1., 0.2, 0.2))
-                        }
-                    }
-                    (
-                        Some(&PresenceLabel {
-                            original_label: PointerLabel::Pointer(_),
-                            original_id: _,
-                        }),
-                        None,
-                    ) => (None, false, Color(0.5, 0.5, 1.0)),
-                    (Some(_), None) => (None, false, Color(0.1, 0.1, 0.1)),
-                    _ => (None, true, Color(0.7, 0.7, 0.7)),
-                };
-                let name: Option<String> = match (nodes.get(0), nodes.get(1)) {
-                    (
-                        Some(&PresenceLabel {
-                            original_label: PointerLabel::Pointer(ref text),
-                            original_id: _,
-                        }),
-                        None,
-                    ) => Some(text.clone()),
-                    _ => None,
-                };
-
-                NodeData {
-                    color,
-                    border_color: TransparentColor(0.0, 0.0, 0.0, 0.0),
-                    width: 1.
-                        + match name {
-                            Some(ref text) => font.measure_width(&text),
-                            None => 0.,
-                        },
-                    name,
-                    is_terminal,
-                    is_group,
-                }
-            },
-            move |layer_label| LayerData {
-                name: layer_label.clone(),
-            },
-        ));
-        grouped_graph.hide(0);
-
-        let composite_config = CompositeConfig::new(
-            (
-                LabelConfig::new(
-                    "Layout",
-                    ChoiceConfig::new([Choice::new(0, "1"), Choice::new(1, "2")]),
-                ),
-                LabelConfig::new("False terminal", {
-                    let mut c = ChoiceConfig::new([
-                        Choice::new(PresenceRemainder::Show, "show"),
-                        Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                        Choice::new(PresenceRemainder::Hide, "hide"),
-                    ]);
-                    c.set_index(2).commit();
-                    c
-                }),
-                LabelConfig::new(
-                    "True terminal",
-                    ChoiceConfig::new([
-                        Choice::new(PresenceRemainder::Show, "show"),
-                        Choice::new(PresenceRemainder::Duplicate, "duplicate"),
-                        Choice::new(PresenceRemainder::Hide, "hide"),
-                    ]),
-                ),
-                LabelConfig::new("Hide shared true", {
-                    let mut c =
-                        ChoiceConfig::new([Choice::new(false, "show"), Choice::new(true, "hide")]);
-                    c.set_index(1).commit();
-                    c
-                }),
-                LabelConfig::new("Move shared", {
-                    let mut c = ChoiceConfig::new([
-                        Choice::new(true, "enabled"),
-                        Choice::new(false, "disabled"),
-                    ]);
-                    c
-                }),
-                LabelConfig::new("Seed", IntConfig::new_min_max(0, Some(0), None)),
-                ButtonConfig::new_labeled("Change seed"),
-                ButtonConfig::new_labeled("Generate latex"),
-                TextOutputConfig::new(true),
-                ButtonConfig::new_labeled("Expand all"),
-            ),
-            |(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10)| {
-                vec![
-                    Box::new(f1.clone()),
-                    Box::new(f2.clone()),
-                    Box::new(f3.clone()),
-                    Box::new(f4.clone()),
-                    Box::new(f5.clone()),
-                    Box::new(f6.clone()),
-                    Box::new(f7.clone()),
-                    Box::new(f8.clone()),
-                    Box::new(f9.clone()),
-                    Box::new(f10.clone()),
-                ]
-            },
-        );
-        let config = Configuration::new(LocationConfig::new(
-            Location::BOTTOM_RIGHT,
-            PanelConfig::builder()
-                .set_button_icon("Settings")
-                .set_button_icon_description("Open visualization settings")
-                .set_name("Settings")
-                .set_category("visualization-settings")
-                .set_open_side(OpenSide::Right)
-                .set_open_size(0.3)
-                .build(composite_config.clone()),
-        ));
-
-        let mut out = QDDDiagramDrawer {
-            group_manager,
-            presence_adjuster,
-            graph: modified_graph,
-            time: MutRcRefCell::new(0),
-            drawer: MutRcRefCell::new(Drawer::new(
-                renderer,
-                layout,
-                MutRcRefCell::new(grouped_graph),
-            )),
-            config,
-        };
-
-        let drawer = out.drawer.clone();
-        let false_config = composite_config.0.clone();
-        let _ = on_configuration_change(&composite_config.0, move || {
-            drawer
-                .get()
-                .get_layout_rules()
-                .select_layout(false_config.get());
-        });
-
-        let drawer = out.drawer.clone();
-        let mut seed = composite_config.5.clone();
-        composite_config.6.clone().add_press_listener(move || {
-            let new_seed = seed.get() + 1;
-            seed.set(new_seed).commit();
-        });
-        let seed = composite_config.5.clone();
-        let seed2 = seed.clone();
-        let _ = on_configuration_change(&seed, move || {
-            drawer
-                .get()
-                .get_layout_rules()
-                .set_seed(seed2.get() as usize);
-        });
-
-        let drawer = out.drawer.clone();
-        let mut latex_renderer = LatexRenderer::new();
-        let mut output = composite_config.8.clone();
-        composite_config.7.clone().add_press_listener(move || {
-            latex_renderer.update_layout(&drawer.get().get_current_layout());
-            latex_renderer.render(u32::MAX);
-            let out = latex_renderer.get_output();
-            output.set(out.into()).commit();
-        });
-
-        let from = out.create_group(vec![TargetID(TargetIDType::NodeGroupID, 0)]);
-        // let from = 0;
-        for root in roots {
-            out.create_group(vec![TargetID(TargetIDType::NodeID, root)]);
-        }
-
-        let max = 500;
-        if out.group_manager.read().get_nodes_of_group(from).len() < max {
-            reveal_all(&out.group_manager, from, max);
-        }
-
-        let group_manager = out.group_manager.clone();
-        composite_config
-            .9
-            .clone()
-            .add_press_listener(move || reveal_all(&group_manager, from, 10_000_000));
-
-        // Connect the config
-        let drawer = out.drawer.clone();
-        let time = out.time.clone();
-        fn set_terminal_presence<
-            T: DrawTag + Serializable<T> + 'static,
-            G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
-        >(
-            presence_adjuster: &MPresenceAdjuster<T, G>,
-            terminal: String,
-            presence: PresenceRemainder,
-        ) -> () {
-            let mut adjuster = presence_adjuster.get();
-            let terminals = adjuster.get_terminals();
-            let mut terminals = terminals.iter().filter_map(|&node| {
-                match adjuster.get_node_label(node).original_label {
-                    PointerLabel::Node(NodeLabel {
-                        pointers: _,
-                        kind: NodeType::Terminal(t),
-                    }) if t == terminal => Some(node),
-                    _ => None,
-                }
-            });
-            let Some(target_terminal) = terminals.next() else {
-                return;
-            };
-
-            adjuster.set_node_presence(target_terminal, PresenceGroups::remainder(presence));
-        }
-        let false_config = composite_config.1.clone();
-        let false_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&composite_config.1, move || {
-            set_terminal_presence(&false_presence_adjuster, "F".into(), false_config.get());
-        });
-        let true_config = composite_config.2.clone();
-        let true_presence_adjuster = out.presence_adjuster.clone();
-        let _ = on_configuration_change(&composite_config.2, move || {
-            set_terminal_presence(&true_presence_adjuster, "T".into(), true_config.get());
-        });
-
-        let hide_shared_true_config = composite_config.3.clone();
-        let _ = on_configuration_change(&composite_config.3, move || {
-            if hide_shared_true_config.get() {
-                let hide_edges = edge_to_adjuster
-                    .get_terminals()
-                    .into_iter()
-                    .filter_map(|node| match edge_to_adjuster.get_node_label(node) {
-                        PointerLabel::Node(NodeLabel {
-                            pointers: _,
-                            kind: NodeType::Terminal(t),
-                        }) if t == "T" => Some((node, EdgeType::new(T::default(), 2))),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .into_iter();
-                edge_to_adjuster.get().set_remove_to_edges(hide_edges);
-            } else {
-                edge_to_adjuster
-                    .get()
-                    .set_remove_to_edges(HashSet::new().into_iter());
-            }
-        });
-
-        let move_shared_config = composite_config.4.clone();
-        on_configuration_change(&composite_config.4, move || {
-            child_edge_adjuster
-                .get()
-                .set_enabled(move_shared_config.get());
-        });
-
-        let _ = after_configuration_change(&composite_config, move || {
-            drawer.get().layout(*time.get());
-        });
-
-        out
-    }
-}
-
-fn reveal_all<
-    T: DrawTag + Serializable<T> + 'static,
-    G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
->(
-    group_manager: &MutRcRefCell<GM<T, G>>,
-    from_id: NodeGroupID,
-    limit: usize,
-) {
-    let nodes = {
-        let explored_group = group_manager
-            .get()
-            .create_group(vec![TargetID(TargetIDType::NodeGroupID, from_id)]);
-        group_manager.read().get_nodes_of_group(explored_group)
-    };
-    let mut count = 0;
-    let mut group_manager = group_manager.get();
-    for node_id in nodes.into_iter().rev() {
-        // console::log!("{node_id}");
-        group_manager.create_group(vec![TargetID(TargetIDType::NodeID, node_id)]);
-
-        count = count + 1;
-        if limit > 0 && count >= limit {
-            break;
-        }
-    }
-}
-
-impl<
-        T: DrawTag + Serializable<T> + 'static,
-        G: GraphStructure<T, NodeLabel<String>, String> + StateStorage + 'static,
-        R: Renderer<T, NodeData, LayerData>,
-        L: LayoutRules<T, NodeData, LayerData, GMGraph<T, G>>,
-    > DiagramSectionDrawer for QDDDiagramDrawer<T, G, R, L>
-{
-    fn render(&mut self, time: u32) -> () {
-        *self.time.get() = time;
-        self.drawer.get().render(time);
-    }
-
-    fn layout(&mut self, time: u32) -> () {
-        self.drawer.get().layout(time);
-    }
-
-    fn set_transform(&mut self, width: u32, height: u32, x: f32, y: f32, scale: f32) -> () {
-        self.drawer.get().set_transform(width, height, x, y, scale);
-    }
-
-    fn set_step(&mut self, step: i32) -> Option<StepData> {
-        todo!()
-    }
-
-    fn set_group(&mut self, from: Vec<TargetID>, to: NodeGroupID) -> bool {
-        self.group_manager.get().set_group(from, to)
-    }
-
-    fn create_group(&mut self, from: Vec<TargetID>) -> NodeGroupID {
-        // self.config.
-        self.group_manager.get().create_group(from)
-    }
-
-    fn split_edges(&mut self, nodes: &[NodeID], fully: bool) {
-        self.group_manager.get().split_edges(nodes, fully);
-    }
-
-    fn get_nodes(&self, area: Rectangle, max_group_expansion: usize) -> Vec<NodeID> {
-        self.drawer.read().get_nodes(area, max_group_expansion)
-    }
-
-    fn set_selected_nodes(&mut self, selected_ids: &[NodeID], hovered_ids: &[NodeID]) {
-        self.drawer.get().select_nodes(selected_ids, hovered_ids);
-    }
-
-    fn local_nodes_to_sources(&self, nodes: &[NodeID]) -> Vec<NodeID> {
-        self.graph
-            .local_nodes_to_sources(nodes.iter().cloned().collect())
-    }
-
-    fn source_nodes_to_local(&self, nodes: &[NodeID]) -> Vec<NodeID> {
-        self.graph
-            .source_nodes_to_local(nodes.iter().cloned().collect())
-    }
-    fn serialize_state(&self) -> Vec<u8> {
-        let mut out = Vec::new();
-        let _ = self.group_manager.read().write(&mut Cursor::new(&mut out));
-        out
-    }
-
-    fn deserialize_state(&mut self, state: Vec<u8>) -> () {
-        let _ = self.group_manager.get().read(&mut Cursor::new(&state));
-    }
-
-    fn get_configuration(&self) -> AbstractConfigurationObject {
-        self.config.get_abstract()
-    }
 }

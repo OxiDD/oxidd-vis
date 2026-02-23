@@ -51,10 +51,11 @@ pub struct Node {
 }
 
 pub struct NodeRenderingColorConfig {
-    pub select: (Color, f32),
-    pub partial_select: (Color, f32),
-    pub hover: (Color, f32),
-    pub partial_hover: (Color, f32),
+    pub select: TransparentColor,
+    pub partial_select: TransparentColor,
+    pub hover: TransparentColor,
+    pub partial_hover: TransparentColor,
+    pub text: Color,
 }
 
 pub struct TextRenderingConfig {
@@ -278,10 +279,10 @@ impl NodeRenderer {
                 let data_index = node_data.index * 6;
                 let node_color = maybe_color
                     .clone()
-                    .map(|(color, per)| node_data.color.mix(&color, per))
+                    .map(|color| node_data.color.mix_transparent(&color))
                     .unwrap_or_else(|| node_data.color.clone());
                 let old_node_color = maybe_color
-                    .map(|(color, per)| node_data.color.mix(&color, per))
+                    .map(|color| node_data.color.mix_transparent(&color))
                     .unwrap_or_else(|| node_data.color.clone());
                 for i in 0..6 {
                     self.vertex_renderer.update_data(

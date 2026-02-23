@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use crate::util::{free_id_manager::FreeIdManager, rc_refcell::MutRcRefCell};
 
@@ -13,7 +13,18 @@ impl<C: Abstractable> Configuration<C> {
         Configuration { config }
     }
 }
-// impl Deref for Configuration<>
+impl<C: Abstractable> Deref for Configuration<C> {
+    type Target = C;
+
+    fn deref(&self) -> &Self::Target {
+        &self.config
+    }
+}
+impl<C: Abstractable> DerefMut for Configuration<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.config
+    }
+}
 
 impl<C: Abstractable> Abstractable for Configuration<C> {
     fn get_abstract(&self) -> AbstractConfigurationObject {

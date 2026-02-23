@@ -20,25 +20,19 @@ use crate::{
     wasm_interface::{NodeGroupID, NodeID},
 };
 
-pub struct GroupPresenceAdjuster<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> {
+pub struct GroupPresenceAdjuster<G: GroupedGraphStructure> {
     graph: MutRcRefCell<G>,
     hidden_groups: HashSet<NodeGroupID>,
-    tag: PhantomData<T>,
-    group_label: PhantomData<GL>,
-    level_label: PhantomData<LL>,
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> GroupPresenceAdjuster<T, GL, LL, G> {
-    pub fn new(graph: G) -> GroupPresenceAdjuster<T, GL, LL, G> {
+impl<G: GroupedGraphStructure> GroupPresenceAdjuster<G> {
+    pub fn new(graph: G) -> GroupPresenceAdjuster<G> {
         GroupPresenceAdjuster::new_shared(MutRcRefCell::new(graph))
     }
-    pub fn new_shared(graph: MutRcRefCell<G>) -> GroupPresenceAdjuster<T, GL, LL, G> {
+    pub fn new_shared(graph: MutRcRefCell<G>) -> GroupPresenceAdjuster<G> {
         GroupPresenceAdjuster {
             graph,
             hidden_groups: HashSet::new(),
-            tag: PhantomData,
-            group_label: PhantomData,
-            level_label: PhantomData,
         }
     }
 
@@ -51,9 +45,10 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> GroupPresenceAdjus
     }
 }
 
-impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> GroupedGraphStructure<T, GL, LL>
-    for GroupPresenceAdjuster<T, GL, LL, G>
-{
+impl<G: GroupedGraphStructure> GroupedGraphStructure for GroupPresenceAdjuster<G> {
+    type T = G::T;
+    type GL = G::GL;
+    type LL = G::LL;
     type Tracker = G::Tracker;
 
     fn get_roots(&self) -> Vec<NodeGroupID> {
@@ -90,11 +85,11 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> GroupedGraphStruct
         self.graph.read().get_group(node)
     }
 
-    fn get_group_label(&self, group: NodeID) -> GL {
+    fn get_group_label(&self, group: NodeID) -> G::GL {
         self.graph.read().get_group_label(group)
     }
 
-    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
+    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<G::T>> {
         self.graph
             .read()
             .get_parents(group)
@@ -103,7 +98,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> GroupedGraphStruct
             .collect()
     }
 
-    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>> {
+    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<G::T>> {
         self.graph
             .read()
             .get_children(group)
@@ -120,7 +115,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> GroupedGraphStruct
         self.graph.read().get_level_range(group)
     }
 
-    fn get_level_label(&self, level: LevelNo) -> LL {
+    fn get_level_label(&self, level: LevelNo) -> G::LL {
         self.graph.read().get_level_label(level)
     }
 
@@ -133,11 +128,7 @@ impl<T: DrawTag, GL, LL, G: GroupedGraphStructure<T, GL, LL>> GroupedGraphStruct
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GroupedGraphStructure<T, NL, LL>> StateStorage
-    for GroupPresenceAdjuster<T, NL, LL, G>
-where
-    G: StateStorage,
-{
+impl<G: GroupedGraphStructure + StateStorage> StateStorage for GroupPresenceAdjuster<G> {
     fn write(&self, stream: &mut Cursor<&mut Vec<u8>>) -> Result<()> {
         let hidden_count = self.hidden_groups.len();
         stream.write_u32::<LittleEndian>(hidden_count as u32)?;

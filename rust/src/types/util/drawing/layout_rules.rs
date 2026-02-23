@@ -14,14 +14,23 @@ use crate::{
 
 use super::diagram_layout::{DiagramLayout, LayerStyle, NodeStyle};
 
-pub trait LayoutRules<T: DrawTag, S: NodeStyle, LS: LayerStyle, G: GroupedGraphStructure<T, S, LS>>
-{
+pub trait LayoutRules {
+    type T: DrawTag;
+    type NS: NodeStyle;
+    type LS: LayerStyle;
+    type Tracker;
+    type G: GroupedGraphStructure<
+        GL = Self::NS,
+        LL = Self::LS,
+        T = Self::T,
+        Tracker = Self::Tracker,
+    >;
     fn layout(
         &mut self,
-        graph: &G,
-        old: &DiagramLayout<T, S, LS>,
+        graph: &Self::G,
+        old: &DiagramLayout<Self::T, Self::NS, Self::LS>,
         /* Sources for new nodes that did not yet exist in the previous layout iteration */
-        new_sources: &G::Tracker,
+        new_sources: &Self::Tracker,
         time: u32,
-    ) -> DiagramLayout<T, S, LS>;
+    ) -> DiagramLayout<Self::T, Self::NS, Self::LS>;
 }

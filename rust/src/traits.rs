@@ -9,7 +9,7 @@ use web_sys::HtmlCanvasElement;
 
 pub trait Diagram {
     fn create_section_from_dddmp(&mut self, dddmp: String) -> Option<Box<dyn DiagramSection>>; // TODO: error type
-    fn create_section_from_buddy(
+    fn create_section_from_other(
         &mut self,
         data: String,
         vars: Option<String>,
@@ -24,6 +24,7 @@ pub trait DiagramSection {
     fn create_drawer(&self, canvas: HtmlCanvasElement) -> Box<dyn DiagramSectionDrawer>;
     fn get_level_labels(&self) -> Vec<String>;
     fn get_node_labels(&self, node: NodeID) -> Vec<String>;
+    fn get_meta(&self) -> i128;
 }
 
 pub trait DiagramSectionDrawer {

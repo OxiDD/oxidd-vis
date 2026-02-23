@@ -1,7 +1,7 @@
 use super::transition::Interpolatable;
 
 // pub type Color = (f32, f32, f32);
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Copy)]
 pub struct Color(pub f32, pub f32, pub f32);
 impl Interpolatable for Color {
     fn mix(&self, c2: &Self, per: f32) -> Self {
@@ -12,7 +12,19 @@ impl Interpolatable for Color {
     }
 }
 
-#[derive(Clone, PartialEq)]
+impl Color {
+    pub fn mix_transparent(&self, c2: &TransparentColor) -> Self {
+        self.mix(&Color(c2.0, c2.1, c2.2), c2.3)
+    }
+}
+
+impl Into<TransparentColor> for Color {
+    fn into(self) -> TransparentColor {
+        TransparentColor(self.0, self.1, self.2, 1.0)
+    }
+}
+
+#[derive(Clone, PartialEq, Copy)]
 pub struct TransparentColor(pub f32, pub f32, pub f32, pub f32);
 impl Interpolatable for TransparentColor {
     fn mix(&self, c2: &Self, per: f32) -> Self {

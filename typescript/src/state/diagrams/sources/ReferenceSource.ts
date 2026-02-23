@@ -1,4 +1,4 @@
-import {DiagramBox, DiagramSectionBox} from "oxidd-viz-rust";
+import {DiagramBox, DiagramSectionBox} from "oxidd-vis-rust";
 import {Field} from "../../../watchables/Field";
 import {IDiagramSection} from "../_types/IDiagramSection";
 import {AbstractDiagramSectionState} from "../AbstractDiagramSectionState";

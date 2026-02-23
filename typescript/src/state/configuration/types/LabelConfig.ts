@@ -1,4 +1,4 @@
-import {AbstractConfigurationObject} from "oxidd-viz-rust";
+import {AbstractConfigurationObject} from "oxidd-vis-rust";
 import {Derived} from "../../../watchables/Derived";
 import {IConfigObjectType} from "../_types/IConfigObjectType";
 import {ConfigurationObject, IOwnedAbstractConfig} from "../ConfigurationObject";
@@ -27,4 +27,5 @@ export class LabelConfig extends ConfigurationObject<{label: string; style: numb
 export enum LabelStyle {
     Inline = 0,
     Above = 1,
+    Category = 2,
 }

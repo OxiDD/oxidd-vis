@@ -12,6 +12,12 @@ extern "C" {
     #[wasm_bindgen(js_namespace = console, js_name = log)]
     pub fn log(s: &str);
 
+    #[wasm_bindgen(js_namespace = console, js_name = time)]
+    pub fn time(s: &str);
+
+    #[wasm_bindgen(js_namespace = console, js_name = timeEnd)]
+    pub fn time_end(s: &str);
+
     // The `console.log` is quite polymorphic, so we can bind it with multiple
     // signatures. Note that we need to use `js_name` to ensure we always call
     // `log` in JS.
@@ -31,6 +37,22 @@ macro_rules! log {
         log(&format_args!($($t)*).to_string())}
     )
 }
+macro_rules! time  {
+    // Note that this is using the `log` function imported above during
+    // `bare_bones`
+    ($($t:tt)*) => ({
+        use crate::util::logging::time;
+        time(&format_args!($($t)*).to_string())}
+    )
+}
+macro_rules! time_end {
+    // Note that this is using the `log` function imported above during
+    // `bare_bones`
+    ($($t:tt)*) => ({
+        use crate::util::logging::time_end;
+        time_end(&format_args!($($t)*).to_string())}
+    )
+}
 
 // Next let's define a macro that's like `println!`, only it works for
 // `console.log`. Note that `println!` doesn't actually work on the wasm target
@@ -39,4 +61,6 @@ macro_rules! log {
 pub mod console {
 
     pub(crate) use log;
+    pub(crate) use time;
+    pub(crate) use time_end;
 }

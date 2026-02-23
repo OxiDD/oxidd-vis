@@ -18,7 +18,7 @@ use super::{
     },
 };
 
-pub struct OxiddGraphStructure<DT: DrawTag, F: Function, T, S: Fn(&T) -> String>
+pub struct OxiddGraphStructure<DT: DrawTag, F: Function, T: ToString>
 where
     for<'id> F::Manager<'id>: Manager<EdgeTag = DT, Terminal = T>,
 {
@@ -26,7 +26,6 @@ where
     node_by_id: HashMap<NodeID, F>,
     pointers: HashMap<NodeID, Vec<String>>,
     node_parents: HashMap<NodeID, HashSet<(EdgeType<DT>, NodeID)>>,
-    terminal_to_string: S,
     level_labels: Vec<String>,
     terminal: PhantomData<T>,
     event_writer: GraphEventsWriter,
@@ -49,15 +48,14 @@ pub enum NodeType<T> {
     Terminal(T),
 }
 
-impl<DT: DrawTag, F: Function, T, S: Fn(&T) -> String> OxiddGraphStructure<DT, F, T, S>
+impl<DT: DrawTag, F: Function, T: ToString> OxiddGraphStructure<DT, F, T>
 where
     for<'id> F::Manager<'id>: Manager<EdgeTag = DT, Terminal = T>,
 {
     pub fn new(
         roots: Vec<(F, Vec<String>)>,
         level_labels: Vec<String>,
-        terminal_to_string: S,
-    ) -> OxiddGraphStructure<DT, F, T, S> {
+    ) -> OxiddGraphStructure<DT, F, T> {
         OxiddGraphStructure {
             node_by_id: roots
                 .iter()
@@ -80,7 +78,6 @@ where
                 .collect(),
             level_labels,
             node_parents: HashMap::new(),
-            terminal_to_string,
             event_writer: GraphEventsWriter::new(),
             terminal: PhantomData,
         }
@@ -110,13 +107,12 @@ where
 
 impl<
         ET: DrawTag + 'static,
-        T: Clone + 'static,
+        T: Clone + ToString + 'static,
         E: Edge<Tag = ET> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
         R: DiagramRules<E, N, T> + 'static,
         F: Function + 'static,
-        S: Fn(&T) -> String,
-    > StateStorage for OxiddGraphStructure<ET, F, T, S>
+    > StateStorage for OxiddGraphStructure<ET, F, T>
 where
     for<'id> F::Manager<'id>:
         Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
@@ -125,17 +121,20 @@ where
 
 impl<
         ET: DrawTag + 'static,
-        T: Clone + 'static,
+        T: Clone + ToString + 'static,
         E: Edge<Tag = ET> + 'static,
         N: InnerNode<E> + HasLevel + 'static,
         R: DiagramRules<E, N, T> + 'static,
         F: Function + 'static,
-        S: Fn(&T) -> String,
-    > GraphStructure<ET, NodeLabel<T>, String> for OxiddGraphStructure<ET, F, T, S>
+    > GraphStructure for OxiddGraphStructure<ET, F, T>
 where
     for<'id> F::Manager<'id>:
         Manager<EdgeTag = ET, Edge = E, InnerNode = N, Rules = R, Terminal = T>,
 {
+    type T = ET;
+    type NL = NodeLabel<T>;
+    type LL = String;
+
     fn get_roots(&self) -> Vec<NodeID> {
         self.roots
             .iter()

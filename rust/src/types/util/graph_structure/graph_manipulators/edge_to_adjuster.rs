@@ -16,34 +16,27 @@ use crate::{
     wasm_interface::NodeID,
 };
 
-pub struct EdgeToAdjuster<T: DrawTag + 'static, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>>
-{
+pub struct EdgeToAdjuster<G: GraphStructure> {
     graph: G,
-    remove_edges: HashSet<(NodeID, EdgeType<T>)>,
+    remove_edges: HashSet<(NodeID, EdgeType<G::T>)>,
 
     event_writer: GraphEventsWriter,
     graph_events: GraphEventsReader,
-
-    node_label: PhantomData<NL>,
-    level_label: PhantomData<LL>,
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> EdgeToAdjuster<T, NL, LL, G> {
+impl<G: GraphStructure> EdgeToAdjuster<G> {
     pub fn new(mut graph: G) -> Self {
         EdgeToAdjuster {
             graph_events: graph.create_event_reader(),
             graph,
             event_writer: GraphEventsWriter::new(),
             remove_edges: HashSet::new(),
-
-            node_label: PhantomData,
-            level_label: PhantomData,
         }
     }
 
     pub fn set_remove_to_edges(
         &mut self,
-        edges: impl Iterator<Item = (NodeID, EdgeType<T>)>,
+        edges: impl Iterator<Item = (NodeID, EdgeType<G::T>)>,
     ) -> () {
         self.process_graph_changes();
         let remove_edges = self.remove_edges.clone();
@@ -62,7 +55,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> EdgeToAdjus
 
     fn get_affected_nodes(
         &mut self,
-        remove_edges: HashSet<(NodeID, EdgeType<T>)>,
+        remove_edges: HashSet<(NodeID, EdgeType<G::T>)>,
     ) -> HashSet<NodeID> {
         let affected_parents = remove_edges.iter().flat_map(|(to, edge_type)| {
             self.graph
@@ -90,9 +83,10 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> EdgeToAdjus
     }
 }
 
-impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStructure<T, NL, LL>
-    for EdgeToAdjuster<T, NL, LL, G>
-{
+impl<G: GraphStructure> GraphStructure for EdgeToAdjuster<G> {
+    type T = G::T;
+    type NL = G::NL;
+    type LL = G::LL;
     fn get_roots(&self) -> Vec<NodeID> {
         self.graph.get_roots()
     }
@@ -101,7 +95,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
         self.graph.get_terminals()
     }
 
-    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_known_parents(&mut self, node: NodeID) -> Vec<(EdgeType<G::T>, NodeID)> {
         self.process_graph_changes();
         let parents = self.graph.get_known_parents(node);
         if self.remove_edges.len() == 0 {
@@ -114,7 +108,7 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
             .collect()
     }
 
-    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<T>, NodeID)> {
+    fn get_children(&mut self, node: NodeID) -> Vec<(EdgeType<G::T>, NodeID)> {
         self.process_graph_changes();
         let children = self.graph.get_children(node);
         if self.remove_edges.len() == 0 {
@@ -131,11 +125,11 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
         self.graph.get_level(node)
     }
 
-    fn get_node_label(&self, node: NodeID) -> NL {
+    fn get_node_label(&self, node: NodeID) -> G::NL {
         self.graph.get_node_label(node)
     }
 
-    fn get_level_label(&self, level: oxidd::LevelNo) -> LL {
+    fn get_level_label(&self, level: oxidd::LevelNo) -> G::LL {
         self.graph.get_level_label(level)
     }
 
@@ -160,10 +154,9 @@ impl<T: DrawTag, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> GraphStruct
     }
 }
 
-impl<T: DrawTag + Serializable<T>, NL: Clone, LL: Clone, G: GraphStructure<T, NL, LL>> StateStorage
-    for EdgeToAdjuster<T, NL, LL, G>
+impl<G: GraphStructure + StateStorage> StateStorage for EdgeToAdjuster<G>
 where
-    G: StateStorage,
+    G::T: Serializable,
 {
     fn write(&self, stream: &mut std::io::Cursor<&mut Vec<u8>>) -> std::io::Result<()> {
         self.graph.write(stream)?;
@@ -185,7 +178,7 @@ where
         for _ in 0..count {
             let to = stream.read_u32::<LittleEndian>()? as usize;
             let index = stream.read_i32::<LittleEndian>()?;
-            let tag = T::deserialize(stream)?;
+            let tag = G::T::deserialize(stream)?;
             remove_edges.insert((to, EdgeType { tag, index }));
         }
         self.remove_edges = remove_edges;

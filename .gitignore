@@ -14,3 +14,4 @@ target/
 *.pdb
 
 build
+!build/index.html

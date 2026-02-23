@@ -19,10 +19,10 @@ use crate::{
 
 /// Sorts nodes according to incoming and outgoing edge ordering values
 pub struct EdgeLayerOrdering;
-impl<T: DrawTag, GL, LL> LayerOrdering<T, GL, LL> for EdgeLayerOrdering {
+impl<G: GroupedGraphStructure> LayerOrdering<G> for EdgeLayerOrdering {
     fn order_nodes(
         &self,
-        _graph: &impl GroupedGraphStructure<T, GL, LL>,
+        _graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         _dummy_group_start_id: NodeGroupID,

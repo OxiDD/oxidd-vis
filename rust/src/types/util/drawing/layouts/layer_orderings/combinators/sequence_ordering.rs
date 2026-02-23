@@ -15,29 +15,19 @@ use crate::{
     wasm_interface::NodeGroupID,
 };
 
-pub struct SequenceOrdering<
-    T: DrawTag,
-    GL,
-    LL,
-    O1: LayerOrdering<T, GL, LL>,
-    O2: LayerOrdering<T, GL, LL>,
-> {
+pub struct SequenceOrdering<G: GroupedGraphStructure, O1: LayerOrdering<G>, O2: LayerOrdering<G>> {
     ordering1: O1,
     ordering2: O2,
-    tag: PhantomData<T>,
-    group_label: PhantomData<GL>,
-    level_label: PhantomData<LL>,
+    graph: PhantomData<G>,
 }
-impl<T: DrawTag, GL, LL, O1: LayerOrdering<T, GL, LL>, O2: LayerOrdering<T, GL, LL>>
-    SequenceOrdering<T, GL, LL, O1, O2>
+impl<G: GroupedGraphStructure, O1: LayerOrdering<G>, O2: LayerOrdering<G>>
+    SequenceOrdering<G, O1, O2>
 {
-    pub fn new(o1: O1, o2: O2) -> SequenceOrdering<T, GL, LL, O1, O2> {
+    pub fn new(o1: O1, o2: O2) -> SequenceOrdering<G, O1, O2> {
         SequenceOrdering {
             ordering1: o1,
             ordering2: o2,
-            tag: PhantomData,
-            group_label: PhantomData,
-            level_label: PhantomData,
+            graph: PhantomData,
         }
     }
     pub fn get_ordering1(&mut self) -> &mut O1 {
@@ -47,12 +37,12 @@ impl<T: DrawTag, GL, LL, O1: LayerOrdering<T, GL, LL>, O2: LayerOrdering<T, GL, 
         &mut self.ordering2
     }
 }
-impl<T: DrawTag, GL, LL, O1: LayerOrdering<T, GL, LL>, O2: LayerOrdering<T, GL, LL>>
-    LayerOrdering<T, GL, LL> for SequenceOrdering<T, GL, LL, O1, O2>
+impl<G: GroupedGraphStructure, O1: LayerOrdering<G>, O2: LayerOrdering<G>> LayerOrdering<G>
+    for SequenceOrdering<G, O1, O2>
 {
     fn order_nodes(
         &self,
-        graph: &impl GroupedGraphStructure<T, GL, LL>,
+        graph: &G,
         layers: &Vec<Order>,
         edges: &EdgeMap,
         dummy_group_start_id: NodeGroupID,

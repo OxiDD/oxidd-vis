@@ -9,7 +9,6 @@ import {
     MessageBarType,
     PrimaryButton,
     Stack,
-    StackItem,
     TextField,
 } from "@fluentui/react";
 import {StyledModal} from "../StyledModal";
@@ -41,12 +40,15 @@ export const TextOutputConfigComp: FC<{
     const watch = useWatch();
     const output = watch(value.output);
 
+    if (!output.text && !copyStatus) {
+        return <></>;
+    }
     return (
         <div>
             {copyStatus}
             {output.text && (
                 <>
-                    <Stack horizontal>
+                    <Stack horizontal style={{flexWrap: "wrap"}}>
                         <DefaultButton style={{flexGrow: 1}} onClick={revealTextModal}>
                             Show
                         </DefaultButton>
@@ -85,7 +87,9 @@ export const TextOutputModal: FC<{
     );
 };
 
-function useCopy(messageDuration: number = 5000): [(text: string) => void, JSX.Element] {
+function useCopy(
+    messageDuration: number = 5000
+): [(text: string) => void, JSX.Element | undefined] {
     const [showCopiedMessage, setShowCopiedMessage] = useState(false);
     const hideCopiedMessage = useCallback(() => setShowCopiedMessage(false), []);
     useEffect(() => {
@@ -114,21 +118,23 @@ function useCopy(messageDuration: number = 5000): [(text: string) => void, JSX.E
 
     return [
         copyText,
-        <>
-            {showCopiedMessage && (
-                <MessageBar
-                    onDismiss={hideCopiedMessage}
-                    messageBarType={MessageBarType.success}>
-                    Text copied!
-                </MessageBar>
-            )}
-            {showErrorMessage && (
-                <MessageBar
-                    onDismiss={hideErrorMessage}
-                    messageBarType={MessageBarType.error}>
-                    Copy failed!
-                </MessageBar>
-            )}
-        </>,
+        showCopiedMessage || showErrorMessage ? (
+            <>
+                {showCopiedMessage && (
+                    <MessageBar
+                        onDismiss={hideCopiedMessage}
+                        messageBarType={MessageBarType.success}>
+                        Text copied!
+                    </MessageBar>
+                )}
+                {showErrorMessage && (
+                    <MessageBar
+                        onDismiss={hideErrorMessage}
+                        messageBarType={MessageBarType.error}>
+                        Copy failed!
+                    </MessageBar>
+                )}
+            </>
+        ) : undefined,
     ];
 }

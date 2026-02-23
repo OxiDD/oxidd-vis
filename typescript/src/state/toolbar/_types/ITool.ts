@@ -1,4 +1,4 @@
-import {DiagramSectionDrawerBox} from "oxidd-viz-rust";
+import {DiagramSectionDrawerBox} from "oxidd-vis-rust";
 import {DiagramVisualizationState} from "../../diagrams/DiagramVisualizationState";
 import {IToolEvent} from "./IToolEvent";
 

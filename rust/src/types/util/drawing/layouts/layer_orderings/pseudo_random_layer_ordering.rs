@@ -34,10 +34,10 @@ impl PseudoRandomLayerOrdering {
         self.seed = seed;
     }
 }
-impl<T: DrawTag, GL, LL> LayerOrdering<T, GL, LL> for PseudoRandomLayerOrdering {
+impl<G: GroupedGraphStructure> LayerOrdering<G> for PseudoRandomLayerOrdering {
     fn order_nodes(
         &self,
-        _graph: &impl GroupedGraphStructure<T, GL, LL>,
+        _graph: &G,
         layers: &Vec<Order>,
         _edges: &EdgeMap,
         _dummy_group_start_id: NodeGroupID,

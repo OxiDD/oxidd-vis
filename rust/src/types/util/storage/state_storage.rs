@@ -9,12 +9,13 @@ pub trait StateStorage {
     }
 }
 
-pub trait Serializable<T> {
+// TODO: remove this, and rely on something like serde
+pub trait Serializable: Sized {
     fn serialize(&self, stream: &mut Cursor<&mut Vec<u8>>) -> Result<()>;
-    fn deserialize(stream: &mut Cursor<&Vec<u8>>) -> Result<T>;
+    fn deserialize(stream: &mut Cursor<&Vec<u8>>) -> Result<Self>;
 }
 
-impl Serializable<()> for () {
+impl Serializable for () {
     fn deserialize(stream: &mut Cursor<&Vec<u8>>) -> Result<()> {
         Ok(())
     }

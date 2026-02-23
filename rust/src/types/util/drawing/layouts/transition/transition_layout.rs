@@ -37,44 +37,23 @@ use super::{
 /// A layout builder that takes another layout approach, and applies transitioning to it.
 /// This will make layout changes smoothly transition from the previous state to the new state.
 ///
-pub struct TransitionLayout<
-    T: DrawTag,
-    S: NodeStyle,
-    LS: LayerStyle,
-    G: GroupedGraphStructure<T, S, LS>,
-    L: LayoutRules<T, S, LS, G>,
-> {
+pub struct TransitionLayout<L: LayoutRules> {
     layout: L,
     durations: TransitionDurations,
-    group_label: PhantomData<S>,
-    level_label: PhantomData<LS>,
-    // TODO: see if these generics and  phantom data is even needed
-    tag: PhantomData<T>,
-    graph: PhantomData<G>,
 }
 
-impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L: LayoutRules<T, S, LS, G>,
-    > TransitionLayout<T, S, LS, G, L>
-{
-    pub fn new(layout: L) -> TransitionLayout<T, S, LS, G, L> {
+impl<L: LayoutRules> TransitionLayout<L> {
+    pub fn new(layout: L) -> Self {
         let speed_modifier = 1; // for testing
                                 // TODO: add parameters
         TransitionLayout {
             layout,
+            // TODO: make this more finely grained configurable
             durations: TransitionDurations {
                 insert_duration: 900 * speed_modifier,
                 transition_duration: 600 * speed_modifier,
                 delete_duration: 300 * speed_modifier,
             },
-            tag: PhantomData,
-            graph: PhantomData,
-            group_label: PhantomData,
-            level_label: PhantomData,
         }
     }
     pub fn get_layout_rules(&mut self) -> &mut L {
@@ -89,21 +68,20 @@ pub struct TransitionDurations {
     insert_duration: u32,
 }
 
-impl<
-        T: DrawTag,
-        S: NodeStyle,
-        LS: LayerStyle,
-        G: GroupedGraphStructure<T, S, LS>,
-        L: LayoutRules<T, S, LS, G>,
-    > LayoutRules<T, S, LS, G> for TransitionLayout<T, S, LS, G, L>
-{
+impl<L: LayoutRules> LayoutRules for TransitionLayout<L> {
+    type T = L::T;
+    type NS = L::NS;
+    type LS = L::LS;
+    type Tracker = L::Tracker;
+    type G = L::G;
+
     fn layout(
         &mut self,
-        graph: &G,
-        old: &DiagramLayout<T, S, LS>,
-        sources: &G::Tracker,
+        graph: &Self::G,
+        old: &DiagramLayout<Self::T, Self::NS, Self::LS>,
+        sources: &Self::Tracker,
         time: u32,
-    ) -> DiagramLayout<T, S, LS> {
+    ) -> DiagramLayout<Self::T, Self::NS, Self::LS> {
         let duration = self.durations.transition_duration;
         let old_time = time;
         let new = self.layout.layout(graph, old, sources, time);
@@ -166,7 +144,7 @@ impl<
             .map(|(&id, group, _)| {
                 (
                     id,
-                    layout_added_group::<T, S, LS>(
+                    layout_added_group::<Self::T, Self::NS, Self::LS>(
                         id,
                         group,
                         &some_updated_parents,
@@ -221,7 +199,8 @@ fn layout_updated_group<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     let duration = durations.transition_duration;
 
     let cur_size = old_group.size.get(time);
-    let cur_position = old_group.position.get(time);
+    let cur_old_group_position = old_group.position.get(time);
+    let old_position = cur_old_group_position + target_data.offset;
     let start_size = if target_data.represents {
         cur_size
     } else {
@@ -241,7 +220,7 @@ fn layout_updated_group<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
         position: Transition {
             old_time,
             duration,
-            old: cur_position + target_data.offset,
+            old: old_position,
             new: group.position.new,
         },
         size: Transition {
@@ -264,7 +243,15 @@ fn layout_updated_group<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
                 (
                     edge_data.clone(),
                     layout_current_edge(
-                        id, edge_data, edge, old_group, &old, &new, &durations, &relations, time,
+                        id,
+                        edge_data,
+                        edge,
+                        old_position,
+                        &old,
+                        &new,
+                        &durations,
+                        &relations,
+                        time,
                     ),
                 )
             })
@@ -448,7 +435,7 @@ fn layout_current_edge<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
     from: NodeGroupID,
     edge: &EdgeData<T>,
     edge_layout: &EdgeLayout,
-    old_group: &NodeGroupLayout<T, S>,
+    old_group_position: Point,
     old: &DiagramLayout<T, S, LS>,
     new: &DiagramLayout<T, S, LS>,
     durations: &TransitionDurations,
@@ -572,6 +559,7 @@ fn layout_current_edge<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
             .zip(relations.previous_groups.get(&edge.to))
             .map(|(from_source, to_source)| from_source.id == to_source.id)
             .unwrap_or(false);
+        let start_offset = edge_layout.start_offset.get(time);
         let points = edge_layout
             .points
             .iter()
@@ -579,13 +567,13 @@ fn layout_current_edge<T: DrawTag, S: NodeStyle, LS: LayerStyle>(
                 point: Transition {
                     duration,
                     old_time,
-                    // TODO: could also transition in from the new node's edge start position
-                    old: old_group.position.get(time) + edge_layout.end_offset.get(time),
+                    old: old_group_position + start_offset,
                     new: point.point.new,
                 },
                 exists: point.exists,
             })
             .collect();
+
         EdgeLayout {
             start_offset: edge_layout.start_offset,
             end_offset: edge_layout.end_offset,

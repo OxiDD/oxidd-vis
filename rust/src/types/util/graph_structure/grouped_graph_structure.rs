@@ -7,18 +7,21 @@ use crate::wasm_interface::{NodeGroupID, NodeID};
 
 use super::graph_structure::{DrawTag, EdgeType};
 
-pub trait GroupedGraphStructure<T: DrawTag, GL, LL> {
+pub trait GroupedGraphStructure {
+    type T: DrawTag;
+    type GL;
+    type LL;
     type Tracker: NodeTracker;
     fn get_roots(&self) -> Vec<NodeGroupID>;
     fn get_all_groups(&self) -> Vec<NodeGroupID>;
     fn get_hidden(&self) -> Vec<NodeGroupID>;
     fn get_group(&self, node: NodeID) -> NodeGroupID;
-    fn get_group_label(&self, group: NodeID) -> GL;
-    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>>;
-    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<T>>;
+    fn get_group_label(&self, group: NodeID) -> Self::GL;
+    fn get_parents(&self, group: NodeGroupID) -> Vec<EdgeCountData<Self::T>>;
+    fn get_children(&self, group: NodeGroupID) -> Vec<EdgeCountData<Self::T>>;
     fn get_nodes_of_group(&self, group: NodeGroupID) -> Vec<NodeID>;
     fn get_level_range(&self, group: NodeGroupID) -> (LevelNo, LevelNo);
-    fn get_level_label(&self, level: LevelNo) -> LL;
+    fn get_level_label(&self, level: LevelNo) -> Self::LL;
     /// Refreshes the node groups according to changes of the underlying graph
     fn refresh(&mut self);
     /// Retrieves a node-tracker that for every node tracks its source (that it got created from), and whether it and its source ids can be reused

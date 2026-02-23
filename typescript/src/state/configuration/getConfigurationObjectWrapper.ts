@@ -1,4 +1,4 @@
-import {AbstractConfigurationObject, ConfigurationObjectType} from "oxidd-viz-rust";
+import {AbstractConfigurationObject, ConfigurationObjectType} from "oxidd-vis-rust";
 import {IConfigObjectType} from "./_types/IConfigObjectType";
 import {IntConfig} from "./types/IntConfig";
 import {LabelConfig} from "./types/LabelConfig";
@@ -9,7 +9,9 @@ import {TextOutputConfig} from "./types/TextOutputConfig";
 import {PanelConfig} from "./types/PanelConfig";
 import {IWatchable} from "../../watchables/_types/IWatchable";
 import {IOwnedAbstractConfig} from "./ConfigurationObject";
-import { LocationConfig } from "./types/LocationConfig";
+import {LocationConfig} from "./types/LocationConfig";
+import {FloatConfig} from "./types/FloatConfig";
+import {ContainerConfig} from "./types/ContainerConfig";
 
 /**
  * Creates the configuration object wrapper from the given abstract configuration object
@@ -22,6 +24,8 @@ export function getConfigurationObjectWrapper(
     const type = ownedConfig.config.get_type();
     if (type == ConfigurationObjectType.Int) {
         return new IntConfig(ownedConfig);
+    } else if (type == ConfigurationObjectType.Float) {
+        return new FloatConfig(ownedConfig);
     } else if (type == ConfigurationObjectType.Label) {
         return new LabelConfig(ownedConfig);
     } else if (type == ConfigurationObjectType.Composite) {
@@ -34,9 +38,11 @@ export function getConfigurationObjectWrapper(
         return new TextOutputConfig(ownedConfig);
     } else if (type == ConfigurationObjectType.Panel) {
         return new PanelConfig(ownedConfig);
-    } else if (type===ConfigurationObjectType.Location) {
+    } else if (type === ConfigurationObjectType.Location) {
         return new LocationConfig(ownedConfig);
+    } else if (type === ConfigurationObjectType.Container) {
+        return new ContainerConfig(ownedConfig);
     }
-    
+
     return null as never;
 }
