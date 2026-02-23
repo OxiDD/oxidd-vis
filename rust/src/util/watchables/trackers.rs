@@ -19,12 +19,10 @@ impl Trackers {
         }
     }
 
-    pub fn observe<T: Listener + 'static>(&self, tracker: T) -> Observer {
+    pub fn observe(&self, tracker: Box<dyn Listener>) -> Observer {
         let id = *self.next_id.borrow();
         *self.next_id.borrow_mut() += 1;
-        self.trackers
-            .borrow_mut()
-            .insert(id, Rc::new(Box::new(tracker)));
+        self.trackers.borrow_mut().insert(id, Rc::new(tracker));
 
         let tracker = self.trackers.clone();
         Observer::new(move || {

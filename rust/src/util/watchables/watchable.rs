@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt, hash::Hash, ops::Deref, rc::Rc};
+use std::{fmt, rc::Rc};
 
 /// A watchable data value.
 ///
@@ -14,39 +14,34 @@ use std::{cell::RefCell, fmt, hash::Hash, ops::Deref, rc::Rc};
 ///     assert!(a != b)
 ///     ```
 ///     then there has been a moment after `a` was assigned and before `b` was assigned where `w.state()==DataState::Outdated`.
-/// - when executing in sequence (with anything not containing `unobserve(o)` at the ...) without assertion violations:
+/// - when executing in sequence (with anything not containing `o` being dropped at the ...) without assertion violations:
 ///     ```
 ///     let s = w.state();
-///     w.observe(o);
+///     let o = w.observe(c);
 ///     ...
 ///     let u = w.state();
 ///     assert!(s != u);
 ///     ```
-///     then there was a call `o.state_changed(&w)` before `u` was assigned
+///     then there was a call `c.state_changed(w.state())` before `u` was assigned
+/// - when executing in sequence (with anything not containing `observe(c)` at the ...):
+///     ```
+///     ...
+///     let o = w.observe(c);
+///     ```
+///     then no calls `c.state_changed(w.state())` will be made before the observe call
 /// - when executing in sequence (with anything not containing `observe(o)` at the ...):
 ///     ```
+///     let o = w.observe(c);
 ///     ...
-///     let observer = w.observe(o);
-///     ```
-///     then no calls `o.state_changed(&w)` will be made before the observe call
-/// - when executing in sequence (with anything not containing `observe(o)` at the ...):
-///     ```
-///     let observer = w.observe(o);
-///     ...
-///     drop(observer);
+///     drop(o);
 ///     ...
 ///     ```
-///     then no calls `o.state_changed(&w)` will be made after dropping the observer
+///     then no calls `c.state_changed(w.state())` will be made after dropping the observer
 /// - `w.watch(t)` behaves equivalently to `{t.observe(&w); w.get()}`
 pub trait Watchable: WatchableState {
     type Output;
     /// Retrieves the data of the watchable
     fn get(&self) -> Rc<Self::Output>;
-    /// Obtains and observes the watchable value
-    fn watch<T: Tracker<Self>>(&self, tracker: &T) -> Rc<Self::Output> {
-        tracker.observe(&self);
-        self.get()
-    }
 }
 
 pub trait WatchableState {
@@ -55,13 +50,9 @@ pub trait WatchableState {
     /// Observes data state changes until the next change.
     /// Returns the observer that performs the observation. Once the observer is dropped, no more observations will happen
     ///
-    /// Note that observing without performing `.get()` may result in no state changes occuring (see the spec)
-    #[must_use = "When the observer is dropped, the observation automatically stops"]
-    fn observe<L: Listener + 'static>(&self, listener: L) -> Observer;
-}
-
-pub trait Tracker<W: Watchable + ?Sized> {
-    fn observe(&self, w: &W);
+    /// Note that observing without performing `.get()` may result in no state changes occurring (see the spec)
+    #[must_use = "When the observer is dropped, observation automatically stops"]
+    fn observe(&self, listener: Box<dyn Listener>) -> Observer;
 }
 
 pub trait Listener {
@@ -105,4 +96,9 @@ impl fmt::Display for DataState {
             DataState::Outdated => write!(f, "Outdated"),
         }
     }
+}
+
+pub trait IntoWatchable<X> {
+    type Output: Watchable<Output = X>;
+    fn into(self) -> Self::Output;
 }

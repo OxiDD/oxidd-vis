@@ -1,8 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
+use crate::util::watchables::{watchable::IntoWatchable, watchable_utils::Tracker};
+
 use super::{
     trackers::Trackers,
-    watchable::{DataState, Listener, Observer, Tracker, Watchable, WatchableState},
+    watchable::{DataState, Listener, Observer, Watchable, WatchableState},
 };
 
 /// A watchable value that is computed from other watchable values and has its value cached to prevent unnecessary recomputes
@@ -23,6 +25,12 @@ impl<X> Clone for Derived<X> {
         }
     }
 }
+impl<X> IntoWatchable<X> for Derived<X> {
+    type Output = Derived<X>;
+    fn into(self) -> Self::Output {
+        self
+    }
+}
 
 impl<'a, X: 'static> Derived<X> {
     /// Creates a new value, such that for function `f` and `w = Derived::new(f)`:
@@ -31,7 +39,7 @@ impl<'a, X: 'static> Derived<X> {
     ///
     /// For these constaints to be met, we require that:
     /// - `f` only depends on constants and other watchables
-    /// - `f` obtains results from watchables only by calling `.watch(t)` with the provied tracker
+    /// - `f` obtains results from watchables only by calling `.watch(t)` with the provided tracker
     pub fn new<F: Fn(&DerivedTracker) -> X + 'static>(f: F) -> Derived<X> {
         Derived {
             compute: Rc::new(Box::new(f)),
@@ -95,7 +103,7 @@ impl<X: 'static> WatchableState for Derived<X> {
         self.dependents.get_state()
     }
 
-    fn observe<T: Listener + 'static>(&self, tracker: T) -> Observer {
+    fn observe(&self, tracker: Box<dyn Listener>) -> Observer {
         self.dependents.observe(tracker)
     }
 }
@@ -168,6 +176,6 @@ impl<W: Watchable + ?Sized> Dependency for W {
     }
 
     fn observe(&self, tracker: DerivedListener) -> Observer {
-        self.observe(tracker)
+        self.observe(Box::new(tracker))
     }
 }

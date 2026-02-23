@@ -1,5 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
+use wasm_bindgen::prelude::wasm_bindgen;
+
+use crate::util::watchables::watchable::IntoWatchable;
+
 use super::{
     mutator::Mutator,
     trackers::Trackers,
@@ -9,6 +13,13 @@ use super::{
 pub struct Field<X> {
     inner: Rc<RefCell<FieldInner<X>>>,
 }
+impl<X> Clone for Field<X> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
 struct FieldInner<X> {
     val: Rc<X>,
     dependents: Trackers,
@@ -17,11 +28,17 @@ struct FieldInner<X> {
 const LOOPMESSAGE: &str = "Dependency loop detected!";
 impl<X> Watchable for Field<X> {
     type Output = X;
-
     fn get(&self) -> Rc<Self::Output> {
         self.inner.try_borrow().expect(LOOPMESSAGE).val.clone()
     }
 }
+impl<X> IntoWatchable<X> for Field<X> {
+    type Output = Field<X>;
+    fn into(self) -> Self::Output {
+        self
+    }
+}
+
 impl<X> WatchableState for Field<X> {
     fn state(&self) -> DataState {
         self.inner
@@ -31,7 +48,7 @@ impl<X> WatchableState for Field<X> {
             .get_state()
     }
 
-    fn observe<T: Listener + 'static>(&self, tracker: T) -> Observer {
+    fn observe(&self, tracker: Box<dyn Listener>) -> Observer {
         self.inner
             .try_borrow()
             .expect(LOOPMESSAGE)
@@ -76,38 +93,79 @@ impl<X: 'static> Field<X> {
 
     /// Creates a readonly reference to this field data
     pub fn read(&self) -> ReadonlyField<X> {
-        ReadonlyField {
-            inner: self.inner.clone(),
-        }
+        ReadonlyField(self.clone())
     }
 }
 
-#[derive(Clone)]
-pub struct ReadonlyField<X> {
-    inner: Rc<RefCell<FieldInner<X>>>,
+/// Disallow writing to the field
+pub struct ReadonlyField<X>(Field<X>);
+impl<X> Clone for ReadonlyField<X> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
 }
 
 impl<X> Watchable for ReadonlyField<X> {
     type Output = X;
 
     fn get(&self) -> Rc<Self::Output> {
-        self.inner.try_borrow().expect(LOOPMESSAGE).val.clone()
+        self.0.get()
     }
 }
 impl<X> WatchableState for ReadonlyField<X> {
     fn state(&self) -> DataState {
-        self.inner
-            .try_borrow()
-            .expect(LOOPMESSAGE)
-            .dependents
-            .get_state()
+        self.0.state()
     }
 
-    fn observe<T: Listener + 'static>(&self, tracker: T) -> Observer {
-        self.inner
-            .try_borrow()
-            .expect(LOOPMESSAGE)
-            .dependents
-            .observe(tracker)
+    fn observe(&self, tracker: Box<dyn Listener>) -> Observer {
+        self.0.observe(tracker)
+    }
+}
+impl<X> IntoWatchable<X> for ReadonlyField<X> {
+    type Output = ReadonlyField<X>;
+    fn into(self) -> Self::Output {
+        self
+    }
+}
+
+/// Disallows cloning of the field
+pub struct ControlledField<X>(Field<X>);
+
+impl<X> Watchable for ControlledField<X> {
+    type Output = X;
+
+    fn get(&self) -> Rc<Self::Output> {
+        self.0.get()
+    }
+}
+impl<X> WatchableState for ControlledField<X> {
+    fn state(&self) -> DataState {
+        self.0.state()
+    }
+
+    fn observe(&self, tracker: Box<dyn Listener>) -> Observer {
+        self.0.observe(tracker)
+    }
+}
+impl<X: 'static> ControlledField<X> {
+    pub fn new(init: X) -> Self {
+        Self(Field::new(init))
+    }
+
+    #[must_use = "Only once the mutator is committed, will the field be changed"]
+    /// Creates a mutator that when committed changes the value, after committing the mutation, the state of this field is DataState::UpToDate again
+    pub fn set(&mut self, val: X) -> Mutator {
+        self.0.set(val)
+    }
+
+    /// Creates a readonly reference to this field data
+    pub fn read(&self) -> ReadonlyField<X> {
+        self.0.read()
+    }
+}
+impl<X> IntoWatchable<X> for ControlledField<X> {
+    type Output = ControlledField<X>;
+    fn into(self) -> Self::Output {
+        self
     }
 }

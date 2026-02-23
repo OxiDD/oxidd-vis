@@ -33,6 +33,7 @@ ordered-float = "4.2.0"
 multimap = "0.10.0"
 byteorder = "1.4"
 seeded-random = "0.6.0"
+bon = "3.9.0"
 
 
 # The `console_error_panic_hook` crate provides better debugging of panics by

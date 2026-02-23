@@ -6,7 +6,7 @@ mod tests {
         derived::Derived,
         field::Field,
         watchable::{DataState, Listener, Watchable, WatchableState},
-        watchable_utils::WatchableUtils,
+        watchable_utils::{WatchableUtils, Watcher, Watching},
     };
 
     #[test]
@@ -64,7 +64,7 @@ mod tests {
                 assert_eq!(&*derived_copy.get(), "goodbye world");
             }
         });
-        let observer = derived.observe(check1);
+        let observer = derived.observe(Box::new(check1));
         field1.set("goodbye").commit();
         drop(observer);
 
@@ -76,7 +76,7 @@ mod tests {
                 assert_eq!(&*derived_copy.get(), "not you");
             }
         });
-        let observer = derived.observe(check1);
+        let observer = derived.observe(Box::new(check1));
         field1.set("not").chain(field2.set("you")).commit();
         drop(observer);
 
@@ -115,7 +115,7 @@ mod tests {
                 assert_eq!(&*derived_copy.get(), text2);
             }
         });
-        let observer = derived4.observe(check1);
+        let observer = derived4.observe(Box::new(check1));
         field2
             .set("Bram")
             .chain(field1.set("goodbye"))
@@ -153,7 +153,7 @@ mod tests {
                 *fire_count_copy.borrow_mut() += 1;
             }
         });
-        let _observer = derived4.observe(check2);
+        let _observer = derived4.observe(Box::new(check2));
         field2.set("Tar").commit(); // Does not fire listener, since the initial value has not been read
         assert_eq!(*fire_count.borrow(), 0);
 
@@ -167,5 +167,21 @@ mod tests {
         derived4.get();
         field2.set("Emma").commit();
         assert_eq!(*fire_count.borrow(), 2);
+    }
+
+    #[test]
+    fn accepts_watch_syntax() {
+        let mut field1 = Field::new("hello");
+        let mut field2 = Field::new("world");
+
+        let start = field1.read();
+        let end = field2.read();
+        let derived = Derived::new(move |t| format!("{} {}", t.watch(&start), t.watch(&end)));
+        assert_eq!(&*derived.get(), "hello world");
+
+        field1.set("goodbye").commit();
+        field2.set("Tar"); // No commit
+        assert_eq!(&*derived.get(), "goodbye world");
+        assert_eq!(&*derived.get(), "goodbye world");
     }
 }

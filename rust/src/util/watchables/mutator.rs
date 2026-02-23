@@ -137,7 +137,7 @@ impl<R, F> Mutation<R, F> {
 impl<R, F> Drop for Mutation<R, F> {
     fn drop(&mut self) {
         if self.signal.is_some() && !self.canceled {
-            eprintln!("Mutation was dropped without being executed or canceled! If you wish to not perform the mutation, please cancel it explicitely using .cancel()");
+            eprintln!("Mutation was dropped without being executed or canceled! If you wish to not perform the mutation, please cancel it explicitly using .cancel()");
         }
     }
 }

@@ -1,4 +1,7 @@
+mod components;
 mod configuration;
+mod inputs;
+mod new_wasm_interface;
 mod traits;
 mod types;
 mod util;
