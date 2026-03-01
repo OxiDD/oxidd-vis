@@ -2,10 +2,9 @@ use std::{cell::RefCell, rc::Rc};
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::util::watchables::watchable::IntoWatchable;
+use crate::util::watchables::{signaller::Signaller, IntoWatchable};
 
 use super::{
-    mutator::Mutator,
     trackers::Trackers,
     watchable::{DataState, Listener, Observer, Watchable, WatchableState},
 };
@@ -34,7 +33,7 @@ impl<X> Watchable for Field<X> {
 }
 impl<X> IntoWatchable<X> for Field<X> {
     type Output = Field<X>;
-    fn into(self) -> Self::Output {
+    fn into_watchable(self) -> Self::Output {
         self
     }
 }
@@ -66,29 +65,26 @@ impl<X: 'static> Field<X> {
             })),
         }
     }
+    pub fn from<V: Into<X>>(init: V) -> Self {
+        Self::new(init.into())
+    }
 
-    #[must_use = "Only once the mutator is committed, will the field be changed"]
-    /// Creates a mutator that when committed changes the value, after committing the mutation, the state of this field is DataState::UpToDate again
-    pub fn set(&mut self, val: X) -> Mutator {
+    /// Sets the field and returns a signaller which will signal about the change once dropped. In order to perform batching of setting fields, simply hold on to the signaller until the next field is set
+    pub fn set(&mut self, val: X) -> Signaller {
         let inner = self.inner.clone();
-        Mutator::new_pass(
-            move || {
-                inner
-                    .try_borrow()
-                    .expect(LOOPMESSAGE)
-                    .dependents
-                    .change_state(DataState::Outdated);
-                inner.try_borrow_mut().expect(LOOPMESSAGE).val = Rc::new(val);
-                (inner, ())
-            },
-            |inner| {
-                inner
-                    .try_borrow()
-                    .expect(LOOPMESSAGE)
-                    .dependents
-                    .change_state(DataState::UpToDate);
-            },
-        )
+        inner
+            .try_borrow()
+            .expect(LOOPMESSAGE)
+            .dependents
+            .change_state(DataState::Outdated);
+        inner.try_borrow_mut().expect(LOOPMESSAGE).val = Rc::new(val);
+        Signaller::new(move || {
+            inner
+                .try_borrow()
+                .expect(LOOPMESSAGE)
+                .dependents
+                .change_state(DataState::UpToDate);
+        })
     }
 
     /// Creates a readonly reference to this field data
@@ -123,7 +119,7 @@ impl<X> WatchableState for ReadonlyField<X> {
 }
 impl<X> IntoWatchable<X> for ReadonlyField<X> {
     type Output = ReadonlyField<X>;
-    fn into(self) -> Self::Output {
+    fn into_watchable(self) -> Self::Output {
         self
     }
 }
@@ -151,10 +147,12 @@ impl<X: 'static> ControlledField<X> {
     pub fn new(init: X) -> Self {
         Self(Field::new(init))
     }
+    pub fn from<V: Into<X>>(init: V) -> Self {
+        Self::new(init.into())
+    }
 
-    #[must_use = "Only once the mutator is committed, will the field be changed"]
-    /// Creates a mutator that when committed changes the value, after committing the mutation, the state of this field is DataState::UpToDate again
-    pub fn set(&mut self, val: X) -> Mutator {
+    /// Sets the field and returns a signaller which will signal about the change once dropped. In order to perform batching of setting fields, simply hold on to the signaller until the next field is set
+    pub fn set(&mut self, val: X) -> Signaller {
         self.0.set(val)
     }
 
@@ -165,7 +163,7 @@ impl<X: 'static> ControlledField<X> {
 }
 impl<X> IntoWatchable<X> for ControlledField<X> {
     type Output = ControlledField<X>;
-    fn into(self) -> Self::Output {
+    fn into_watchable(self) -> Self::Output {
         self
     }
 }

@@ -1,4 +1,4 @@
-import {DiagramBox} from "oxidd-vis-rust";
+import {DiagramBox, ButtonComponent, F32InputComponent} from "oxidd-vis-rust";
 import {Field} from "../../watchables/Field";
 import {IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
@@ -19,6 +19,10 @@ const sourceTypes: Record<string, IDiagramSectionType<unknown>> = {
     file: FileSource,
     reference: ReferenceSource,
 };
+
+let t: F32InputComponent = null as any;
+t.min;
+let derived = new Derived(watch => watch(t.icon));
 
 /** The state of a single diagram, which may contain multiple functions and views */
 export class DiagramState extends ViewState {

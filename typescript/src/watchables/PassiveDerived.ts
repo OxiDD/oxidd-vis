@@ -1,6 +1,7 @@
 import {Derived} from "./Derived";
 import {IDerivedCompute} from "./_types/IDerivedCompute";
 import {IRunnable} from "./_types/IRunnable";
+import {dispose} from "./utils/dispose";
 
 /**
  * A simple passive derived value. This value is lazily computed, and cached unless no listeners exist. This prevents the derived value from listening to dependency changes, when it is not being used anymore.
@@ -32,8 +33,8 @@ export class PassiveDerived<T> extends Derived<T> {
         if (this.isPassive) {
             this.dependencies = this.dependencies.map(
                 ({watchable, value, unsubDirty, unsubChange}) => {
-                    unsubDirty?.();
-                    unsubChange?.();
+                    dispose(unsubDirty);
+                    dispose(unsubChange);
                     return {watchable, value};
                 }
             );

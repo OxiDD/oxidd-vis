@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::util::watchables::{watchable::IntoWatchable, watchable_utils::Tracker};
+use crate::util::watchables::{watchable, watchable_utils::Tracker, IntoWatchable};
 
 use super::{
     trackers::Trackers,
@@ -27,7 +27,7 @@ impl<X> Clone for Derived<X> {
 }
 impl<X> IntoWatchable<X> for Derived<X> {
     type Output = Derived<X>;
-    fn into(self) -> Self::Output {
+    fn into_watchable(self) -> Self::Output {
         self
     }
 }

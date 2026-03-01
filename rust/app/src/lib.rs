@@ -29,7 +29,11 @@ use swash::{
 };
 
 use crate::{
-    util::dummy_bdd::{DummyBDDFunction, DummyBDDManager, DummyBDDManagerRef},
+    components::button_component::ButtonComp,
+    util::{
+        dummy_bdd::{DummyBDDFunction, DummyBDDManager, DummyBDDManagerRef},
+        watchables::{ClonableWatchableUtils, Field, WatchableUtils},
+    },
     wasm_interface::DiagramBox,
 };
 
@@ -45,4 +49,15 @@ pub fn create_mtbdd_diagram() -> Option<DiagramBox> // And some DD type param
 {
     set_panic_hook();
     Some(DiagramBox::new(Box::new(MTBDDDiagram::new())))
+}
+
+#[wasm_bindgen]
+pub fn test() -> ButtonComp {
+    let text = Field::from("test");
+    let description = Field::new("hoi".to_string());
+    let comp = ButtonComp::builder()
+        .text(text.option())
+        .icon("alarm")
+        .build();
+    comp
 }

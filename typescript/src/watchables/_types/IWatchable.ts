@@ -1,3 +1,4 @@
+import {IDisposer} from "./IDisposer";
 import {IRunnable} from "./IRunnable";
 
 /**
@@ -20,12 +21,12 @@ export interface IWatchable<X> {
      * @param listener The listener to be invoked
      * @returns A function that can be used to remove the listener
      */
-    onDirty(listener: IRunnable): IRunnable;
+    onDirty(listener: IRunnable): IDisposer;
     /**
      * A function to register listeners for value changes, returns the unsubscribe function
      * @note that listeners are weakly stored, meaning that unless a reference to the function is kept elsewhere, it may be garbage collected and no longer called.
      * @param listener The listener to be invoked
      * @returns A function that can be used to remove the listener
      */
-    onChange(listener: IRunnable): IRunnable;
+    onChange(listener: IRunnable): IDisposer;
 }

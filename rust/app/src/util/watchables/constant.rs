@@ -1,7 +1,8 @@
 use std::{process::Output, rc::Rc};
 
-use crate::util::watchables::watchable::{
-    DataState, IntoWatchable, Listener, Observer, Watchable, WatchableState,
+use crate::util::watchables::{
+    watchable::{DataState, Listener, Observer, Watchable, WatchableState},
+    IntoWatchable,
 };
 
 pub struct Constant<X>(Rc<X>);
@@ -35,14 +36,29 @@ impl<X> Watchable for Constant<X> {
 
 impl<X> IntoWatchable<X> for Constant<X> {
     type Output = Constant<X>;
-    fn into(self) -> Self::Output {
+    fn into_watchable(self) -> Self::Output {
         self
     }
 }
 impl<X> IntoWatchable<X> for X {
     type Output = Constant<X>;
 
-    fn into(self) -> Self::Output {
+    fn into_watchable(self) -> Self::Output {
         Constant::new(self)
     }
 }
+impl<X> IntoWatchable<Option<X>> for X {
+    type Output = Constant<Option<X>>;
+
+    fn into_watchable(self) -> Self::Output {
+        Constant::new(Some(self))
+    }
+}
+
+// impl<X, Y: Into<X>> IntoWatchable<X> for Y {
+//     type Output = Constant<X>;
+
+//     fn into(self) -> Self::Output {
+//         Constant::new(self.into())
+//     }
+// }

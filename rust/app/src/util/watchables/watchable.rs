@@ -1,5 +1,7 @@
 use std::{fmt, rc::Rc};
 
+use wasm_bindgen::prelude::wasm_bindgen;
+
 /// A watchable data value.
 ///
 /// Specification for a watchable `w` and observer `o`:
@@ -59,6 +61,7 @@ pub trait Listener {
     fn state_changed(&self, state: DataState);
 }
 
+#[wasm_bindgen]
 pub struct Observer {
     remove: Option<Box<dyn FnOnce() -> ()>>,
 }
@@ -68,8 +71,11 @@ impl Observer {
             remove: Some(Box::new(f)),
         }
     }
+}
+#[wasm_bindgen]
+impl Observer {
     /// Stops observing the value, also automatically called when the observer is dropped
-    fn remove(mut self) {
+    pub fn remove(mut self) {
         (self.remove.take().unwrap())()
     }
 }
@@ -81,6 +87,7 @@ impl Drop for Observer {
     }
 }
 
+#[wasm_bindgen]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum DataState {
     UpToDate, // The data accessed from this watchable accurately reflects its spec
@@ -96,9 +103,4 @@ impl fmt::Display for DataState {
             DataState::Outdated => write!(f, "Outdated"),
         }
     }
-}
-
-pub trait IntoWatchable<X> {
-    type Output: Watchable<Output = X>;
-    fn into(self) -> Self::Output;
 }

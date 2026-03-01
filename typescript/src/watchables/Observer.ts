@@ -1,5 +1,7 @@
+import {IDisposer} from "./_types/IDisposer";
 import {IRunnable} from "./_types/IRunnable";
 import {IWatchable} from "./_types/IWatchable";
+import {dispose} from "./utils/dispose";
 
 /**
  * An observer to listen to value changes of watchables, only invoking the
@@ -7,7 +9,7 @@ import {IWatchable} from "./_types/IWatchable";
  */
 export class Observer<T> {
     protected source: IWatchable<T>;
-    protected innerDestroy?: IRunnable;
+    protected innerDestroy?: IDisposer;
 
     protected previous: T;
     protected listeners: ((value: T, prev: T) => void)[] = [];
@@ -62,7 +64,7 @@ export class Observer<T> {
      */
     public destroy(): void {
         if (!this.innerDestroy) return;
-        this.innerDestroy();
+        dispose(this.innerDestroy);
         this.innerDestroy = undefined;
     }
 }

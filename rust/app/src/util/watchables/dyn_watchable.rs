@@ -4,11 +4,16 @@ use crate::util::watchables::{
     DataState, IntoWatchable, Listener, Observer, Watchable, WatchableState,
 };
 
-pub struct DynWatchable<X>(Box<dyn Watchable<Output = X>>);
+pub struct DynWatchable<X>(Rc<dyn Watchable<Output = X>>);
+impl<X> Clone for DynWatchable<X> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<X> DynWatchable<X> {
     pub fn new<W: Watchable<Output = X> + 'static>(watchable: W) -> Self {
-        DynWatchable(Box::new(watchable))
+        DynWatchable(Rc::new(watchable))
     }
 }
 impl<X> Watchable for DynWatchable<X> {
@@ -30,15 +35,7 @@ impl<X> WatchableState for DynWatchable<X> {
 
 impl<X> IntoWatchable<X> for DynWatchable<X> {
     type Output = DynWatchable<X>;
-    fn into(self) -> Self::Output {
+    fn into_watchable(self) -> Self::Output {
         self
-    }
-}
-pub trait IntoDynWatchable<X> {
-    fn into(self) -> DynWatchable<X>;
-}
-impl<X, W: Watchable<Output = X> + 'static> IntoDynWatchable<X> for W {
-    fn into(self) -> DynWatchable<X> {
-        DynWatchable::new(self)
     }
 }

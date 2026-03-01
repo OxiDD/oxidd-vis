@@ -1,8 +1,8 @@
 import {IRunnable} from "../_types/IRunnable";
-import {IMutator} from "./_types/IMutator";
+import {IMutator, IMutatorMutations} from "./_types/IMutator";
 
 /** A mutator class that ensures that performing and signalling is only used once */
-export class Mutator<I = void, R = void> implements IMutator<R> {
+export class Mutator<I = void, R = void> implements IMutator<R>, IMutatorMutations<R> {
     protected performCB: () => {result: R; pass: I};
     protected signalCB: (pass: I) => void;
 

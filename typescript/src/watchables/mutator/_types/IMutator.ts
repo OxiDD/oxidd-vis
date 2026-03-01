@@ -16,7 +16,8 @@ export interface IMutator<R = unknown> {
      * Broadcasts the change event, requires perform to be invoked first
      */
     signal(): void;
-
+}
+export interface IMutatorMutations<R = unknown> {
     /**
      * Obtains a mutator that performs both this mutation and some next mutation before signalling either. The next mutator can use the result of this mutation.
      * @param next The next mutator to chain after

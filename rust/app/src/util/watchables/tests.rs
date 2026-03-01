@@ -19,12 +19,11 @@ mod tests {
         let derived = Derived::new(move |t| format!("{} {}", start.watch(t), end.watch(t)));
         assert_eq!(&*derived.get(), "hello world");
 
-        field1.set("goodbye").commit();
-        field2.set("Tar"); // No commit
+        field1.set("goodbye");
         assert_eq!(&*derived.get(), "goodbye world");
         assert_eq!(&*derived.get(), "goodbye world");
 
-        field1.set("not").chain(field2.set("you")).commit();
+        (field1.set("not"), field2.set("you"));
         assert_eq!(&*derived.get(), "not you");
     }
 
@@ -65,7 +64,7 @@ mod tests {
             }
         });
         let observer = derived.observe(Box::new(check1));
-        field1.set("goodbye").commit();
+        field1.set("goodbye");
         drop(observer);
 
         let fire_count_copy = fire_count.clone();
@@ -77,7 +76,7 @@ mod tests {
             }
         });
         let observer = derived.observe(Box::new(check1));
-        field1.set("not").chain(field2.set("you")).commit();
+        (field1.set("not"), field2.set("you"));
         drop(observer);
 
         assert_eq!(*fire_count.borrow(), 2);
@@ -116,11 +115,7 @@ mod tests {
             }
         });
         let observer = derived4.observe(Box::new(check1));
-        field2
-            .set("Bram")
-            .chain(field1.set("goodbye"))
-            .chain(field2.set("Tar"))
-            .commit();
+        (field2.set("Bram"), field1.set("goodbye"), field2.set("Tar"));
         drop(observer);
 
         assert_eq!(*fire_count.borrow(), 1);
@@ -154,33 +149,32 @@ mod tests {
             }
         });
         let _observer = derived4.observe(Box::new(check2));
-        field2.set("Tar").commit(); // Does not fire listener, since the initial value has not been read
+        field2.set("Tar"); // Does not fire listener, since the initial value has not been read
         assert_eq!(*fire_count.borrow(), 0);
 
         derived4.get();
-        field2.set("John").commit();
+        field2.set("John");
         assert_eq!(*fire_count.borrow(), 1);
 
-        field2.set("Bob").commit(); // Does not fire listener, since the new value has not been read
+        field2.set("Bob"); // Does not fire listener, since the new value has not been read
         assert_eq!(*fire_count.borrow(), 1);
 
         derived4.get();
-        field2.set("Emma").commit();
+        field2.set("Emma");
         assert_eq!(*fire_count.borrow(), 2);
     }
 
     #[test]
     fn accepts_watch_syntax() {
         let mut field1 = Field::new("hello");
-        let mut field2 = Field::new("world");
+        let field2 = Field::new("world");
 
         let start = field1.read();
         let end = field2.read();
         let derived = Derived::new(move |t| format!("{} {}", t.watch(&start), t.watch(&end)));
         assert_eq!(&*derived.get(), "hello world");
 
-        field1.set("goodbye").commit();
-        field2.set("Tar"); // No commit
+        field1.set("goodbye");
         assert_eq!(&*derived.get(), "goodbye world");
         assert_eq!(&*derived.get(), "goodbye world");
     }

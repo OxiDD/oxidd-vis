@@ -5,6 +5,8 @@ import {IWatcher} from "./_types/IWatcher";
 import {ListenerManager} from "./utils/ListenerManager";
 import {IInspectable, ISummary, inspect} from "./utils/devtools";
 import {funcWithSource} from "./utils/funcWithSource";
+import {dispose} from "./utils/dispose";
+import {IDisposer} from "./_types/IDisposer";
 
 // TODO: add debug mode that checks if value changed, even if dependencies did not change (I.e. derived value is impure) to warn the user
 
@@ -64,7 +66,7 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
 
         /** Cleanup old dependencies */
         // Note, if we are dirty, there is at least one dependency that signalled it's dirty. It might not have signaled change yet when this value is recomputed, but the first dirty dependency will be resubscribed to. Hence when this dependency signals change, we will observe it and also signal. Therefor no change events get lost, even though we may unsubscribe from the old dependency events before they signalled.
-        for (const {unsubChange} of this.dependencies) unsubChange?.();
+        for (const {unsubChange} of this.dependencies) dispose(unsubChange);
         this.dependencies = [];
 
         /** Compute new value and register new dependencies */
@@ -147,7 +149,7 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
     protected unsubDirtyDependencies() {
         if (this.dirty) return;
         for (const dep of this.dependencies) {
-            dep.unsubDirty?.();
+            dispose(dep.unsubDirty);
             dep.unsubDirty = undefined;
         }
     }
@@ -163,7 +165,7 @@ export class Derived<T> extends ListenerManager implements IWatchable<T>, IInspe
     protected unsubChangeDependencies() {
         if (this.signaled) return;
         for (const dep of this.dependencies) {
-            dep.unsubChange?.();
+            dispose(dep.unsubChange);
             dep.unsubChange = undefined;
         }
     }
@@ -197,7 +199,7 @@ interface IDependency<T = unknown, W extends IWatchable<T> = IWatchable<T>> {
     /** The value of watchable when read */
     value: T;
     /** The function to unsubscribe from the dirty updates */
-    unsubDirty?: () => void;
+    unsubDirty?: IDisposer;
     /** The function to unsubscribe from the change updates */
-    unsubChange?: () => void;
+    unsubChange?: IDisposer;
 }
