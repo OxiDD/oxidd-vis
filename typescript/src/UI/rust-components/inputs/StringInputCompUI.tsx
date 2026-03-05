@@ -67,7 +67,6 @@ export const StringInputCompUI: NFC<{
             onChange={onChange}
             aria-describedby={aria?.descriptionID}
             aria-labelledby={aria?.labelID}
-            style={{pointerEvents: "all"}}
             className={className}
             multiline={multiline}
             styles={{fieldGroup: rows ? {minHeight: 0} : undefined}}

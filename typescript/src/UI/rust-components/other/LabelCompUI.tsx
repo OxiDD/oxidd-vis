@@ -44,7 +44,6 @@ export const LabelCompUI: NFC<{
             <>
                 <Label
                     className={`${css({marginBottom: 10, fontSize: 20})} ${className}`}
-                    style={{pointerEvents: "all"}}
                     id={id}>
                     {text}
                 </Label>
@@ -54,7 +53,7 @@ export const LabelCompUI: NFC<{
     } else if (kind == LabelKind.Above) {
         return (
             <>
-                <Label className={className} style={{pointerEvents: "all"}} id={id}>
+                <Label className={className} id={id}>
                     {text}
                 </Label>
                 <ChildComp data={child} aria={addAriaLabel(id, aria)} />
@@ -64,7 +63,6 @@ export const LabelCompUI: NFC<{
         return (
             <Stack
                 horizontal
-                style={{pointerEvents: "all"}}
                 tokens={{childrenGap: theme.spacing.s1}}
                 className={css({">:nth-child(3)": {flex: "1 1"}, flexWrap: "wrap"})}>
                 <Label

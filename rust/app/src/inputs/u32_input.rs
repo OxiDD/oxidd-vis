@@ -43,6 +43,7 @@ impl U32Input {
 pub struct U32InputClamped {
     /// The raw input
     #[getter]
+    #[builder(start_fn, into)]
     input: U32Input,
     /// The minimum value
     #[getter]
@@ -116,21 +117,20 @@ impl U32InputClamped {
 }
 impl Into<U32InputClamped> for U32Input {
     fn into(self) -> U32InputClamped {
-        U32InputClamped::builder().input(self).build()
+        U32InputClamped::builder(self).build()
     }
 }
 
 
 /// u32 input component
-#[derive(Clone)]
 #[wasm_getters]
 #[wasm_bindgen]
 #[watchable_setters]
-#[derive(Builder)]
+#[derive(Builder, Clone)]
 pub struct U32InputComp {
     /// The data of the component
     #[getter]
-    #[builder(into)]
+    #[builder(start_fn, into)]
     data: U32InputClamped,
     /// Whether to supply step buttons
     #[getter]
@@ -154,12 +154,12 @@ impl_watchable!(U32InputComp, u32);
 
 impl Into<U32InputComp> for U32Input {
     fn into(self) -> U32InputComp {
-        U32InputComp::builder().data(self).build()
+        U32InputComp::builder(self).build()
     }
 }
 impl Into<U32InputComp> for U32InputClamped {
     fn into(self) -> U32InputComp {
-        U32InputComp::builder().data(self).build()
+        U32InputComp::builder(self).build()
     }
 }
 

@@ -29,7 +29,6 @@ export const TooltipCompUI: NFC<{
             delay={delay}
             closeDelay={closeDelay}
             directionalHint={direction}
-            styles={{root: {pointerEvents: "all"}}}
             content={<ChildComp data={tooltip} />}>
             <ChildComp
                 data={content}

@@ -31,11 +31,11 @@ export const DragPreview: FC<
 
     if (!data) return <></>;
     return (
-        <Overlay styles={{root: {background: "none", pointerEvents: "none"}}}>
+        <Overlay
+            styles={{root: {background: "none", zIndex: 1001, pointerEvents: "none"}}}>
             <DragWrapper
                 style={{
                     position: "absolute",
-                    zIndex: 1001,
                     top: data.position.y + data.offset.y,
                     left: data.position.x + data.offset.x,
                 }}>

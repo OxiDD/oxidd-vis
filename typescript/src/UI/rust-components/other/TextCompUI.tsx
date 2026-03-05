@@ -16,16 +16,11 @@ export const TextCompUI: NFC<{data: TextComp; className?: string; aria?: IAriaRe
         return (
             <h2
                 className={className}
-                style={{pointerEvents: "all"}}
                 aria-describedby={aria?.descriptionID}
                 aria-labelledby={aria?.labelID}>
                 {text}
             </h2>
         );
     }
-    return (
-        <span style={{pointerEvents: "all"}} className={className}>
-            {text}
-        </span>
-    );
+    return <span className={className}>{text}</span>;
 };

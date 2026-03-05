@@ -49,7 +49,7 @@ impl BoolInput {
 pub struct BoolInputComp {
     /// The data of the component
     #[getter]
-    #[builder(into)]
+    #[builder(start_fn, into)]
     data: BoolInput,
     /// Whether this input is disabled
     #[getter]
@@ -65,7 +65,7 @@ impl_watchable!(BoolInputComp, bool);
 
 impl Into<BoolInputComp> for BoolInput {
     fn into(self) -> BoolInputComp {
-        BoolInputComp::builder().data(self).build()
+        BoolInputComp::builder(self).build()
     }
 }
 

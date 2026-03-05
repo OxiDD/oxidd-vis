@@ -6,13 +6,16 @@ use itertools::Itertools;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
-    components::composite_component::ComponentVecWatchable,
+    components::{
+        composite_component::ComponentVecWatchable, Align, AlignMain, AlignMainWatchable,
+        AlignWatchable,
+    },
     inputs::variant_input::variant_input_comp_builder::{Empty, SetData},
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
         make_typed_dyn_watchable, signaller::Signaller, BoolWatchable, Constant, Derived,
-        DynWatchable, Field, IntoWatchable, Mutator, OptionBoolWatchable, U32Watchable, Watchable,
-        Watching,
+        DynWatchable, F32Watchable, Field, IntoWatchable, Mutator, OptionBoolWatchable,
+        U32Watchable, Watchable, Watching,
     },
 };
 
@@ -119,7 +122,11 @@ pub struct VariantComponentMapper<V: Sized + Clone + Eq + 'static> {
     selected_index: U32Watchable,
 }
 impl<V: Sized + Clone + Eq + 'static> VariantComponentMapper<V> {
-    pub fn new(data: VariantInputFiltered<V>, map: impl Fn(&V) -> Component + 'static) -> Self {
+    pub fn new(
+        data: impl Into<VariantInputFiltered<V>>,
+        map: impl Fn(&V) -> Component + 'static,
+    ) -> Self {
+        let data = data.into();
         let options = data.options.clone();
         let option_components = ComponentVecWatchable::new(Derived::new(move |t| {
             let options = options.watch(t);
@@ -156,7 +163,7 @@ impl<V: Sized + Clone + Eq + VariantComponentMapping + VariantOptions>
     Into<VariantComponentMapper<V>> for VariantInput<V>
 {
     fn into(self) -> VariantComponentMapper<V> {
-        VariantComponentMapper::new(self.into(), |v| V::map(v))
+        VariantComponentMapper::new(self, |v| V::map(v))
     }
 }
 
@@ -189,19 +196,31 @@ trait VariantOptionComponents {
     fn get_option(&self) -> &U32Watchable;
 }
 
-/// Variant component
+/// Variant component.
 #[wasm_getters]
 #[wasm_bindgen]
 #[watchable_setters]
 #[derive(Builder, Clone)]
 pub struct VariantInputComp {
-    /// The data of the component
+    /// The data of the component.
     #[builder(setters(name=set_data, vis=""))]
     data: Rc<RefCell<dyn VariantOptionComponents>>,
-    /// Whether the variants should display horizontally (if advanced)
+    /// Whether the variants should display horizontally (if advanced).
     #[getter]
-    #[setter(bool, false)]
-    horizontal: BoolWatchable,
+    #[setter(Option<bool>)]
+    horizontal: OptionBoolWatchable,
+    /// The main axis alignment (if advanced).
+    #[getter]
+    #[setter(AlignMain, AlignMain::Start)]
+    main_align: AlignMainWatchable,
+    /// The off axis alignment (if advanced).
+    #[getter]
+    #[setter(Align, Align::Start)]
+    perpendicular_align: AlignWatchable,
+    /// The gap between child elements (if advanced).
+    #[getter]
+    #[setter(f32, 1.0)]
+    gap: F32Watchable,
     /// Whether this input is disabled
     #[getter]
     #[setter(bool, false)]

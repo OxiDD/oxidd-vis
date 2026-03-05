@@ -45,7 +45,7 @@ impl StringInput {
 pub struct StringInputComp {
     /// The data of the component
     #[getter]
-    #[builder(into)]
+    #[builder(start_fn, into)]
     data: StringInput,
     /// Whether to allow multiline inputs
     #[getter]
@@ -83,7 +83,7 @@ pub struct StringInputComp {
 
 impl Into<StringInputComp> for StringInput {
     fn into(self) -> StringInputComp {
-        StringInputComp::builder().data(self).build()
+        StringInputComp::builder(self).build()
     }
 }
 

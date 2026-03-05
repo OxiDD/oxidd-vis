@@ -51,7 +51,7 @@ export class PanelViewState extends ViewState {
         });
 
         new Observer(component.open_count).add((value, old) => {
-            if (!old) return;
+            if (old == undefined) return;
             if (value == old) return;
             views
                 .open(this, function* getBaseLocationHints() {
@@ -66,7 +66,7 @@ export class PanelViewState extends ViewState {
                     };
                 })
                 .commit();
-        });
+        }, true);
     }
 }
 
@@ -83,11 +83,7 @@ function childPanels(
         when(c.as_fill(), d => dynPanels(d.content, m, a)) ??
         when(c.as_label(), d => dynPanels(d.input, m, a)) ??
         when(c.as_modal(), d => dynPanels(d.content, m, a)) ??
-        when(c.as_overlay(), d => {
-            const mainPanels = dynPanels(d.main, m, a);
-            const overlayPanels = dynPanels(d.overlay, m, a);
-            return new Derived(watch => [...watch(mainPanels), ...watch(overlayPanels)]);
-        }) ??
+        when(c.as_overlay(), d => dynPanels(d.content, m, a)) ??
         when(c.as_tooltip(), d => dynPanels(d.content, m, a)) ??
         when(c.as_variant_input(), d => vecPanels(d.options, m, a)) ??
         when(c.as_panel_handle(), d => {

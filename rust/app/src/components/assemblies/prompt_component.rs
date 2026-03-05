@@ -38,11 +38,11 @@ pub struct PromptComp {
     height: OptionF32Watchable,
     /// Cancel text
     #[getter]
-    #[setter(String)]
+    #[setter(String, "cancel")]
     cancel_text: StringWatchable,
     /// Submit text
     #[getter]
-    #[setter(String)]
+    #[setter(String, "ok")]
     submit_text: StringWatchable,
     /// The number of times submitted
     #[getter]
@@ -75,22 +75,23 @@ impl PromptComp {
         height: OptionF32Watchable,
     ) -> ModalComp {
 
-        let submit = ButtonComp::builder().data(submit_count).text("Submit").build();
+        let submit = ButtonComp::builder().primary(true).data(submit_count).text("Submit").build();
         let close = ButtonComp::builder().data(cancel_count).text("Cancel").build();
 
         let click_outside_count = U32Field::new(0);
 
         let shown = {
-            let submit_changed = Changed::new(submit.clicks().clone());
-            let cancel_changed = Changed::new(close.clicks().clone());
-            let click_outside_changed = Changed::new(click_outside_count.clone());
+            let open_count_changed = Changed::new(open_count);
             
+            let (submit_clicks, close_clicks, click_outside_count) = (submit.clicks(), close.clicks(), click_outside_count.clone());
             Derived::new(move |t| {
-                open_count.watch(t);
-                let closed = *submit_changed.watch(t) 
-                    || *cancel_changed.watch(t)
-                    || *click_outside_changed.watch(t);
-                !closed
+                let opened = open_count_changed.watch(t);
+
+                close_clicks.watch(t);
+                submit_clicks.watch(t);
+                click_outside_count.watch(t);
+                
+                *opened
             })
         };
 

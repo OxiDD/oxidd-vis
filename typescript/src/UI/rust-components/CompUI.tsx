@@ -14,6 +14,12 @@ import {OverlayCompUI} from "./other/OverlayCompUI";
 import {FillCompUI} from "./other/FillCompUI";
 import {CompositeItemCompUI} from "./other/CompositeItemCompUI";
 import {ContainerCompUI} from "./other/ContainerCompUI";
+import {ModalCompUI} from "./other/ModalCompUI";
+import {F32InputCompUI} from "./inputs/F32InputCompUI";
+import {I32InputCompUI} from "./inputs/I32InputCompUI";
+import {U32InputCompUI} from "./inputs/U32InputCompUI";
+import {VariantInputCompUI} from "./inputs/VariantInputCompUI";
+import {BoolInputCompUI} from "./inputs/BoolInputCompUI";
 
 export const CompUI: ICompUI = ({data: d, className, aria}) => {
     const p = {className, aria, ChildComp: CompUI};
@@ -21,7 +27,6 @@ export const CompUI: ICompUI = ({data: d, className, aria}) => {
         when(d.as_composite(), r => <CompositeCompUI data={r} {...p} />) ??
         when(d.as_container(), r => <ContainerCompUI data={r} {...p} />) ??
         when(d.as_label(), r => <LabelCompUI data={r} {...p} />) ??
-        when(d.as_string_input(), r => <StringInputCompUI data={r} {...p} />) ??
         when(d.as_button(), r => <ButtonCompUI data={r} {...p} />) ??
         when(d.as_dyn(), r => <DynCompUI data={r} {...p} />) ??
         when(d.as_text(), r => <TextCompUI data={r} {...p} />) ??
@@ -30,6 +35,13 @@ export const CompUI: ICompUI = ({data: d, className, aria}) => {
         when(d.as_overlay(), r => <OverlayCompUI data={r} {...p} />) ??
         when(d.as_fill(), r => <FillCompUI data={r} {...p} />) ??
         when(d.as_composite_item(), r => <CompositeItemCompUI data={r} {...p} />) ??
+        when(d.as_f32_input(), r => <F32InputCompUI data={r} {...p} />) ??
+        when(d.as_i32_input(), r => <I32InputCompUI data={r} {...p} />) ??
+        when(d.as_u32_input(), r => <U32InputCompUI data={r} {...p} />) ??
+        when(d.as_string_input(), r => <StringInputCompUI data={r} {...p} />) ??
+        when(d.as_variant_input(), r => <VariantInputCompUI data={r} {...p} />) ??
+        when(d.as_bool_input(), r => <BoolInputCompUI data={r} {...p} />) ??
+        when(d.as_modal(), r => <ModalCompUI data={r} {...p} />) ??
         when(d.as_panel(), r => <></>) ??
         componentNotFound
     );

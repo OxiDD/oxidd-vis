@@ -35,7 +35,7 @@ export const PanelHandleCompUI: NFC<{
             .commit();
     });
     return (
-        <div className={className} style={{pointerEvents: "all"}} ref={ref}>
+        <div className={className} ref={ref}>
             {content}
         </div>
     );

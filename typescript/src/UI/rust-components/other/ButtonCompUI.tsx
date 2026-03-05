@@ -25,7 +25,6 @@ export const ButtonCompUI: NFC<{
             <BtnType
                 aria-describedby={aria?.descriptionID}
                 aria-labelledby={aria?.labelID}
-                style={{pointerEvents: "all"}}
                 text={text}
                 className={className}
                 onClick={onClick}
@@ -38,7 +37,6 @@ export const ButtonCompUI: NFC<{
             <IconButton
                 aria-describedby={aria?.descriptionID}
                 aria-labelledby={aria?.labelID}
-                style={{pointerEvents: "all"}}
                 className={className}
                 aria-label={icon}
                 iconProps={{iconName: icon}}
