@@ -19,6 +19,7 @@ use crate::{
         PromptComp, TooltipComp,
     },
     inputs::{
+        binary_input::{BinaryInput, BinaryInputComp},
         bool_input::{BoolInput, BoolInputComp},
         f32_input::{F32Input, F32InputClamped, F32InputComp},
         string_input::{StringInput, StringInputComp},
@@ -167,7 +168,9 @@ pub fn test_panel() -> PanelComp {
                 )),
         );
 
-    let composite = (labeled_button, text_field, extra_panel);
+    let binary_input = BinaryInputComp::builder(BinaryInput::new()).build();
+
+    let composite = (labeled_button, text_field, extra_panel, binary_input);
     // let composite = CompositeComp::builder().gap(1.0).build(composite);
 
     let prompt_button = ButtonComp::builder().text("Some prompt").build();

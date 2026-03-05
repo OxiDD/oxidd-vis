@@ -16,8 +16,9 @@ use crate::{
     },
     configuration::configuration_object::AbstractConfigurationObject,
     inputs::{
-        bool_input::BoolInputComp, f32_input::F32InputComp, i32_input::I32InputComp,
-        string_input::StringInputComp, u32_input::U32InputComp, variant_input::VariantInputComp,
+        binary_input::BinaryInputComp, bool_input::BoolInputComp, f32_input::F32InputComp,
+        i32_input::I32InputComp, string_input::StringInputComp, u32_input::U32InputComp,
+        variant_input::VariantInputComp,
     },
     types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder,
     util::rectangle::Rectangle,
@@ -57,6 +58,7 @@ impl Component {
 #[derive(Clone)]
 pub enum ComponentOption {
     BoolInput(BoolInputComp),
+    BinaryInput(BinaryInputComp),
     F32Input(F32InputComp),
     I32Input(I32InputComp),
     U32Input(U32InputComp),
@@ -78,6 +80,7 @@ pub enum ComponentOption {
 }
 
 impl_as_variant!(as_bool_input, BoolInput, BoolInputComp);
+impl_as_variant!(as_binary_input, BinaryInput, BinaryInputComp);
 impl_as_variant!(as_f32_input, F32Input, F32InputComp);
 impl_as_variant!(as_i32_input, I32Input, I32InputComp);
 impl_as_variant!(as_u32_input, U32Input, U32InputComp);

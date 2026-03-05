@@ -225,6 +225,7 @@ make_typed_dyn_watchable!(F32Watchable, f32);
 make_typed_dyn_watchable!(OptionF32Watchable, Option<f32>);
 
 make_typed_field!(StringField, StringWatchable, String);
+make_typed_field!(OptionStringField, OptionStringWatchable, Option<String>);
 make_typed_field!(BoolField, BoolWatchable, bool);
 make_typed_field!(U32Field, U32Watchable, u32);
 make_typed_field!(I32Field, I32Watchable, i32);
