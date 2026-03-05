@@ -1,23 +1,25 @@
-import { Constant } from "../watchables/Constant";
-import { Derived } from "../watchables/Derived";
-import { IWatchable } from "../watchables/_types/IWatchable";
-import { dummyMutator } from "../watchables/mutator/Mutator";
-import { IMutator } from "../watchables/mutator/_types/IMutator";
-import { all } from "../watchables/mutator/all";
-import { chain } from "../watchables/mutator/chain";
-import { ConfigurationState } from "./ConfigurationState";
-import { DiagramCollectionState as DiagramsSourceState } from "./diagrams/DiagramCollectionState";
-import { SettingsState } from "./SettingsState";
-import { IAppSerialization } from "./_types/IAppSerialization";
-import { IBaseViewSerialization } from "./_types/IBaseViewSerialization";
-import { IGlobalSettings } from "./_types/IGlobalSettings";
-import { ISidebarTab } from "./_types/ISidebarTab";
-import { ViewManager } from "./views/ViewManager";
-import { ViewState } from "./views/ViewState";
-import { IViewLocationHint } from "./_types/IViewLocationHint";
-import { Field } from "../watchables/Field";
-import { ToolbarState } from "./toolbar/ToolbarState";
-import { mainLocationHint } from "./views/locations/mainLocationHint";
+import {Constant} from "../watchables/Constant";
+import {Derived} from "../watchables/Derived";
+import {IWatchable} from "../watchables/_types/IWatchable";
+import {dummyMutator} from "../watchables/mutator/Mutator";
+import {IFMutator, IMutator} from "../watchables/mutator/_types/IMutator";
+import {all} from "../watchables/mutator/all";
+import {chain} from "../watchables/mutator/chain";
+import {ConfigurationState} from "./ConfigurationState";
+import {DiagramCollectionState as DiagramsSourceState} from "./diagrams/DiagramCollectionState";
+import {SettingsState} from "./SettingsState";
+import {IAppSerialization} from "./_types/IAppSerialization";
+import {IBaseViewSerialization} from "./_types/IBaseViewSerialization";
+import {IGlobalSettings} from "./_types/IGlobalSettings";
+import {ISidebarTab} from "./_types/ISidebarTab";
+import {ViewManager} from "./views/ViewManager";
+import {ViewState} from "./views/ViewState";
+import {IViewLocationHint} from "./_types/IViewLocationHint";
+import {Field} from "../watchables/Field";
+import {ToolbarState} from "./toolbar/ToolbarState";
+import {mainLocationHint} from "./views/locations/mainLocationHint";
+import {PanelViewState} from "./PanelViewState";
+import {test_panel} from "oxidd-vis-rust";
 
 const APP_STORAGE_NAME = "BDD-viewer";
 export class AppState extends ViewState {
@@ -39,7 +41,7 @@ export class AppState extends ViewState {
             load: () => localStorage.getItem(APP_STORAGE_NAME) ?? undefined,
             save: data => localStorage.setItem(APP_STORAGE_NAME, data),
         },
-        { darkMode: true }
+        {darkMode: true}
     );
 
     /** The settings of the application */
@@ -50,6 +52,9 @@ export class AppState extends ViewState {
 
     /** The toolbar to access the selected tool */
     public readonly toolbar = new ToolbarState();
+
+    /** A test panel from rust */
+    public readonly testComp = new PanelViewState(test_panel(), this.views, [this]);
 
     /** The sidebar tabs to show, forming an entry to this */
     public readonly tabs: Readonly<ISidebarTab[]> = [
@@ -76,6 +81,11 @@ export class AppState extends ViewState {
             view: this.settings,
             hidden: true,
         },
+        {
+            icon: "SidePanel",
+            name: "Rust test panel",
+            view: this.testComp,
+        },
     ];
 
     /** @override */
@@ -84,8 +94,8 @@ export class AppState extends ViewState {
     /** @override */
     public readonly children = new Constant<ViewState[]>(
         this.tabs
-            .filter(({ skipSerialization }) => !skipSerialization)
-            .map(({ view }) => view)
+            .filter(({skipSerialization}) => !skipSerialization)
+            .map(({view}) => view)
     );
 
     /** Creates a new app state */
@@ -103,14 +113,14 @@ export class AppState extends ViewState {
             ...super.serialize(),
             tabs: Object.fromEntries(
                 this.tabs
-                    .filter(({ skipSerialization }) => !skipSerialization)
+                    .filter(({skipSerialization}) => !skipSerialization)
                     .map(tab => [tab.name, tab.view.serialize()])
             ),
         };
     }
 
     /** @override */
-    public deserialize(data: IAppSerialization): IMutator<unknown> {
+    public deserialize(data: IAppSerialization): IFMutator {
         return super
             .deserialize(data)
             .chain(
@@ -118,7 +128,7 @@ export class AppState extends ViewState {
                     Object.entries(data.tabs).map(
                         ([dataName, data]) =>
                             this.tabs
-                                .find(({ name }) => name == dataName)
+                                .find(({name}) => name == dataName)
                                 ?.view.deserialize(data) ?? dummyMutator()
                     )
                 )

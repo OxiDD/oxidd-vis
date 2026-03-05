@@ -1,6 +1,6 @@
 import {DiagramBox, DiagramSectionBox} from "oxidd-vis-rust";
 import {IWatchable} from "../../../watchables/_types/IWatchable";
-import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {DiagramVisualizationState} from "../DiagramVisualizationState";
 import {DiagramState} from "../DiagramState";
 
@@ -25,7 +25,7 @@ export type IDiagramSection<T> = {
      * @param data The data to deserialize
      * @param sources All the diagram sources being loaded
      */
-    deserialize(data: T, sources: Map<string, IDiagramSection<unknown>>): IMutator;
+    deserialize(data: T, sources: Map<string, IDiagramSection<unknown>>): IFMutator;
 
     /**
      * Disposes this instance of the source, cleaning up all data

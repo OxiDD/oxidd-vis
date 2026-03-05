@@ -1,6 +1,6 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
-use crate::util::watchables::Constant;
+use crate::util::watchables::{Constant, DataState, Listener, Observer, WatchableState};
 
 use super::{derived::Derived, watchable::Watchable};
 
@@ -68,5 +68,57 @@ impl IntoWatchable<Option<String>> for &str {
 
     fn into_watchable(self) -> Self::Output {
         Constant::new(Some(self.to_string()))
+    }
+}
+
+// Change testers
+pub struct Changed<W: Watchable>
+where
+    W::Output: Eq,
+{
+    watchable: W,
+    prev: RefCell<Rc<W::Output>>,
+    true_f: Rc<bool>,
+    false_f: Rc<bool>,
+}
+impl<W: Watchable> Changed<W>
+where
+    W::Output: Eq,
+{
+    pub fn new(watchable: W) -> Self {
+        let val = watchable.get();
+        Changed {
+            watchable,
+            prev: RefCell::new(val),
+            true_f: Rc::new(true),
+            false_f: Rc::new(false),
+        }
+    }
+}
+impl<W: Watchable> WatchableState for Changed<W>
+where
+    W::Output: Eq,
+{
+    fn state(&self) -> DataState {
+        self.watchable.state()
+    }
+
+    fn observe(&self, listener: Box<dyn Listener>) -> Observer {
+        self.watchable.observe(listener)
+    }
+}
+impl<W: Watchable> Watchable for Changed<W>
+where
+    W::Output: Eq,
+{
+    type Output = bool;
+    fn get(&self) -> Rc<Self::Output> {
+        let new_value = self.watchable.get();
+        let changed = new_value != *self.prev.borrow();
+        *self.prev.borrow_mut() = new_value;
+        match changed {
+            true => self.true_f.clone(),
+            false => self.false_f.clone(),
+        }
     }
 }

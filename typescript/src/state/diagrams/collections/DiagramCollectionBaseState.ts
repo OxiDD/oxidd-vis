@@ -1,6 +1,6 @@
 import {MessageBarType} from "@fluentui/react";
 import {IWatchable} from "../../../watchables/_types/IWatchable";
-import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {IDiagramCollection} from "../_types/IDiagramCollection";
 import {DiagramState} from "../DiagramState";
 import {PlainField} from "../../../watchables/PlainField";
@@ -14,9 +14,7 @@ import {v4 as uuid} from "uuid";
 import {createDiagramBox} from "../createDiagramBox";
 import {IDiagramCollectionBaseSerialization} from "./_types/IDiagramCollectionBaseSerialization";
 
-export class DiagramCollectionBaseState
-    implements IDiagramCollection<IDiagramCollectionBaseSerialization>
-{
+export class DiagramCollectionBaseState implements IDiagramCollection<IDiagramCollectionBaseSerialization> {
     /** @override */
     public readonly ID = uuid();
 
@@ -69,7 +67,7 @@ export class DiagramCollectionBaseState
      * @param diagram The diagram to be removed and disposed
      * @returns The mutator to commit the change, resulting in whether the diagram was present and has now been disposed
      */
-    public removeDiagram(diagram: DiagramState): IMutator<boolean> {
+    public removeDiagram(diagram: DiagramState): IFMutator<boolean> {
         return chain(push => {
             const diagrams = this._diagrams.get();
             const index = diagrams.findIndex(v => v == diagram);
@@ -91,7 +89,7 @@ export class DiagramCollectionBaseState
      * @param collection The collection to be removed and disposed
      * @returns The mutator to commit the change, resulting in whether the collection was present and has now been disposed
      */
-    public removeCollection(collection: IDiagramCollection<unknown>): IMutator<boolean> {
+    public removeCollection(collection: IDiagramCollection<unknown>): IFMutator<boolean> {
         return chain(push => {
             const collections = this._collections.get();
             const index = collections.findIndex(v => v == collection);
@@ -120,7 +118,7 @@ export class DiagramCollectionBaseState
     }
 
     /** @override */
-    public deserialize(data: IDiagramCollectionBaseSerialization): IMutator<unknown> {
+    public deserialize(data: IDiagramCollectionBaseSerialization): IFMutator {
         return chain(push => {
             (this.ID as any) = data.ID;
 

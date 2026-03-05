@@ -35,6 +35,7 @@ export const DragPreview: FC<
             <DragWrapper
                 style={{
                     position: "absolute",
+                    zIndex: 1001,
                     top: data.position.y + data.offset.y,
                     left: data.position.x + data.offset.x,
                 }}>

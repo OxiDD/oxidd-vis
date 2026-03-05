@@ -5,7 +5,7 @@ import {TDeepReadonly} from "../../utils/_types/TDeepReadonly";
 import {Derived} from "../../watchables/Derived";
 import {Field} from "../../watchables/Field";
 import {IWatchable} from "../../watchables/_types/IWatchable";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
 import {ViewState} from "./ViewState";
 import {IViewComponent} from "../_types/IViewComponent";
@@ -137,7 +137,7 @@ export class ViewManager implements IViewManager {
      * @param layout The layout that specifies how to assign views to tabs
      * @returns The mutator to commit the change
      */
-    public loadLayout(layout: IPanelData): IMutator {
+    public loadLayout(layout: IPanelData): IFMutator {
         return chain(push => {
             push(this.layoutState.loadLayout(layout));
         });
@@ -179,7 +179,7 @@ export class ViewManager implements IViewManager {
     }
 
     /** A hook invoked when a view is deleted from the tree */
-    protected onDeleteView(view: ViewState): IMutator {
+    protected onDeleteView(view: ViewState): IFMutator {
         // We want to close associated UI for this view
         return this.close(view);
     }
@@ -305,7 +305,7 @@ export class ViewManager implements IViewManager {
             hints: Generator<IViewLocationHint>
         ) => Generator<IViewLocationHint> = h => h,
         focus: boolean = true
-    ): IMutator {
+    ): IFMutator {
         const layout = this.layoutState;
         const getContainer = (ID: string | null | undefined) =>
             ID ? layout.allPanels.get().find(({id}) => id == ID) : undefined;
@@ -455,7 +455,7 @@ export class ViewManager implements IViewManager {
      * @param view The view state to close
      * @returns The mutator to commit changes
      */
-    public close(view: ViewState): IMutator {
+    public close(view: ViewState): IFMutator {
         return chain(push => {
             if (!view.canClose.get()) return;
 
@@ -501,7 +501,7 @@ export class ViewManager implements IViewManager {
      * @param view The view to be shown
      * @returns A mutator to commit the change
      */
-    public focus(view: ViewState | string): IMutator {
+    public focus(view: ViewState | string): IFMutator {
         const viewID = typeof view == "string" ? view : view.ID;
         return chain(push => {
             const layout = this.layoutState;

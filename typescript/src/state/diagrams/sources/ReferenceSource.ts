@@ -6,7 +6,7 @@ import {DiagramState} from "../DiagramState";
 import {Derived} from "../../../watchables/Derived";
 import {IReferenceSourceSerialization} from "./_types/IReferenceSourceSerialization";
 import {chain} from "../../../watchables/mutator/chain";
-import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../../watchables/mutator/_types/IMutator";
 
 /** A diagram source, referencing part of another source */
 export class ReferenceSource extends AbstractDiagramSectionState<IReferenceSourceSerialization> {
@@ -76,7 +76,7 @@ export class ReferenceSource extends AbstractDiagramSectionState<IReferenceSourc
     deserialize(
         data: IReferenceSourceSerialization,
         sources: Map<string, IDiagramSection<unknown>>
-    ): IMutator {
+    ): IFMutator {
         return chain(push => {
             push(
                 this.parents.set(

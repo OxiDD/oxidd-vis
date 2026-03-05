@@ -1,6 +1,6 @@
 import {MessageBarType} from "@fluentui/react";
 import {IWatchable} from "../../../watchables/_types/IWatchable";
-import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {ICollectionStatus, IDiagramCollection} from "../_types/IDiagramCollection";
 import {DiagramState} from "../DiagramState";
 import {v4 as uuid} from "uuid";
@@ -148,7 +148,7 @@ export class HttpDiagramCollectionState extends DiagramCollectionBaseState {
     }
 
     /** @override */
-    public deserialize(data: IHttpDiagramCollectionSerialization): IMutator {
+    public deserialize(data: IHttpDiagramCollectionSerialization): IFMutator {
         return chain(push => {
             push(super.deserialize(data));
             (this.host as any) = data.host;
@@ -168,7 +168,7 @@ export class HttpDiagramCollectionTargetState extends ViewState {
     /** The diagrams that we are observing */
     protected diagrams: IWatchable<DiagramState[]>;
 
-    protected listeners: ((diagram: DiagramState) => void | IMutator)[] = [];
+    protected listeners: ((diagram: DiagramState) => void | IFMutator)[] = [];
 
     protected observer: Observer<DiagramState[]>;
 
@@ -202,7 +202,7 @@ export class HttpDiagramCollectionTargetState extends ViewState {
      * @returns The function that can be called for removing the listener
      */
     public onDiagramOpen(
-        listener: (diagram: DiagramState) => void | IMutator
+        listener: (diagram: DiagramState) => void | IFMutator
     ): () => void {
         this.listeners.push(listener);
         return () => {

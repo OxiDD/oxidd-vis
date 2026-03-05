@@ -1,5 +1,5 @@
 import {Field} from "../../watchables/Field";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
 import {DiagramVisualizationState} from "../diagrams/DiagramVisualizationState";
 import {ViewState} from "../views/ViewState";
@@ -85,7 +85,7 @@ export class ToolbarState extends ViewState implements ITool {
     }
 
     /** @override */
-    public deserialize(data: IToolbarSerialization): IMutator {
+    public deserialize(data: IToolbarSerialization): IFMutator {
         return chain(push => {
             push(super.deserialize(data));
             push(this.selectedToolName.set(data.selectedTool));

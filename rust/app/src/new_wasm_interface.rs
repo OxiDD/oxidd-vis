@@ -4,7 +4,15 @@ use crate::{
     components::{
         button_component::ButtonComp,
         composite_component::{CompositeComp, CompositeItemComp},
+        container_component::ContainerComp,
         dyn_component::DynComp,
+        fill_component::FillComp,
+        label_component::LabelComp,
+        modal_component::ModalComp,
+        overlay_component::OverlayComp,
+        panel_component::PanelComp,
+        text_component::TextComp,
+        PanelHandleComp, TooltipComp,
     },
     configuration::configuration_object::AbstractConfigurationObject,
     inputs::{
@@ -55,9 +63,18 @@ pub enum ComponentOption {
     StringInput(StringInputComp),
     VariantInput(VariantInputComp),
     Button(ButtonComp),
+    Container(ContainerComp),
+    Fill(FillComp),
+    Label(LabelComp),
+    Text(TextComp),
+    Panel(PanelComp),
+    Modal(ModalComp),
     Composite(CompositeComp),
     CompositeItem(CompositeItemComp),
     Dyn(DynComp),
+    Overlay(OverlayComp),
+    Tooltip(TooltipComp),
+    PanelHandle(PanelHandleComp),
 }
 
 impl_as_variant!(as_bool_input, BoolInput, BoolInputComp);
@@ -67,6 +84,15 @@ impl_as_variant!(as_u32_input, U32Input, U32InputComp);
 impl_as_variant!(as_string_input, StringInput, StringInputComp);
 impl_as_variant!(as_variant_input, VariantInput, VariantInputComp);
 impl_as_variant!(as_button, Button, ButtonComp);
+impl_as_variant!(as_container, Container, ContainerComp);
+impl_as_variant!(as_fill, Fill, FillComp);
+impl_as_variant!(as_label, Label, LabelComp);
+impl_as_variant!(as_text, Text, TextComp);
+impl_as_variant!(as_panel, Panel, PanelComp);
+impl_as_variant!(as_modal, Modal, ModalComp);
 impl_as_variant!(as_composite, Composite, CompositeComp);
 impl_as_variant!(as_composite_item, CompositeItem, CompositeItemComp);
 impl_as_variant!(as_dyn, Dyn, DynComp);
+impl_as_variant!(as_overlay, Overlay, OverlayComp);
+impl_as_variant!(as_tooltip, Tooltip, TooltipComp);
+impl_as_variant!(as_panel_handle, PanelHandle, PanelHandleComp);

@@ -1,21 +1,21 @@
 import {IRunnable} from "../../watchables/_types/IRunnable";
 import {IWatchable} from "../../watchables/_types/IWatchable";
 import {Field} from "../../watchables/Field";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
 import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
 import {ViewState} from "../views/ViewState";
 import {INodeSelectionSerialization} from "./_types/INodeSelectionSerialization";
 
 export class NodeSelectionState extends ViewState implements IWatchable<Uint32Array> {
-    protected readonly selection = new Field(new Uint32Array());
+    protected readonly selection = new Field<Uint32Array<any>>(new Uint32Array());
 
     /**
      * Sets the nodes of this selection
      * @param nodes The new node selection
      * @returns The mutator to commit the change
      */
-    public set(nodes: Uint32Array | number[]): IMutator {
+    public set(nodes: Uint32Array | number[]): IFMutator {
         const nodesArray = nodes instanceof Uint32Array ? nodes : new Uint32Array(nodes);
         return this.selection.set(nodesArray);
     }
@@ -25,7 +25,7 @@ export class NodeSelectionState extends ViewState implements IWatchable<Uint32Ar
      * @param nodes The new nodes to add to the selection
      * @returns The mutator to commit the change
      */
-    public addTo(nodes: Uint32Array | number[]): IMutator {
+    public addTo(nodes: Uint32Array | number[]): IFMutator {
         return chain(push => {
             const merged = new Uint32Array(new Set([...nodes, ...this.selection.get()]));
             push(this.set(merged));
@@ -37,7 +37,7 @@ export class NodeSelectionState extends ViewState implements IWatchable<Uint32Ar
      * @param nodes The nodes to remove from the selection
      * @returns The mutator to commit the change
      */
-    public removeFrom(nodes: Uint32Array | number[]): IMutator {
+    public removeFrom(nodes: Uint32Array | number[]): IFMutator {
         return chain(push => {
             const current = new Set(this.selection.get());
             for (const node of nodes) current.delete(node);
@@ -50,7 +50,7 @@ export class NodeSelectionState extends ViewState implements IWatchable<Uint32Ar
      * @param nodes The nodes for which to toggle their selected state
      * @returns The mutator to commit the change
      */
-    public toggle(nodes: Uint32Array | number[]): IMutator {
+    public toggle(nodes: Uint32Array | number[]): IFMutator {
         return chain(push => {
             const current = new Set(this.selection.get());
             for (const node of nodes) {
@@ -67,7 +67,7 @@ export class NodeSelectionState extends ViewState implements IWatchable<Uint32Ar
         return {...super.serialize(), selection: [...this.selection.get()]};
     }
     /** @override */
-    public deserialize(data: INodeSelectionSerialization): IMutator {
+    public deserialize(data: INodeSelectionSerialization): IFMutator {
         return chain(push => {
             push(super.deserialize(data));
             push(this.selection.set(new Uint32Array(data.selection)));

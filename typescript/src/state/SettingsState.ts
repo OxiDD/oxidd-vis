@@ -1,6 +1,6 @@
 import {Constant} from "../watchables/Constant";
 import {Field} from "../watchables/Field";
-import {IMutator} from "../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../watchables/mutator/_types/IMutator";
 import {chain} from "../watchables/mutator/chain";
 import {IBaseViewSerialization} from "./_types/IBaseViewSerialization";
 import {IGlobalSettings} from "./_types/IGlobalSettings";
@@ -46,7 +46,7 @@ export class SettingsState extends ViewState {
     }
 
     /** @override */
-    public deserialize(data: ISettingsSerialization): IMutator {
+    public deserialize(data: ISettingsSerialization): IFMutator {
         return chain(push => {
             push(super.deserialize(data));
             push(this.layout.deleteUnusedPanels.set(data.layout.deleteUnusedPanels));

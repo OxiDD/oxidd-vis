@@ -4,7 +4,7 @@ use app_macros::{wasm_getters, watchable_setters};
 use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::{new_wasm_interface::Component, util::watchables::{
+use crate::{new_wasm_interface::{Component, ComponentOption}, util::watchables::{
      BoolWatchable, Constant, DataState, Derived, IntoWatchable, JsListener, Listener, Mutator, Observer, OptionBoolWatchable, OptionU32Watchable, U32Field, U32Watchable, Watchable, WatchableState, Watching, impl_watchable, signaller::Signaller
 }};
 
@@ -175,6 +175,6 @@ impl Into<Component> for U32InputClamped {
 }
 impl Into<Component> for U32InputComp {
     fn into(self) -> Component {
-        todo!()
+        Component::new(ComponentOption::U32Input(self))
     }
 }

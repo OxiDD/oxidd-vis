@@ -33,6 +33,10 @@ import {HttpDiagramCollectionTargetState} from "./state/diagrams/collections/Htt
 import {DiagramCollectionTarget} from "./UI/views/diagramCollection/types/util/DiagramCollectionTarget";
 import {PanelConfigViewState} from "./state/configuration/types/PanelConfig";
 import {PanelConfigView} from "./UI/components/configuration/PanelConfigComp";
+import {PanelViewState} from "./state/PanelViewState";
+import {DynComp} from "oxidd-vis-rust";
+import {DynCompUI} from "./UI/rust-components/other/DynCompUI";
+import {CompUI} from "./UI/rust-components/CompUI";
 
 export const AppWithLoader: FC = () => {
     const [showingLoader, setShowingLoader] = useState(true);
@@ -110,7 +114,8 @@ const Component: IViewComponent = ({view}) => {
         return <DiagramVisualization visualization={view} />;
     if (view instanceof ToolbarState) return <Toolbar toolbar={view} />;
     if (view instanceof PanelConfigViewState) return <PanelConfigView state={view} />;
-
+    if (view instanceof PanelViewState)
+        return <DynCompUI data={view.content} ChildComp={CompUI} />;
     return <ViewContainer>Not found</ViewContainer>;
 };
 

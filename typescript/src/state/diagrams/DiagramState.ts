@@ -1,6 +1,6 @@
-import {DiagramBox, ButtonComponent, F32InputComponent} from "oxidd-vis-rust";
+import {DiagramBox} from "oxidd-vis-rust";
 import {Field} from "../../watchables/Field";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
 import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
 import {ViewState} from "../views/ViewState";
@@ -19,10 +19,6 @@ const sourceTypes: Record<string, IDiagramSectionType<unknown>> = {
     file: FileSource,
     reference: ReferenceSource,
 };
-
-let t: F32InputComponent = null as any;
-t.min;
-let derived = new Derived(watch => watch(t.icon));
 
 /** The state of a single diagram, which may contain multiple functions and views */
 export class DiagramState extends ViewState {
@@ -75,7 +71,7 @@ export class DiagramState extends ViewState {
      * @param name The name of the diagram to load
      * @returns The mutator to commit the change, resulting in the created section
      */
-    public createSectionFromDDDMP(dddmp: string, name?: string): IMutator<FileSource> {
+    public createSectionFromDDDMP(dddmp: string, name?: string): IFMutator<FileSource> {
         return chain(push => {
             const section = new FileSource(this, this.diagram, {dddmp});
             push(this._sections.set([...this._sections.get(), section]));
@@ -101,7 +97,7 @@ export class DiagramState extends ViewState {
         data: string,
         vars?: string,
         name?: string
-    ): IMutator<FileSource> {
+    ): IFMutator<FileSource> {
         return chain(push => {
             const section = new FileSource(this, this.diagram, {buddy: {data, vars}});
             push(this._sections.set([...this._sections.get(), section]));
@@ -121,7 +117,7 @@ export class DiagramState extends ViewState {
      * @param nodes The nodes to make the section fro
      * @returns The mutator to commit the change, resulting in the created section
      */
-    public createSectionFromSelection(nodes: Uint32Array): IMutator<ReferenceSource> {
+    public createSectionFromSelection(nodes: Uint32Array): IFMutator<ReferenceSource> {
         return chain(push => {
             const parents = this._sections.get();
             const section = new ReferenceSource(this, this.diagram, parents, nodes);
@@ -151,7 +147,7 @@ export class DiagramState extends ViewState {
      * @param section The section to remove
      * @returns The mutator to commit the change
      */
-    public removeSection(section: IDiagramSection<unknown>): IMutator {
+    public removeSection(section: IDiagramSection<unknown>): IFMutator {
         return chain(push => {
             const current = this._sections.get();
             const index = current.indexOf(section);
@@ -197,7 +193,7 @@ export class DiagramState extends ViewState {
     }
 
     /** @override */
-    public deserialize(data: IDiagramSerialization): IMutator<unknown> {
+    public deserialize(data: IDiagramSerialization): IFMutator {
         return chain(push => {
             push(super.deserialize(data));
             push(this.sourceName.set(data.sourceName));

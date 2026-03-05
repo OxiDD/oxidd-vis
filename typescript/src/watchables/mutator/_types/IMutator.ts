@@ -23,12 +23,13 @@ export interface IMutatorMutations<R = unknown> {
      * @param next The next mutator to chain after
      * @returns A new mutator
      */
-    chain<O>(next: ((val: R) => IMutator<O>) | IMutator<O>): IMutator<O>;
+    chain<O>(next: ((val: R) => IMutator<O>) | IMutator<O>): IFMutator<O>;
 
     /**
      * Obtains a new mutator that modifies the output of the given mutator
      * @param map The map function to obtain the new output
      * @returns A new mutator
      */
-    map<O>(map: (res: R) => O): IMutator<O>;
+    map<O>(map: (res: R) => O): IFMutator<O>;
 }
+export type IFMutator<R = unknown> = IMutator<R> & IMutatorMutations<R>;

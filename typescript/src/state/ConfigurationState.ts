@@ -1,13 +1,13 @@
-import { TDeepReadonly } from "../utils/_types/TDeepReadonly";
-import { Derived } from "../watchables/Derived";
-import { Field } from "../watchables/Field";
-import { IMutator } from "../watchables/mutator/_types/IMutator";
-import { chain } from "../watchables/mutator/chain";
-import { ViewState } from "./views/ViewState";
-import { IProfile } from "./_types/IProfile";
-import { IStorage } from "./_types/IStorage";
-import { IViewManager } from "./_types/IViewManager";
-import { v4 as uuid } from "uuid";
+import {TDeepReadonly} from "../utils/_types/TDeepReadonly";
+import {Derived} from "../watchables/Derived";
+import {Field} from "../watchables/Field";
+import {IFMutator, IMutator} from "../watchables/mutator/_types/IMutator";
+import {chain} from "../watchables/mutator/chain";
+import {ViewState} from "./views/ViewState";
+import {IProfile} from "./_types/IProfile";
+import {IStorage} from "./_types/IStorage";
+import {IViewManager} from "./_types/IViewManager";
+import {v4 as uuid} from "uuid";
 
 /**
  * The state related to app configuration, allowing users to create different profiles each of which has associated settings and view layouts
@@ -51,11 +51,11 @@ export class ConfigurationState<X> {
      * @param name The new name of the profile
      * @returns The mutator to commit the change
      */
-    public setProfileName(name: string): IMutator {
+    public setProfileName(name: string): IFMutator {
         return this._profileName.set(name).chain(() => {
             const id = this._profileId.get();
             const profiles = new Map(this._profiles.get());
-            profiles.set(id, { ...profiles.get(id)!, name });
+            profiles.set(id, {...profiles.get(id)!, name});
             return this._profiles.set(profiles);
         });
     }
@@ -68,12 +68,12 @@ export class ConfigurationState<X> {
      * @param id The id of the profile to delete
      * @returns The mutator to commit the change, resulting in whether the profile could be deleted (existed and wasn't the only profile)
      */
-    public deleteProfile(id: string): IMutator<boolean> {
+    public deleteProfile(id: string): IFMutator<boolean> {
         return chain(push => {
             if (this._profileId.get() == id) {
                 const nextProfile = this.profiles
                     .get()
-                    .filter(({ id: pid }) => pid != id)[0];
+                    .filter(({id: pid}) => pid != id)[0];
                 if (!nextProfile) return false;
 
                 push(this.loadProfile(nextProfile));
@@ -103,14 +103,13 @@ export class ConfigurationState<X> {
      * @param profile The profile to be loaded
      * @returns The mutator that can be committed to load the profile
      */
-    public loadProfile(profile: IProfile): IMutator {
+    public loadProfile(profile: IProfile): IFMutator {
         return chain(push => {
             push(this._profileName.set(profile.name));
             push(this._profileId.set(profile.id));
 
             const root = this.viewManager.root.get();
-            if (root)
-                push(root.deserialize(profile.app));
+            if (root) push(root.deserialize(profile.app));
             push(this.viewManager.loadLayout(profile.layout.current));
             push(this.viewManager.categoryRecovery.set(profile.layout.recovery));
         });
@@ -125,7 +124,7 @@ export class ConfigurationState<X> {
             id: this._profileId.get(),
             layout: {
                 current: this.viewManager.layout.get(),
-                recovery: this.viewManager.categoryRecovery.get()
+                recovery: this.viewManager.categoryRecovery.get(),
             },
             app: this.viewManager.root.get()!.serialize(),
         };
@@ -135,7 +134,7 @@ export class ConfigurationState<X> {
      * Saves the current profile
      * @returns The mutator to commit the changes
      */
-    public saveProfile(): IMutator {
+    public saveProfile(): IFMutator {
         const profileData = this.getProfileData();
 
         return chain(push => {
@@ -150,7 +149,7 @@ export class ConfigurationState<X> {
     /**
      * Clears all profile data from the user
      */
-    public clearProfiles(): IMutator {
+    public clearProfiles(): IFMutator {
         return chain(push => {
             const newProfiles = new Map();
             push(this._profiles.set(newProfiles));
@@ -173,7 +172,7 @@ export class ConfigurationState<X> {
      * Loads the profiles from disk
      * @returns The mutator to commit the changes, returning whether there was any profile data to be loaded
      */
-    public loadProfilesData(): IMutator<boolean> {
+    public loadProfilesData(): IFMutator<boolean> {
         return chain(push => {
             const initialData = this.getProfileData();
             try {

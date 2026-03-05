@@ -16,7 +16,6 @@ macro_rules! impl_watchable {
             fn state(&self) -> crate::util::watchables::DataState {
                 self.watchable().state()
             }
-
             fn observe(
                 &self,
                 listener: Box<dyn crate::util::watchables::Listener>,

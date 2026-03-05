@@ -6,7 +6,7 @@ import {Field} from "../../watchables/Field";
 import {chain} from "../../watchables/mutator/chain";
 import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
 import {IDiagramVisualizationSerialization} from "./_types/IDiagramVisualizationSerialization";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../watchables/mutator/_types/IMutator";
 import {Observer} from "../../watchables/Observer";
 import {ISharedVisualizationState} from "./_types/ISharedVisualizationState";
 import {IRectangle} from "../../utils/_types/IRectangle";
@@ -198,7 +198,7 @@ export class DiagramVisualizationState extends ViewState {
     }
 
     /** @override */
-    public deserialize(data: IDiagramVisualizationSerialization): IMutator<unknown> {
+    public deserialize(data: IDiagramVisualizationSerialization): IFMutator {
         return chain(push => {
             push(super.deserialize(data));
             push(this.transform.set(data.transform));

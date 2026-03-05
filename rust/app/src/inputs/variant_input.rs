@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use crate::{
     components::composite_component::ComponentVecWatchable,
     inputs::variant_input::variant_input_comp_builder::{Empty, SetData},
-    new_wasm_interface::Component,
+    new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
         make_typed_dyn_watchable, signaller::Signaller, BoolWatchable, Constant, Derived,
         DynWatchable, Field, IntoWatchable, Mutator, OptionBoolWatchable, U32Watchable, Watchable,
@@ -206,6 +206,14 @@ pub struct VariantInputComp {
     #[getter]
     #[setter(bool, false)]
     disabled: BoolWatchable,
+    /// The current option components
+    #[getter]
+    #[builder(skip=VariantInputComp::get_options(data.clone()))]
+    options: ComponentVecWatchable,
+    /// The currently selected option index
+    #[getter]
+    #[builder(skip=VariantInputComp::get_selected(data.clone()))]
+    selected: U32Watchable,
 }
 impl VariantInputCompBuilder {
     pub fn data<V: Sized + Clone + Eq + 'static>(
@@ -217,15 +225,15 @@ impl VariantInputCompBuilder {
 }
 #[wasm_bindgen]
 impl VariantInputComp {
-    pub fn selected(&self) -> U32Watchable {
-        (*self.data).borrow().get_option().clone()
-    }
     pub fn select(&mut self, option: u32) -> Mutator {
         let value = self.data.clone();
         Mutator::exec(move || Box::new(value.borrow_mut().select_option(option)))
     }
-    pub fn options(&mut self) -> ComponentVecWatchable {
-        (*self.data).borrow().get_options().clone()
+    fn get_selected(data: Rc<RefCell<dyn VariantOptionComponents>>) -> U32Watchable {
+        (*data).borrow().get_option().clone()
+    }
+    fn get_options(data: Rc<RefCell<dyn VariantOptionComponents>>) -> ComponentVecWatchable {
+        (*data).borrow().get_options().clone()
     }
 }
 
@@ -270,6 +278,6 @@ impl<V: Sized + Clone + Eq + VariantComponentMapping> Into<Component>
 }
 impl Into<Component> for VariantInputComp {
     fn into(self) -> Component {
-        todo!()
+        Component::new(ComponentOption::VariantInput(self))
     }
 }

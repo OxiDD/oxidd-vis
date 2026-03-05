@@ -1,5 +1,5 @@
 import {Mutator} from "./Mutator";
-import {IMutator} from "./_types/IMutator";
+import {IFMutator} from "./_types/IMutator";
 
 /**
  * Chains multiple mutators together, using imperative code in a callback
@@ -7,11 +7,11 @@ import {IMutator} from "./_types/IMutator";
  * @returns The new mutator
  */
 export function chain<R>(
-    obtain: (add: <O>(mutator: IMutator<O>) => O) => R
-): IMutator<R> {
+    obtain: (add: <O>(mutator: IFMutator<O>) => O) => R
+): IFMutator<R> {
     return new Mutator(
         () => {
-            const muts: IMutator<any>[] = [];
+            const muts: IFMutator<any>[] = [];
             return {
                 result: obtain(mutator => {
                     const res = mutator.perform();

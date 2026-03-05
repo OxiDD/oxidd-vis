@@ -1,18 +1,22 @@
-import { v4 as uuid } from "uuid";
-import { IBaseViewSerialization } from "../_types/IBaseViewSerialization";
-import { Field } from "../../watchables/Field";
-import { IMutator } from "../../watchables/mutator/_types/IMutator";
-import { all } from "../../watchables/mutator/all";
-import { IWatchable } from "../../watchables/_types/IWatchable";
-import { Derived } from "../../watchables/Derived";
-import { Constant } from "../../watchables/Constant";
-import { chain } from "../../watchables/mutator/chain";
-import { IPanelState } from "../../layout/_types/IPanelState";
-import { IPanelData } from "../../layout/_types/IPanelData";
-import { getStatePanels, panelStateToData } from "../../layout/LayoutState";
-import { ViewManager } from "./ViewManager";
-import { IViewLocationHint } from "../_types/IViewLocationHint";
-import { getNeighborHints } from "./locations/getNeighborLocationHints";
+import {v4 as uuid} from "uuid";
+import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
+import {Field} from "../../watchables/Field";
+import {
+    IFMutator,
+    IMutator,
+    IMutatorMutations,
+} from "../../watchables/mutator/_types/IMutator";
+import {all} from "../../watchables/mutator/all";
+import {IWatchable} from "../../watchables/_types/IWatchable";
+import {Derived} from "../../watchables/Derived";
+import {Constant} from "../../watchables/Constant";
+import {chain} from "../../watchables/mutator/chain";
+import {IPanelState} from "../../layout/_types/IPanelState";
+import {IPanelData} from "../../layout/_types/IPanelData";
+import {getStatePanels, panelStateToData} from "../../layout/LayoutState";
+import {ViewManager} from "./ViewManager";
+import {IViewLocationHint} from "../_types/IViewLocationHint";
+import {getNeighborHints} from "./locations/getNeighborLocationHints";
 
 /**
  * The state associated to a single shown view
@@ -29,7 +33,6 @@ export abstract class ViewState {
 
     /** Data for recovering layout data from the previous time this state was opened */
     protected readonly layoutRecovery = new Field<IPanelData | undefined>(undefined);
-
 
     /** Creates a new view */
     public constructor(ID: string = uuid()) {
@@ -55,7 +58,7 @@ export abstract class ViewState {
      * @param data The data to be loaded
      * @returns The mutator to commit the changes
      */
-    public deserialize(data: IBaseViewSerialization): IMutator {
+    public deserialize(data: IBaseViewSerialization): IFMutator {
         return chain(push => {
             (this as any).ID = data.ID;
             push(this.name.set(data.name));
@@ -84,24 +87,24 @@ export abstract class ViewState {
      * @param oldLayout The layout of the application before the panel was closed
      * @param oldLayoutData The layout of the application obtained before the panel was closed
      */
-    public onCloseUI(oldLayout: IPanelState, oldLayoutData: IPanelData): IMutator | void {
+    public onCloseUI(
+        oldLayout: IPanelState,
+        oldLayoutData: IPanelData
+    ): IFMutator | void {
         return this.layoutRecovery.set(oldLayoutData);
     }
 
-
     /** Retrieves base location hints for where to open this view in the layout */
-    protected *getBaseLocationHints(): Generator<IViewLocationHint, void, void> {
-
-    };
+    protected *getBaseLocationHints(): Generator<IViewLocationHint, void, void> {}
 
     /** Location hints for when this view is opened in the layout */
-    public *getLocationHints(categoryRecovery: Generator<IViewLocationHint, void, void> | undefined): Generator<IViewLocationHint, void, void> {
+    public *getLocationHints(
+        categoryRecovery: Generator<IViewLocationHint, void, void> | undefined
+    ): Generator<IViewLocationHint, void, void> {
         const recoveryLayout = this.layoutRecovery.get();
-        if (recoveryLayout)
-            yield* getNeighborHints(this.ID, recoveryLayout);
-        yield { targetType: "category", targetId: this.category.get() };
-        if(categoryRecovery)
-            yield* categoryRecovery;
+        if (recoveryLayout) yield* getNeighborHints(this.ID, recoveryLayout);
+        yield {targetType: "category", targetId: this.category.get()};
+        if (categoryRecovery) yield* categoryRecovery;
         yield* this.getBaseLocationHints();
     }
 }

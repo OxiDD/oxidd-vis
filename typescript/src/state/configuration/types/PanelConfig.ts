@@ -9,7 +9,7 @@ import {
 import {IViewGroup, ViewState} from "../../views/ViewState";
 import {IWatchable} from "../../../watchables/_types/IWatchable";
 import {Constant} from "../../../watchables/Constant";
-import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {IConfigObjectSerialization} from "../_types/IConfigObjectSerialization";
 import {chain} from "../../../watchables/mutator/chain";
 import {IViewLocationHint} from "../../_types/IViewLocationHint";
@@ -114,7 +114,7 @@ export class PanelConfig extends ConfigurationObject<IPanelConfigData> {
     /** @override */
     public deserialize(
         config: IConfigObjectSerialization<IPanelConfigData> & IViewState
-    ): IMutator {
+    ): IFMutator {
         return chain(add => {
             add(super.deserialize(config));
             add(this.view.deserialize(config.view));
@@ -169,7 +169,7 @@ export class PanelConfigViewState extends ViewState {
     }
 
     /** @override */
-    public deserialize(data: IBaseViewSerialization): IMutator {
+    public deserialize(data: IBaseViewSerialization): IFMutator {
         return chain(push => {
             (this as any).ID = data.ID;
             // Use checks to make sure we don't override synchronized sources when not necessary

@@ -3,7 +3,7 @@ use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
-    new_wasm_interface::Component,
+    new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
         impl_watchable, signaller::Signaller, BoolWatchable, Mutator, OptionBoolWatchable,
         OptionU32Watchable, StringField,
@@ -54,15 +54,27 @@ pub struct StringInputComp {
     /// The minimum number of lines to show
     #[getter]
     #[setter(Option<u32>)]
-    show_lines_min: OptionU32Watchable,
+    multiline_min: OptionU32Watchable,
     /// The maximum number of lines to show
     #[getter]
     #[setter(Option<u32>)]
-    show_lines_max: OptionU32Watchable,
+    multiline_max: OptionU32Watchable,
     /// Whether to dynamically adjust the shown number of lines based on content
     #[getter]
     #[setter(bool, false)]
-    show_lines_dynamic: BoolWatchable,
+    multiline_dynamic: BoolWatchable,
+    /// Whether the user may resize the text field
+    #[getter]
+    #[setter(bool, false)]
+    multiline_resizable: BoolWatchable,
+    /// Whether the data should only be changed when the field is blurred, or enter/ctrl-enter is pressed
+    #[getter]
+    #[setter(bool, false)]
+    late_submit: BoolWatchable,
+    /// Whether this input is readonly
+    #[getter]
+    #[setter(bool, false)]
+    readonly: BoolWatchable,
     /// Whether this input is disabled
     #[getter]
     #[setter(bool, false)]
@@ -82,6 +94,6 @@ impl Into<Component> for StringInput {
 }
 impl Into<Component> for StringInputComp {
     fn into(self) -> Component {
-        todo!()
+        Component::new(ComponentOption::StringInput(self))
     }
 }

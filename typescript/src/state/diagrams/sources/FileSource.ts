@@ -1,7 +1,7 @@
 import {DiagramBox} from "oxidd-vis-rust";
 import {Derived} from "../../../watchables/Derived";
 import {Field} from "../../../watchables/Field";
-import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {AbstractDiagramSectionState} from "../AbstractDiagramSectionState";
 import {DiagramState} from "../DiagramState";
 import {IFileSourceSerialization} from "./_types/IFileSourceSerialization";
@@ -50,7 +50,7 @@ export class FileSource extends AbstractDiagramSectionState<IFileSourceSerializa
     }
 
     /** @override */
-    deserialize(data: IFileSourceSerialization): IMutator {
+    deserialize(data: IFileSourceSerialization): IFMutator {
         return this.data.set(data);
     }
 }

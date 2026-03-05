@@ -1,6 +1,6 @@
 import {DiagramBox, DiagramSectionBox} from "oxidd-vis-rust";
 import {IWatchable} from "../../watchables/_types/IWatchable";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../watchables/mutator/_types/IMutator";
 import {IDiagramSection} from "./_types/IDiagramSection";
 import {DiagramVisualizationState} from "./DiagramVisualizationState";
 import {v4 as uuid} from "uuid";
@@ -56,7 +56,7 @@ export abstract class AbstractDiagramSectionState<T> implements IDiagramSection<
     public abstract deserialize(
         data: T,
         sources: Map<string, IDiagramSection<unknown>>
-    ): IMutator;
+    ): IFMutator;
     /** @override */
     public dispose(): void {
         if (this.visualizationInitialized) this.visualization.get()?.dispose();

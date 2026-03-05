@@ -1,5 +1,5 @@
-import { IContent, IContentGetter } from "./_types/IContentGetter";
-import { IPanelData, IPanelSplitData } from "./_types/IPanelData";
+import {IContent, IContentGetter} from "./_types/IContentGetter";
+import {IPanelData, IPanelSplitData} from "./_types/IPanelData";
 import {
     IPanelSplitState,
     IPanelSplitStatePanel,
@@ -7,21 +7,21 @@ import {
     IPanelTabsState,
     ITabState,
 } from "./_types/IPanelState";
-import { IDragData } from "./_types/IDragData";
-import { IDropPanelSplitSide } from "./_types/IDropSide";
-import { v4 as uuid } from "uuid";
-import { ILayoutSettings } from "./_types/ILayoutSettings";
-import { createElement } from "react";
-import { Field } from "../watchables/Field";
-import { IWatchable } from "../watchables/_types/IWatchable";
-import { Derived } from "../watchables/Derived";
-import { IMutator } from "../watchables/mutator/_types/IMutator";
-import { Mutator, dummyMutator } from "../watchables/mutator/Mutator";
-import { PlainField } from "../watchables/PlainField";
-import { all } from "../watchables/mutator/all";
-import { TDeepReadonly } from "../utils/_types/TDeepReadonly";
-import { Constant } from "../watchables/Constant";
-import { ICloseListener } from "./_types/ICloseListener";
+import {IDragData} from "./_types/IDragData";
+import {IDropPanelSplitSide} from "./_types/IDropSide";
+import {v4 as uuid} from "uuid";
+import {ILayoutSettings} from "./_types/ILayoutSettings";
+import {createElement} from "react";
+import {Field} from "../watchables/Field";
+import {IWatchable} from "../watchables/_types/IWatchable";
+import {Derived} from "../watchables/Derived";
+import {IFMutator, IMutator} from "../watchables/mutator/_types/IMutator";
+import {Mutator, dummyMutator} from "../watchables/mutator/Mutator";
+import {PlainField} from "../watchables/PlainField";
+import {all} from "../watchables/mutator/all";
+import {TDeepReadonly} from "../utils/_types/TDeepReadonly";
+import {Constant} from "../watchables/Constant";
+import {ICloseListener} from "./_types/ICloseListener";
 
 /**
  * A component to store the layout of the application
@@ -54,7 +54,7 @@ export class LayoutState {
      * @param layout The layout to be loaded
      * @returns The mutator to commit the changes
      */
-    public loadLayout(layout: TDeepReadonly<IPanelData>): IMutator {
+    public loadLayout(layout: TDeepReadonly<IPanelData>): IFMutator {
         return this.layout.set(panelDataToState(layout));
     }
 
@@ -87,10 +87,10 @@ export class LayoutState {
      * @returns The mutator to commit the change
      */
     protected updateLayout<R>(
-        update: (oldLayout: IPanelState) => { value: IPanelState; result: R }
-    ): IMutator<R> {
+        update: (oldLayout: IPanelState) => {value: IPanelState; result: R}
+    ): IFMutator<R> {
         return new Mutator(() => update(this.layout.get())) //
-            .chain(({ value, result }) => this.layout.set(value).map(() => result));
+            .chain(({value, result}) => this.layout.set(value).map(() => result));
     }
 
     // Dragging data
@@ -99,9 +99,9 @@ export class LayoutState {
      * @param dragData The data for dragging
      * @returns The mutator to commit the change
      */
-    public setDraggingData(dragData: null | IDragData): IMutator {
-        const target = this.allTabs.get().find(({ id }) => id == dragData?.targetId);
-        if (target && dragData) dragData = { ...dragData, target };
+    public setDraggingData(dragData: null | IDragData): IFMutator {
+        const target = this.allTabs.get().find(({id}) => id == dragData?.targetId);
+        if (target && dragData) dragData = {...dragData, target};
 
         const oldDraggingData = this.dragging.get();
         if (oldDraggingData && !dragData) {
@@ -123,13 +123,13 @@ export class LayoutState {
      * @param panelId The panel to be removed
      * @returns The mutator to commit the changes
      */
-    public removePanel(panelId: string): IMutator {
+    public removePanel(panelId: string): IFMutator {
         return this.updateLayout(layout => {
             const currentLayout = updateDefaultWeights(layout);
             const newLayout = removePanel(currentLayout, panelId);
             if (!newLayout)
-                return { value: { type: "tabs", id: "0", tabs: [] }, result: undefined };
-            else return { value: newLayout, result: undefined };
+                return {value: {type: "tabs", id: "0", tabs: []}, result: undefined};
+            else return {value: newLayout, result: undefined};
         });
     }
 
@@ -146,11 +146,11 @@ export class LayoutState {
         side: IDropPanelSplitSide,
         size: number = 1,
         id?: string
-    ): IMutator<string | null> {
+    ): IFMutator<string | null> {
         return this.updateLayout(layout => {
             const currentLayout = updateDefaultWeights(layout);
             const [newState, newId] = addPanel(currentLayout, nextToId, side, size, id);
-            return { value: newId != null ? newState : layout, result: newId };
+            return {value: newId != null ? newState : layout, result: newId};
         });
     }
 
@@ -161,14 +161,14 @@ export class LayoutState {
      * @param tabId The id of the tab to close
      * @returns The mutator to commit the changes
      */
-    public closeTab(panelId: string, tabId: string): IMutator {
+    public closeTab(panelId: string, tabId: string): IFMutator {
         return this.updateLayout(layout => {
             const currentLayout = updateDefaultWeights(layout);
             let isNowEmpty = false;
             let newLayout = modifyTabs(
                 currentLayout,
                 panelId,
-                ({ tabs, selected, ...data }) => {
+                ({tabs, selected, ...data}) => {
                     const index = tabs.findIndex(tab => tab.id == tabId);
                     const newTabs = tabs.filter(tab => tab.id != tabId);
                     if (newTabs.length == 0) isNowEmpty = true;
@@ -179,8 +179,8 @@ export class LayoutState {
                             selected != tabId
                                 ? selected
                                 : newTabs[
-                                    Math.max(0, Math.min(index, newTabs.length - 1))
-                                ]?.id,
+                                      Math.max(0, Math.min(index, newTabs.length - 1))
+                                  ]?.id,
                     };
                 }
             );
@@ -191,7 +191,7 @@ export class LayoutState {
             }
 
             this.schedulePotentialCloseEvent(tabId);
-            return { value: newLayout, result: undefined };
+            return {value: newLayout, result: undefined};
         });
     }
 
@@ -208,23 +208,23 @@ export class LayoutState {
         tab: string | ITabState,
         closeHandler?: ICloseListener,
         beforeTabId?: string
-    ): IMutator {
+    ): IFMutator {
         return this.updateLayout(layout => {
             const tabObj =
                 typeof tab == "string"
-                    ? { id: tab, element: document.createElement("div") }
+                    ? {id: tab, element: document.createElement("div")}
                     : tab;
             const currentLayout = layout; // updateDefaultWeights(layout);  <- operation does not use weights
             const newLayout = modifyTabs(
                 currentLayout,
                 panelId,
-                ({ tabs, selected, ...data }) => {
+                ({tabs, selected, ...data}) => {
                     const filteredTabs = tabs.filter(tab => tab.id != tabObj.id);
                     let targetIndex = beforeTabId
-                        ? filteredTabs.findIndex(({ id }) => id == beforeTabId)
+                        ? filteredTabs.findIndex(({id}) => id == beforeTabId)
                         : -1;
                     if (beforeTabId == tab)
-                        targetIndex = tabs.findIndex(({ id }) => id == beforeTabId);
+                        targetIndex = tabs.findIndex(({id}) => id == beforeTabId);
                     if (targetIndex < 0) targetIndex = filteredTabs.length;
                     return {
                         ...data,
@@ -239,7 +239,7 @@ export class LayoutState {
             );
 
             if (closeHandler) this.addCloseHandler(tabObj.id, closeHandler);
-            return { value: newLayout, result: undefined };
+            return {value: newLayout, result: undefined};
         });
     }
 
@@ -249,18 +249,18 @@ export class LayoutState {
      * @param tabId The id of the tab to select
      * @returns The mutator to commit the changes
      */
-    public selectTab(panelId: string, tabId: string): IMutator {
+    public selectTab(panelId: string, tabId: string): IFMutator {
         return this.updateLayout(layout => {
             const currentLayout = layout; // updateDefaultWeights(layout);  <- operation does not use weights
             const newLayout = modifyTabs(
                 currentLayout,
                 panelId,
-                ({ selected, ...data }) => ({
+                ({selected, ...data}) => ({
                     ...data,
                     selected: data.tabs.some(tab => tab.id == tabId) ? tabId : selected,
                 })
             );
-            return { value: newLayout, result: undefined };
+            return {value: newLayout, result: undefined};
         });
     }
 
@@ -295,12 +295,12 @@ export class LayoutState {
         const beforeScheduleState = this.layout.get();
         const beforeScheduleData = panelStateToData(beforeScheduleState);
         setTimeout(() => {
-            const stillExists = !!this.allTabs.get().find(({ id }) => tabId == id);
+            const stillExists = !!this.allTabs.get().find(({id}) => tabId == id);
             if (!stillExists) {
                 const mutators = this.closeListeners
                     .get(tabId)
                     ?.map(handler => handler(beforeScheduleState, beforeScheduleData))
-                    .filter((m): m is IMutator => !!m);
+                    .filter((m): m is IFMutator => !!m);
                 if (mutators && mutators.length > 0) all(mutators).commit();
                 this.closeListeners.delete(tabId);
             }
@@ -316,10 +316,10 @@ export class LayoutState {
 export function panelStateToData(state: IPanelState): IPanelData {
     if (state.type == "split") {
         const weights = state.handle.current?.getLayout();
-        const { handle, ...stateRest } = state;
+        const {handle, ...stateRest} = state;
         return {
             ...stateRest,
-            panels: state.panels.map(({ defaultWeight, content }, i) => ({
+            panels: state.panels.map(({defaultWeight, content}, i) => ({
                 weight: weights?.[i] ?? defaultWeight,
                 content: panelStateToData(content),
             })),
@@ -327,7 +327,7 @@ export function panelStateToData(state: IPanelState): IPanelData {
     } else
         return {
             ...state,
-            tabs: state.tabs.map(({ id }) => id),
+            tabs: state.tabs.map(({id}) => id),
         };
 }
 
@@ -340,9 +340,9 @@ export function panelDataToState(data: TDeepReadonly<IPanelData>): IPanelState {
     if (data.type == "split")
         return {
             ...data,
-            handle: { current: null },
+            handle: {current: null},
             panels: balanceDefaultWeights(
-                data.panels.map(({ weight, content }, i) => ({
+                data.panels.map(({weight, content}, i) => ({
                     defaultWeight: weight,
                     content: panelDataToState(content),
                 }))
@@ -351,7 +351,7 @@ export function panelDataToState(data: TDeepReadonly<IPanelData>): IPanelState {
     else
         return {
             ...data,
-            tabs: data.tabs.map(id => ({ id, element: document.createElement("div") })),
+            tabs: data.tabs.map(id => ({id, element: document.createElement("div")})),
         };
 }
 
@@ -425,7 +425,7 @@ export function updateDefaultWeights(state: IPanelState): IPanelState {
     if (!handle)
         return {
             ...state,
-            panels: panels.map(({ defaultWeight, content }) => ({
+            panels: panels.map(({defaultWeight, content}) => ({
                 defaultWeight,
                 content: updateDefaultWeights(content),
             })),
@@ -451,7 +451,7 @@ export function updateDefaultWeights(state: IPanelState): IPanelState {
     return {
         ...state,
         panels: balanceDefaultWeights(
-            panels.map(({ content }, i) => ({
+            panels.map(({content}, i) => ({
                 defaultWeight: newWeights[i],
                 content: updateDefaultWeights(content),
             }))
@@ -465,9 +465,9 @@ export function updateDefaultWeights(state: IPanelState): IPanelState {
  * @return The balanced sums
  */
 function balanceDefaultWeights(panels: IPanelSplitStatePanel[]): IPanelSplitStatePanel[] {
-    const sum = panels.reduce((sum, { defaultWeight }) => sum + defaultWeight, 0);
+    const sum = panels.reduce((sum, {defaultWeight}) => sum + defaultWeight, 0);
     if (sum > 100)
-        panels = panels.map(({ defaultWeight, content }) => ({
+        panels = panels.map(({defaultWeight, content}) => ({
             defaultWeight: (defaultWeight / sum) * 99, // 99 Instead of 100 to account for possible rounding issues
             content,
         }));
@@ -476,11 +476,11 @@ function balanceDefaultWeights(panels: IPanelSplitStatePanel[]): IPanelSplitStat
     const firstPanels = panels.slice(0, panels.length - 1);
     const lastPanel = panels[panels.length - 1];
     const firstItemsSum = firstPanels.reduce(
-        (sum, { defaultWeight }) => sum + defaultWeight,
+        (sum, {defaultWeight}) => sum + defaultWeight,
         0
     );
     const lastWeight = 100 - firstItemsSum;
-    return [...firstPanels, { defaultWeight: lastWeight, content: lastPanel.content }];
+    return [...firstPanels, {defaultWeight: lastWeight, content: lastPanel.content}];
 }
 
 /**
@@ -494,7 +494,7 @@ export function removePanel(state: IPanelState, panelId: string): IPanelState | 
     else if (state.type == "tabs") return state;
     else {
         const newPanels = state.panels
-            .map(({ defaultWeight, content }) => ({
+            .map(({defaultWeight, content}) => ({
                 defaultWeight,
                 content: removePanel(content, panelId),
             }))
@@ -503,9 +503,9 @@ export function removePanel(state: IPanelState, panelId: string): IPanelState | 
         if (newPanels.length == 1) return newPanels[0].content;
 
         const weightSumFraction =
-            newPanels.reduce((v, { defaultWeight }) => v + defaultWeight, 0) / 100;
+            newPanels.reduce((v, {defaultWeight}) => v + defaultWeight, 0) / 100;
         const panelsCorrectWeight = balanceDefaultWeights(
-            newPanels.map(({ defaultWeight, content }) => ({
+            newPanels.map(({defaultWeight, content}) => ({
                 defaultWeight: defaultWeight / weightSumFraction,
                 content,
             }))
@@ -539,7 +539,7 @@ export function addPanel(
         const newId = id ?? uuid();
         const after = side == "east" || side == "south";
 
-        const newWeight = 100 * size;  // Choose the weight percentage in relation to the current element that has a size of 100%
+        const newWeight = 100 * size; // Choose the weight percentage in relation to the current element that has a size of 100%
         const adjustment = 100 / (100 + newWeight); // Scale all weights down by the given percentage, so they add up to 100 again
         const finalWeight = adjustment * newWeight;
 
@@ -556,10 +556,10 @@ export function addPanel(
                 type: "split",
                 id: uuid(),
                 direction: axis,
-                handle: { current: null },
+                handle: {current: null},
                 panels: after
-                    ? [{ defaultWeight: 100 - finalWeight, content: state }, newTabs]
-                    : [newTabs, { defaultWeight: 100 - finalWeight, content: state }],
+                    ? [{defaultWeight: 100 - finalWeight, content: state}, newTabs]
+                    : [newTabs, {defaultWeight: 100 - finalWeight, content: state}],
             },
             newId,
         ];
@@ -568,7 +568,7 @@ export function addPanel(
     } else {
         // Add to an already existing split
         const hasNeighborIndex = state.panels.findIndex(
-            ({ content }) => content.id == nextToId
+            ({content}) => content.id == nextToId
         );
         if (hasNeighborIndex != -1) {
             const sameSide = axis == state.direction;
@@ -588,7 +588,7 @@ export function addPanel(
                 };
                 const index =
                     hasNeighborIndex + (side == "east" || side == "south" ? 1 : 0);
-                const correctedPanels = state.panels.map(({ defaultWeight, content }) => ({
+                const correctedPanels = state.panels.map(({defaultWeight, content}) => ({
                     defaultWeight: adjustment * defaultWeight,
                     content,
                 }));
@@ -607,9 +607,9 @@ export function addPanel(
         }
 
         // Try to add the new panel down the tree
-        const newPanels = state.panels.map(({ defaultWeight, content }) => {
+        const newPanels = state.panels.map(({defaultWeight, content}) => {
             const [result, newId] = addPanel(content, nextToId, side, size, id);
-            return [{ defaultWeight, content: result }, newId] as const;
+            return [{defaultWeight, content: result}, newId] as const;
         });
         const newId = newPanels.find(([, newId]) => newId != null)?.[1] ?? null;
         const panels = newPanels.map(([data]) => data);

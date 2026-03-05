@@ -3,7 +3,7 @@ use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
-    new_wasm_interface::Component,
+    new_wasm_interface::{Component, ComponentOption},
     util::watchables::{impl_watchable, signaller::Signaller, BoolField, BoolWatchable, Mutator},
 };
 
@@ -76,6 +76,6 @@ impl Into<Component> for BoolInput {
 }
 impl Into<Component> for BoolInputComp {
     fn into(self) -> Component {
-        todo!()
+        Component::new(ComponentOption::BoolInput(self))
     }
 }

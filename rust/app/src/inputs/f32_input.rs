@@ -4,7 +4,7 @@ use app_macros::{wasm_getters, watchable_setters};
 use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::{new_wasm_interface::Component, util::watchables::{
+use crate::{new_wasm_interface::{Component, ComponentOption}, util::watchables::{
     BoolWatchable, ClonableWatchableUtils, Constant, DataState, Derived, F32Field, F32Watchable, Field, IntoWatchable, JsListener, Listener, Mutator, Observer, OptionBoolWatchable, OptionF32Watchable, Watchable, WatchableState, Watching, impl_watchable, signaller::Signaller
 }};
 
@@ -176,6 +176,6 @@ impl Into<Component> for F32InputClamped {
 }
 impl Into<Component> for F32InputComp {
     fn into(self) -> Component {
-        todo!()
+        Component::new(ComponentOption::F32Input(self))
     }
 }

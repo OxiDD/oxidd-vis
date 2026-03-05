@@ -1,13 +1,14 @@
-import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {IDiagramCollection} from "../_types/IDiagramCollection";
 import {chain} from "../../../watchables/mutator/chain";
 import {IManualDiagramCollectionSerialization} from "./_types/IManualDiagramCollectionSerialization";
 import {IDiagramCollectionConfig} from "./_types/IDiagramCollectionType";
 import {HttpDiagramCollectionState} from "./HttpDiagramCollectionState";
-import { DiagramCollectionBaseState } from "./DiagramCollectionBaseState";
+import {DiagramCollectionBaseState} from "./DiagramCollectionBaseState";
 
 export class ManualDiagramCollectionState
-    extends DiagramCollectionBaseState implements IDiagramCollection<IManualDiagramCollectionSerialization>
+    extends DiagramCollectionBaseState
+    implements IDiagramCollection<IManualDiagramCollectionSerialization>
 {
     /**
      * Adds a new sub-collection to this collection
@@ -16,7 +17,7 @@ export class ManualDiagramCollectionState
      */
     public addCollection(
         config: IDiagramCollectionConfig
-    ): IMutator<IDiagramCollection<unknown>> {
+    ): IFMutator<IDiagramCollection<unknown>> {
         return chain(push => {
             let collection;
             if (config.type == "remote-http") {
@@ -29,7 +30,6 @@ export class ManualDiagramCollectionState
             return collection;
         });
     }
-
 
     /** @override */
     public serialize(): IManualDiagramCollectionSerialization {
@@ -46,7 +46,7 @@ export class ManualDiagramCollectionState
     }
 
     /** @override */
-    public deserialize(data: IManualDiagramCollectionSerialization): IMutator<unknown> {
+    public deserialize(data: IManualDiagramCollectionSerialization): IFMutator {
         return chain(push => {
             push(super.deserialize(data));
 

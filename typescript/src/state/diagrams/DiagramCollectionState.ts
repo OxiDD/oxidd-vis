@@ -3,7 +3,7 @@ import {Constant} from "../../watchables/Constant";
 import {Derived} from "../../watchables/Derived";
 import {PlainField} from "../../watchables/PlainField";
 import {IWatchable} from "../../watchables/_types/IWatchable";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../watchables/mutator/_types/IMutator";
 import {chain} from "../../watchables/mutator/chain";
 import {IBaseViewSerialization} from "../_types/IBaseViewSerialization";
 import {ViewState} from "../views/ViewState";
@@ -48,7 +48,7 @@ export class DiagramCollectionState extends ViewState {
     }
 
     /** @override */
-    public deserialize(data: IDiagramCollectionSerialization): IMutator {
+    public deserialize(data: IDiagramCollectionSerialization): IFMutator {
         return chain(push => {
             push(super.deserialize(data));
             push(this.collection.deserialize(data.collection));

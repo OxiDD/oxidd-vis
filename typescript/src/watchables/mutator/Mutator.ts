@@ -1,5 +1,5 @@
 import {IRunnable} from "../_types/IRunnable";
-import {IMutator, IMutatorMutations} from "./_types/IMutator";
+import {IFMutator, IMutator, IMutatorMutations} from "./_types/IMutator";
 
 /** A mutator class that ensures that performing and signalling is only used once */
 export class Mutator<I = void, R = void> implements IMutator<R>, IMutatorMutations<R> {
@@ -88,7 +88,7 @@ export class Mutator<I = void, R = void> implements IMutator<R>, IMutatorMutatio
      * Obtains a next mutation to this mutation, that can use the output of this mutation. The resulting mutation will dispatch synchronized, performing both mutations before signalling
      * @param next The next mutation to chain
      */
-    public chain<O>(next: ((val: R) => IMutator<O>) | IMutator<O>): IMutator<O> {
+    public chain<O>(next: ((val: R) => IMutator<O>) | IMutator<O>): IFMutator<O> {
         return new Mutator(
             () => {
                 const result = this.perform();
@@ -108,7 +108,7 @@ export class Mutator<I = void, R = void> implements IMutator<R>, IMutatorMutatio
      * @param map The map function to obtain the new output
      * @returns A new mutator
      */
-    public map<O>(map: (res: R) => O): IMutator<O> {
+    public map<O>(map: (res: R) => O): IFMutator<O> {
         return new Mutator(
             () => {
                 const res = this.perform();

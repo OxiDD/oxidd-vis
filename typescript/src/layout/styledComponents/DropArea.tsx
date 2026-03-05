@@ -15,6 +15,7 @@ export const DropArea: FC<IDropAreaProps> = ({dragging, onDrop}) => {
                     className={css({
                         "& .drop": {backgroundColor: dropAreaColor},
                         position: "absolute",
+                        zIndex: 1000,
                         left: 0,
                         top: 42,
                         right: 0,

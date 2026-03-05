@@ -2,7 +2,7 @@ import {IRunnable} from "../../watchables/_types/IRunnable";
 import {IWatchable} from "../../watchables/_types/IWatchable";
 import {AbstractConfigurationObject, ConfigurationObjectType} from "oxidd-vis-rust";
 import {Derived} from "../../watchables/Derived";
-import {IMutator} from "../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../watchables/mutator/_types/IMutator";
 import {Mutator} from "../../watchables/mutator/Mutator";
 import {IConfigObjectSerialization} from "./_types/IConfigObjectSerialization";
 import {IConfigObjectType} from "./_types/IConfigObjectType";
@@ -103,7 +103,7 @@ export class ConfigurationObject<V> {
      * @param v The new value to store
      * @returns The mutator to commit the change
      */
-    protected setValue(v: V): IMutator {
+    protected setValue(v: V): IFMutator {
         let mutatorCallbacks = this.object.set_value(v);
         return new Mutator(
             () => mutatorCallbacks.perform(),
@@ -126,7 +126,7 @@ export class ConfigurationObject<V> {
      * @param config The configuration data to deserialize
      * @returns The mutator to commit the changes
      */
-    public deserialize(config: IConfigObjectSerialization<V>): IMutator {
+    public deserialize(config: IConfigObjectSerialization<V>): IFMutator {
         return chain(push => {
             push(this.deserializeValue(config.value));
             const children = this._children.get();
@@ -144,7 +144,7 @@ export class ConfigurationObject<V> {
      * @param value The value to deserialize
      * @returns The mutator to commit the change
      */
-    public deserializeValue(value: V): IMutator {
+    public deserializeValue(value: V): IFMutator {
         return this.setValue(value);
     }
 

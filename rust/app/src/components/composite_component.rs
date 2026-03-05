@@ -34,32 +34,36 @@ pub enum AlignMain {
 }
 make_typed_dyn_watchable!(AlignMainWatchable, AlignMain);
 
-/// Composite component
+/// Composite component.
 #[wasm_getters]
 #[wasm_bindgen]
 #[watchable_setters]
 #[derive(Builder, Clone)]
 pub struct CompositeComp {
-    /// The children of this component
+    /// The children of this component.
     #[getter]
     #[builder(finish_fn, into)]
     children: ComponentVecWatchable,
-    /// Whether the variants should display horizontally (if advanced)
+    /// Whether the variants should display horizontally (if advanced).
     #[getter]
     #[setter(bool, false)]
     horizontal: BoolWatchable,
-    /// Whether to fill the parent container
-    #[getter]
-    #[setter(bool, false)]
-    fill: BoolWatchable,
-    /// The main axis alignment
+    // /// Whether to fill the parent container.
+    // #[getter]
+    // #[setter(bool, false)]
+    // fill: BoolWatchable,
+    /// The main axis alignment.
     #[getter]
     #[setter(AlignMain, AlignMain::Start)]
     main_align: AlignMainWatchable,
-    /// The off axis alignment
+    /// The off axis alignment.
     #[getter]
     #[setter(Align, Align::Start)]
     perpendicular_align: AlignWatchable,
+    /// The gap between child elements.
+    #[getter]
+    #[setter(f32, 1.0)]
+    gap: F32Watchable,
 }
 impl CompositeComp {
     pub fn new(children: impl Into<ComponentVecWatchable>) -> Self {
@@ -77,19 +81,19 @@ impl Into<Component> for CompositeComp {
 #[watchable_setters]
 #[derive(Builder, Clone)]
 pub struct CompositeItemComp {
-    /// The children of this component
+    /// The children of this component.
     #[getter]
     #[builder(finish_fn, into)]
     child: DynComp,
-    /// The off axis alignment
+    /// The off axis alignment.
     #[getter]
     #[setter(Align, Align::Start)]
     perpendicular_align: AlignWatchable,
-    /// How much to shrink compared to siblings, if stretching on main-axis
+    /// How much to shrink compared to siblings, if stretching on main-axis.
     #[getter]
     #[setter(f32, 0.0)]
     shrink_ratio: F32Watchable,
-    /// How much to grow compared to siblings, if stretching on main-axis
+    /// How much to grow compared to siblings, if stretching on main-axis.
     #[getter]
     #[setter(f32, 0.0)]
     grow_ratio: F32Watchable,

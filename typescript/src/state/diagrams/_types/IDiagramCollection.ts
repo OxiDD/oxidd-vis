@@ -1,6 +1,6 @@
 import {MessageBarType} from "@fluentui/react";
 import {IWatchable} from "../../../watchables/_types/IWatchable";
-import {IMutator} from "../../../watchables/mutator/_types/IMutator";
+import {IFMutator, IMutator} from "../../../watchables/mutator/_types/IMutator";
 import {DiagramState} from "../DiagramState";
 import {ViewState} from "../../views/ViewState";
 
@@ -25,14 +25,14 @@ export type IDiagramCollection<T> = {
      * @param diagram The diagram to be removed and disposed
      * @returns The mutator to commit the change, resulting in whether the diagram was present and has now been disposed
      */
-    removeDiagram(diagram: DiagramState): IMutator<boolean>;
+    removeDiagram(diagram: DiagramState): IFMutator<boolean>;
 
     /**
      * removes the given sub-collection of diagrams
      * @param collection The collection to be removed and disposed
      * @returns The mutator to commit the change, resulting in whether the diagram was present
      */
-    removeCollection(collection: IDiagramCollection<unknown>): IMutator<boolean>;
+    removeCollection(collection: IDiagramCollection<unknown>): IFMutator<boolean>;
 
     /** Disposes the collection and possibly does cleanup if necessary */
     dispose(): void;
@@ -48,7 +48,7 @@ export type IDiagramCollection<T> = {
      * @param data The data to be loaded
      * @returns The mutator to commit the changes
      */
-    deserialize(data: T): IMutator<unknown>;
+    deserialize(data: T): IFMutator<unknown>;
 };
 
 export type ICollectionStatus = {text: string; type: MessageBarType} | undefined;
