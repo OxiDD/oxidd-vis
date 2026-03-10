@@ -4,10 +4,11 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
     components::dyn_component::DynComp,
+    make_typed_dyn_watchable,
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
-        make_typed_dyn_watchable, BoolWatchable, Constant, ControlledField, Derived, F32Watchable,
-        Field, ReadonlyField, WatchableUtils,
+        BoolWatchable, Constant, ControlledField, Derived, F32Watchable, Field, ReadonlyField,
+        WatchableUtils,
     },
 };
 
@@ -108,7 +109,7 @@ impl Into<Component> for CompositeItemComp {
    Traits to automatically derive ComponentVecWatchables implicitly without boilerplate
    Any Vec or tuple of Into<Component> can be used, as well as derived watchables or watchable fields of this type.
 */
-trait IntoComponentVec {
+pub trait IntoComponentVec {
     fn into_vec(self) -> Vec<Component>;
 }
 impl<T: Into<Component>> IntoComponentVec for Vec<T> {
@@ -123,13 +124,15 @@ impl IntoComponentVec for Component {
 }
 
 macro_rules! some_into_component_vec_watchable {
-    ($(< $($Generics:ident),* >)?, $ValueType:tt, $Map:expr) => {
-        impl$(<$($Generics: Into<Component> + Clone + 'static),*>)? Into<ComponentVecWatchable> for $ValueType {
+    ($(< $($Generics:ident $( : $Constraints:tt )?),* >)?, $ValueType:tt,  $Map:expr) => {
+        #[allow(unused_parens)]
+        impl$(<$($Generics: $($Constraints+)? Into<Component> + 'static),*>)? Into<ComponentVecWatchable> for $ValueType {
             fn into(self) -> ComponentVecWatchable {
-                ComponentVecWatchable::new(($Map)(self))
+                ComponentVecWatchable::new($Map(self))
             }
         }
-        impl$(<$($Generics: Into<Component> + Clone + 'static),*>)? Into<Component> for $ValueType {
+        #[allow(unused_parens)]
+        impl$(<$($Generics: $($Constraints+)? Into<Component> + 'static),*>)? Into<Component> for $ValueType {
             fn into(self) -> Component {
                 let watchable = Into::<ComponentVecWatchable>::into(self);
                 Into::<Component>::into(CompositeComp::new(watchable))
@@ -144,18 +147,16 @@ macro_rules! into_component_vec_watchable {
             me.into_vec()
         ));
 
-        some_into_component_vec_watchable!($(<$($Generics),*>)?, (Constant<$ValueType>), |me: Constant<$ValueType>| me
+        some_into_component_vec_watchable!($(<$($Generics: Clone),*>)?, (Constant<$ValueType>),|me: Constant<$ValueType>| me
             .map(|values| (*values).clone().into_vec()));
-        some_into_component_vec_watchable!($(<$($Generics),*>)?, (Derived<$ValueType>), |me: Derived<$ValueType>| me
+        some_into_component_vec_watchable!($(<$($Generics: Clone),*>)?, (Derived<$ValueType>), |me: Derived<$ValueType>| me
             .map(|values| (*values).clone().into_vec()));
-        some_into_component_vec_watchable!($(<$($Generics),*>)?, (Field<$ValueType>), |me: Field<$ValueType>| me
+        some_into_component_vec_watchable!($(<$($Generics: Clone),*>)?, (Field<$ValueType>), |me: Field<$ValueType>| me
             .map(|values| (*values).clone().into_vec()));
-        some_into_component_vec_watchable!($(<$($Generics),*>)?, (ReadonlyField<$ValueType>), |me: ReadonlyField<
-            $ValueType,
-        >| me
+        some_into_component_vec_watchable!($(<$($Generics: Clone),*>)?, (ReadonlyField<$ValueType>), |me: ReadonlyField<$ValueType>| me
             .map(|values| (*values).clone().into_vec()));
         some_into_component_vec_watchable!(
-            $(<$($Generics),*>)?,
+            $(<$($Generics: Clone),*>)?,
             (ControlledField<$ValueType>),
             |me: ControlledField<$ValueType>| me.map(|values| (*values).clone().into_vec())
         );
@@ -173,4 +174,4 @@ fn test() {
     );
 }
 #[doc(hidden)]
-fn comp(v: impl Into<Component>) {}
+fn comp(_v: impl Into<Component>) {}

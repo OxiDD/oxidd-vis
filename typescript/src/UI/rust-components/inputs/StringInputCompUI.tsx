@@ -8,12 +8,11 @@ import {IAriaRef} from "../_types/IAriaRef";
 
 export const StringInputCompUI: NFC<{
     data: StringInputComp;
-    editData?: StringInputComp;
     className?: string;
     aria?: IAriaRef;
-}> = ({data, editData = data, className, aria}) => {
+}> = ({data, className, aria}) => {
     const watch = useWatch();
-    const text = watch(data.data);
+    const text = watch(data);
     const [curText, setCurText] = useState(text);
     const lateSubmit = watch(data.late_submit);
     useEffect(() => {
@@ -21,18 +20,18 @@ export const StringInputCompUI: NFC<{
         setCurText(text);
     }, [text, lateSubmit]);
     const onChange = useCallback(
-        (data, newValue: string) => {
+        (event, newValue: string) => {
             if (lateSubmit) {
                 setCurText(newValue);
             } else {
-                editData.data.set(newValue).commit();
+                data.set(newValue).commit();
             }
         },
-        [editData.data, lateSubmit]
+        [data, lateSubmit]
     );
     const submit = () => {
         if (!lateSubmit) return;
-        editData.data.set(curText).commit();
+        data.set(curText).commit();
     };
     const onKeydown: KeyboardEventHandler<unknown> = data => {
         if (data.key != "Enter") return;
@@ -50,12 +49,13 @@ export const StringInputCompUI: NFC<{
                 const max = watch(data.multiline_max);
                 if (!dynamic) return min ?? max;
 
-                let rows = watch(data.data).split("\n").length;
+                const text = lateSubmit ? curText : watch(data);
+                let rows = text.split("\n").length;
                 if (min) rows = Math.max(min, rows);
                 if (max) rows = Math.min(max, rows);
                 return rows;
             },
-            [data]
+            [data, curText, lateSubmit]
         )
     );
 

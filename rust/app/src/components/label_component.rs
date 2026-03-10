@@ -4,8 +4,9 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
     components::dyn_component::DynComp,
+    make_typed_dyn_watchable,
     new_wasm_interface::{Component, ComponentOption},
-    util::watchables::{make_typed_dyn_watchable, StringWatchable},
+    util::watchables::StringWatchable,
 };
 
 #[wasm_bindgen]

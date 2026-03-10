@@ -1,10 +1,11 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
+    impl_watchable, make_typed_dyn_watchable,
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
-        impl_watchable, make_typed_dyn_watchable, Constant, ControlledField, Derived, Field,
-        IntoWatchable, ReadonlyField, Watchable, WatchableUtils,
+        Constant, ControlledField, Derived, Field, IntoWatchable, ReadonlyField, Watchable,
+        WatchableUtils,
     },
 };
 

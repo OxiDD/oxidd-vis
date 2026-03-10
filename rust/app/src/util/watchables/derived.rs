@@ -9,7 +9,7 @@ use super::{
 
 /// A watchable value that is computed from other watchable values and has its value cached to prevent unnecessary recomputes
 pub struct Derived<X: 'static> {
-    compute: Rc<Box<dyn Fn(&DerivedTracker) -> X>>,
+    compute: Rc<Box<dyn Fn(&DerivedTracker) -> Rc<X>>>,
     dependents: Rc<Trackers>,
     val: Rc<RefCell<Option<Rc<X>>>>,
     dependencies: Rc<RefCell<Option<Vec<Observer>>>>,
@@ -41,6 +41,13 @@ impl<'a, X: 'static> Derived<X> {
     /// - `f` only depends on constants and other watchables
     /// - `f` obtains results from watchables only by calling `.watch(t)` with the provided tracker
     pub fn new<F: Fn(&DerivedTracker) -> X + 'static>(f: F) -> Derived<X> {
+        Self::new_rc(
+            #[inline]
+            move |w| Rc::new(f(w)),
+        )
+    }
+    /// See [`Derived::new`], now returning the RC directly
+    pub fn new_rc<F: Fn(&DerivedTracker) -> Rc<X> + 'static>(f: F) -> Derived<X> {
         Derived {
             compute: Rc::new(Box::new(f)),
             val: Rc::new(RefCell::new(None)),
@@ -87,9 +94,9 @@ impl<X: 'static> Watchable for Derived<X> {
             let observer = dependency.observe(listener);
             new_dependencies.push(observer);
         };
-        let val = Rc::new((self.compute)(&DerivedTracker {
+        let val = (self.compute)(&DerivedTracker {
             on_observe: RefCell::new(on_observe),
-        }));
+        });
 
         // Store the value and dependencies
         *self.val.borrow_mut() = Some(val.clone());

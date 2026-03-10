@@ -7,21 +7,20 @@ import {IAriaRef} from "../_types/IAriaRef";
 
 export const BoolInputCompUI: NFC<{
     data: BoolInputComp;
-    editData?: BoolInputComp;
     className?: string;
     aria?: IAriaRef;
-}> = ({data, editData = data, className, aria}) => {
+}> = ({data, className, aria}) => {
     const watch = useWatch();
-    const checked = watch(data.data);
+    const checked = watch(data);
     const disabled = watch(data.disabled);
 
     const onChange = useCallback(
         (event: React.FormEvent<HTMLElement>, checked?: boolean) => {
             if (checked !== undefined) {
-                editData.data.set(checked).commit();
+                data.set(checked).commit();
             }
         },
-        [editData.data]
+        [data]
     );
 
     return (

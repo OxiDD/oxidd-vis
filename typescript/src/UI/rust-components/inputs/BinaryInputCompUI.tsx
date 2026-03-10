@@ -1,31 +1,30 @@
-import {BinaryInputComp} from "oxidd-vis-rust";
+import {BinaryInputComp, FileData} from "oxidd-vis-rust";
 import React, {ChangeEvent, useCallback, useState} from "react";
 import {useWatch} from "../../../watchables/react/useWatch";
 import {Checkbox, FontIcon, Spinner} from "@fluentui/react";
 import {NFC} from "../../../utils/_types/NFC";
 import {IAriaRef} from "../_types/IAriaRef";
 import {css} from "@emotion/css";
+import {useDerived} from "../../../watchables/react/useDerived";
 
 export const BinaryInputCompUI: NFC<{
     data: BinaryInputComp;
-    editData?: BinaryInputComp;
     className?: string;
     aria?: IAriaRef;
-}> = ({data, editData = data, className, aria}) => {
+}> = ({data, className, aria}) => {
     const watch = useWatch();
-    const input = data.data;
-    const filename = watch(input.filename);
+    const filename = watch(useDerived(watch => watch(data)?.name));
     const disabled = watch(data.disabled);
 
     const [fileLoading, setFileLoading] = useState(false);
 
     const onFileChange = useCallback(
-        async (event: ChangeEvent<HTMLInputElement>) => {
+        (event: ChangeEvent<HTMLInputElement>) => {
             setFileLoading(true);
             const file = event.target.files?.[0];
             if (!file) return;
 
-            input.filename.set(file.name).commit();
+            const name = file.name;
 
             const reader = new FileReader();
             reader.readAsArrayBuffer(file);
@@ -34,12 +33,13 @@ export const BinaryInputCompUI: NFC<{
                 setFileLoading(false);
                 if (result) {
                     const uint8Array = new Uint8Array(result as ArrayBuffer);
-                    input.set(uint8Array).commit();
+                    const fileData = new FileData(name, uint8Array);
+                    data.set(fileData).commit();
                 }
             };
             reader.onerror = () => setFileLoading(false);
         },
-        [input]
+        [data]
     );
 
     return (
@@ -59,7 +59,9 @@ export const BinaryInputCompUI: NFC<{
                     bottom: 0,
                     opacity: 0,
                 },
-                ...(disabled ? {opacity: 0.5, cursor: "not-allowed"} : undefined),
+                ...(disabled
+                    ? {opacity: 0.5, cursor: "not-allowed", pointerEvents: "none"}
+                    : undefined),
             })}`}>
             {!fileLoading && (
                 <input

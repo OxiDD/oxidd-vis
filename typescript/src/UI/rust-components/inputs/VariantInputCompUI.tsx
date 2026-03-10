@@ -27,14 +27,13 @@ import {multiplySize} from "../../../utils/multiplySize";
 
 export const VariantInputCompUI: NFC<{
     data: VariantInputComp;
-    editData?: VariantInputComp;
     ChildComp: ICompUI;
     className?: string;
     aria?: IAriaRef;
-}> = ({data, editData = data, ChildComp, className, aria}) => {
+}> = ({data, ChildComp, className, aria}) => {
     const watch = useWatch();
+    const selected = watch(data);
     const options = watch(data.options);
-    const selected = watch(data.selected);
     const disabled = watch(data.disabled);
     const theme = useTheme();
 
@@ -52,10 +51,10 @@ export const VariantInputCompUI: NFC<{
     );
 
     const onDropdownChange = useCallback(
-        (event: unknown, data: unknown, index: number) => {
-            editData.select(index).commit();
+        (event: unknown, itemData: unknown, index: number) => {
+            data.set(index).commit();
         },
-        [editData]
+        [data]
     );
 
     const dropdownOptions = watch(derivedDropdownOptions);
@@ -91,7 +90,7 @@ export const VariantInputCompUI: NFC<{
                     },
                 }}
                 onLinkClick={e =>
-                    editData.select(parseInt(e!.props.itemKey!) as number).commit()
+                    data.set(parseInt(e!.props.itemKey!) as number).commit()
                 }>
                 {iconOptions.map((item, i) => (
                     <PivotItem
@@ -125,7 +124,7 @@ export const VariantInputCompUI: NFC<{
                     name={item.name}
                     selected={i == selected}
                     onSelect={() => {
-                        editData.select(i).commit();
+                        data.set(i).commit();
                     }}>
                     <ChildComp data={item.child} />
                 </InputOption>

@@ -1,4 +1,4 @@
-use app_macros::{wasm_getters, watchable_setters};
+use app_macros::{builder_into_comp, wasm_getters, watchable_setters};
 use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -13,6 +13,7 @@ use crate::{
 /// Component that renders text, either as paragraph content or as a title.
 #[wasm_getters]
 #[wasm_bindgen]
+#[builder_into_comp]
 #[watchable_setters]
 #[derive(Builder, Clone)]
 pub struct TextComp {

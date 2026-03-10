@@ -9,9 +9,9 @@ use crate::{
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
         signaller::Signaller, BoolWatchable, ClonableWatchableUtils, Constant, DataState,
-        DynWatchable, Field, IntoWatchable, JsListener, Listener, Mutator, Observer,
-        OptionBoolWatchable, OptionStringWatchable, ReadonlyField, StringWatchable, U32Field,
-        U32Watchable, Watchable, WatchableState,
+        DynSignaller, DynWatchable, Field, IntoWatchable, JsListener, Listener, Mutator, Observer,
+        OptionBoolWatchable, OptionStringWatchable, ReadonlyField, Setter, StringWatchable,
+        U32Field, U32Watchable, Watchable, WatchableState,
     },
 };
 
@@ -55,7 +55,7 @@ impl ButtonComp {
     pub fn on_click<L: FnMut() -> () + 'static>(&self, listener: L) -> Observer {
         self.data.observe(Box::new(ButtonListener::new(listener)))
     }
-    pub fn click(&mut self) -> Signaller {
+    pub fn click(&mut self) -> DynSignaller {
         self.data.set(self.data.get() + 1)
     }
 }

@@ -7,6 +7,7 @@ mod types;
 mod util;
 mod wasm_interface;
 
+use app_macros::Inheritable;
 use util::panic_hook::set_panic_hook;
 use wasm_bindgen::prelude::*;
 
@@ -15,17 +16,22 @@ use types::{mtbdd::mtbdd_drawer::MTBDDDiagram, qdd::qdd_drawer::QDDDiagram};
 use crate::{
     components::{
         button_component::ButtonComp, Align, AlignMain, ComponentWithData, CompositeComp,
-        ContainerComp, FillComp, LabelComp, LabelKind, OverlayComp, PanelButtonComp, PanelComp,
-        PromptComp, TooltipComp,
+        ContainerComp, FillComp, IntoComponentVec, LabelComp, LabelKind, OverlayComp,
+        PanelButtonComp, PanelComp, PromptComp, TooltipComp,
     },
     inputs::{
         binary_input::{BinaryInput, BinaryInputComp},
         bool_input::{BoolInput, BoolInputComp},
-        f32_input::{F32Input, F32InputClamped, F32InputComp},
+        f32_input::{F32InputClamped, F32InputComp},
         string_input::{StringInput, StringInputComp},
         variant_input::{VariantComponentMapper, VariantInput, VariantInputComp, VariantOptions},
+        F32Input, Inheritable, InheritedInput, U32Input,
     },
-    util::watchables::{ClonableWatchableUtils, Field, StringField, WatchableUtils},
+    new_wasm_interface::Component,
+    util::watchables::{
+        ClonableWatchableUtils, DynWatchableSetter, F32Field, Field, Setter, StringField,
+        WatchableUtils,
+    },
     wasm_interface::DiagramBox,
 };
 
@@ -45,13 +51,16 @@ pub fn create_mtbdd_diagram() -> Option<DiagramBox> // And some DD type param
 
 #[wasm_bindgen]
 pub fn test_panel() -> PanelComp {
-    let text = StringInput::from("test");
-    let mut text_clone = text.clone();
-    let text_clone2 = text.clone();
+    let text_ancestor = InheritedInput::default(StringInput::from("testing"));
+    let text_ancestor_clone = text_ancestor.clone();
+    // let inherited_text = InheritedInput::default(text_ancestor, "Default");
+    let inherited_text = text_ancestor.inherit("Ancestor");
+    let mut text_clone = inherited_text.clone();
+    let text_clone2 = inherited_text.clone();
 
     let button = ButtonComp::builder()
         .icon("AlarmClock")
-        .text(text.map(|v| Some(format!("Button: {v}"))))
+        .text(inherited_text.map(|v| Some(format!("Button: {v}"))))
         .build();
     let reset_button = ComponentWithData::new(
         button.clone(),
@@ -73,12 +82,12 @@ pub fn test_panel() -> PanelComp {
                 .build(reset_button),
         );
 
-    let text_field = StringInputComp::builder(text_clone2)
+    let text_ancestor_field = StringInputComp::wrap_builder(text_ancestor_clone).build();
+    let text_field = StringInputComp::wrap_builder(text_clone2)
         .multiline(true)
         .multiline_dynamic(true)
-        .multiline_min(2)
-        .late_submit(true)
-        .build();
+        .multiline_min(2);
+    // .late_submit(true);
 
     #[derive(PartialEq, Eq, Clone)]
     enum Option {
@@ -92,18 +101,14 @@ pub fn test_panel() -> PanelComp {
         }
     }
     let variant = VariantInput::new(Option::V1);
-    let variant_comp1 = VariantInputComp::builder()
-        .data(VariantComponentMapper::new(variant.clone(), |v| {
-            (match v {
-                Option::V1 => "V1",
-                Option::V2 => "V2",
-                Option::V3 => "V3",
-            })
-            .into()
-        }))
-        .build();
-    let variant_comp2 = VariantInputComp::builder()
-        .data(VariantComponentMapper::new(variant.clone(), |v| {
+    let variant_comp1 = variant.clone().comp_builder(|v| match v {
+        Option::V1 => "V1",
+        Option::V2 => "V2",
+        Option::V3 => "V3",
+    });
+    let variant_comp2 = variant
+        .clone()
+        .comp_builder(|v| {
             ButtonComp::builder()
                 .icon(match v {
                     Option::V1 => "PageLink",
@@ -112,16 +117,15 @@ pub fn test_panel() -> PanelComp {
                 })
                 .text("Some label")
                 .build()
-                .into()
-        }))
-        .horizontal(false)
-        .build();
+        })
+        .horizontal(false);
 
     let v1_field = StringInputComp::builder(StringInput::new("V1".into())).build();
     let v2_field = StringInputComp::builder(StringInput::new("V2".into())).build();
     let v3_field = StringInputComp::builder(StringInput::new("V3".into())).build();
-    let variant_comp3 = VariantInputComp::builder()
-        .data(VariantComponentMapper::new(variant.clone(), move |v| {
+    let variant_comp3 = variant
+        .clone()
+        .comp_builder(move |v| {
             LabelComp::builder()
                 .label(match v {
                     Option::V1 => "V1",
@@ -133,12 +137,10 @@ pub fn test_panel() -> PanelComp {
                     Option::V2 => v2_field.clone(),
                     Option::V3 => v3_field.clone(),
                 })
-                .into()
-        }))
+        })
         .main_align(AlignMain::Stretch)
         .gap(1.0)
-        .horizontal(true)
-        .build();
+        .horizontal(true);
 
     let extra_panel_name = StringField::from("test panel");
     let extra_panel = PanelButtonComp::builder()
@@ -168,10 +170,15 @@ pub fn test_panel() -> PanelComp {
                 )),
         );
 
-    let binary_input = BinaryInputComp::builder(BinaryInput::new()).build();
+    let binary_input = BinaryInputComp::builder(BinaryInput::new());
 
-    let composite = (labeled_button, text_field, extra_panel, binary_input);
-    // let composite = CompositeComp::builder().gap(1.0).build(composite);
+    let composite = (
+        text_ancestor_field,
+        text_field,
+        labeled_button,
+        extra_panel,
+        binary_input,
+    );
 
     let prompt_button = ButtonComp::builder().text("Some prompt").build();
     let prompt = (
@@ -193,4 +200,11 @@ pub fn test_panel() -> PanelComp {
         .id("test-panel")
         .open_count(0)
         .build(with_overlay)
+}
+
+#[derive(Inheritable)]
+struct MySettings {
+    name: InheritedInput<StringInput>,
+    value: InheritedInput<U32Input>,
+    check: InheritedInput<BoolInput>,
 }

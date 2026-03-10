@@ -10,8 +10,9 @@ use crate::{
         },
         dyn_component::DynComp,
     },
+    make_typed_dyn_watchable,
     new_wasm_interface::{Component, ComponentOption},
-    util::watchables::{make_typed_dyn_watchable, F32Watchable, IntoWatchable, OptionF32Watchable},
+    util::watchables::{F32Watchable, IntoWatchable, OptionF32Watchable},
 };
 
 /// Common UI color palette for use in container and component styling.

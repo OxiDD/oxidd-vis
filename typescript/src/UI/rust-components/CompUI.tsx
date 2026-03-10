@@ -20,7 +20,8 @@ import {I32InputCompUI} from "./inputs/I32InputCompUI";
 import {U32InputCompUI} from "./inputs/U32InputCompUI";
 import {VariantInputCompUI} from "./inputs/VariantInputCompUI";
 import {BoolInputCompUI} from "./inputs/BoolInputCompUI";
-import {BinaryInputCompUI} from "./inputs/BinaryInputComp";
+import {BinaryInputCompUI} from "./inputs/BinaryInputCompUI";
+import {InheritedInputCompUI} from "./inputs/InheritedInputCompUI";
 
 export const CompUI: ICompUI = ({data: d, className, aria}) => {
     const p = {className, aria, ChildComp: CompUI};
@@ -43,6 +44,7 @@ export const CompUI: ICompUI = ({data: d, className, aria}) => {
         when(d.as_variant_input(), r => <VariantInputCompUI data={r} {...p} />) ??
         when(d.as_bool_input(), r => <BoolInputCompUI data={r} {...p} />) ??
         when(d.as_binary_input(), r => <BinaryInputCompUI data={r} {...p} />) ??
+        when(d.as_inherited_input(), r => <InheritedInputCompUI data={r} {...p} />) ??
         when(d.as_modal(), r => <ModalCompUI data={r} {...p} />) ??
         when(d.as_panel(), r => <></>) ??
         componentNotFound

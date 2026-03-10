@@ -1,12 +1,24 @@
-use app_macros::{wasm_getters, watchable_setters};
+use std::rc::Rc;
+
+use app_macros::{builder_into_comp, wasm_getters, watchable_setters};
 use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
+    impl_setter, impl_watchable,
+    inputs::{
+        string_input::string_input_comp_builder::SetWrapper,
+        wrapper::{CompWrapper, IdentityWrapper, InputWrapper},
+        InheritLabel, Inheritable, InheritedInput,
+    },
     new_wasm_interface::{Component, ComponentOption},
-    util::watchables::{
-        impl_watchable, signaller::Signaller, BoolWatchable, Mutator, OptionBoolWatchable,
-        OptionU32Watchable, StringField,
+    util::{
+        logging::console,
+        watchables::{
+            signaller::Signaller, BoolWatchable, DynSignaller, DynWatchable, DynWatchableSetter,
+            IntoWatchable, IntoWatchableSetter, MutateSetter, Mutator, OptionBoolWatchable,
+            OptionU32Watchable, Setter, StringField, Watchable, WatchableSetter,
+        },
     },
 };
 
@@ -16,37 +28,48 @@ use crate::{
 pub struct StringInput(StringField);
 impl StringInput {
     pub fn new(val: String) -> Self {
-        StringInput(StringField::new(val))
-    }
-    pub fn from<V: Into<String>>(val: V) -> Self {
-        StringInput(StringField::from(val))
+        StringInput(StringField::new(val).into())
     }
     fn watchable(&self) -> &StringField {
         &self.0
     }
-    pub fn set(&mut self, val: impl Into<String>) -> Signaller {
-        self.0.set(val.into())
+    fn setter(&mut self) -> &mut StringField {
+        &mut self.0
     }
 }
 impl_watchable!(StringInput, String);
-#[wasm_bindgen]
-impl StringInput {
-    #[wasm_bindgen(js_name = "set")]
-    pub fn set_js(&mut self, val: String) -> Mutator {
-        self.0.set_js(val.into())
+impl_setter!(StringInput, String);
+
+impl Inheritable for InheritedInput<StringInput> {
+    fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + 'static) -> Self {
+        InheritedInput::new(
+            StringInput::new((*self.get()).clone()),
+            DynWatchable::new(self.clone()),
+            self_name,
+        )
+    }
+}
+impl<X: Into<String>> From<X> for StringInput {
+    fn from(value: X) -> Self {
+        Self::new(value.into())
+    }
+}
+impl<X: Into<String>> From<X> for InheritedInput<StringInput> {
+    fn from(value: X) -> Self {
+        Self::from(StringInput::from(value))
     }
 }
 
 /// StringInput component
 #[wasm_getters]
 #[wasm_bindgen]
+#[builder_into_comp]
 #[watchable_setters]
 #[derive(Builder, Clone)]
 pub struct StringInputComp {
     /// The data of the component
-    #[getter]
     #[builder(start_fn, into)]
-    data: StringInput,
+    data: DynWatchableSetter<String>,
     /// Whether to allow multiline inputs
     #[getter]
     #[setter(bool, false)]
@@ -79,14 +102,31 @@ pub struct StringInputComp {
     #[getter]
     #[setter(bool, false)]
     disabled: BoolWatchable,
+    /// Wraps the output component
+    #[builder(default=IdentityWrapper::new())]
+    wrapper: Rc<dyn CompWrapper>,
 }
+impl StringInputComp {
+    pub fn wrap_builder<I: Into<DynWatchableSetter<String>>>(
+        wrapper: impl CompWrapper + InputWrapper<I> + Clone + 'static,
+    ) -> StringInputCompBuilder<SetWrapper> {
+        Self::builder(wrapper.get_input()).wrapper(Rc::new(wrapper))
+    }
+    fn watchable(&self) -> &DynWatchableSetter<String> {
+        &self.data
+    }
+    fn setter(&mut self) -> &mut DynWatchableSetter<String> {
+        &mut self.data
+    }
+}
+impl_watchable!(StringInputComp, String);
+impl_setter!(StringInputComp, String);
 
 impl Into<StringInputComp> for StringInput {
     fn into(self) -> StringInputComp {
         StringInputComp::builder(self).build()
     }
 }
-
 impl Into<Component> for StringInput {
     fn into(self) -> Component {
         Into::<StringInputComp>::into(self).into()
@@ -94,6 +134,8 @@ impl Into<Component> for StringInput {
 }
 impl Into<Component> for StringInputComp {
     fn into(self) -> Component {
-        Component::new(ComponentOption::StringInput(self))
+        self.wrapper
+            .clone()
+            .wrap(Component::new(ComponentOption::StringInput(self)))
     }
 }

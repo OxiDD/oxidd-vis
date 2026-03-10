@@ -7,31 +7,27 @@ import {IAriaRef} from "../_types/IAriaRef";
 
 export const F32InputCompUI: NFC<{
     data: F32InputComp;
-    editData?: F32InputComp;
     className?: string;
     aria?: IAriaRef;
-}> = ({data, editData = data, className, aria}) => {
+}> = ({data, className, aria}) => {
     const watch = useWatch();
-    const valData = data.data;
-    const min = watch(valData.min);
-    const max = watch(valData.max);
-    const clamped = watch(valData.clamped);
+    const clamped = watch(data);
     const round_step = watch(data.step_round);
     const disabled = watch(data.disabled);
-    const is_stepper = false; //step_size != undefined;
+    const is_stepper = watch(data.step_size) != undefined;
 
     const onChange = useCallback(
         (event: unknown, newValue?: string) => {
             if (newValue === undefined) return;
             const parsed = parseFloat(newValue);
             if (!isNaN(parsed)) {
-                editData.data.input.set(parsed).commit();
+                data.set(parsed).commit();
             }
             if (!is_stepper) {
-                setTextfieldValue(valData.clamped.get().toString());
+                setTextfieldValue(data.get().toString());
             }
         },
-        [editData.data.input, is_stepper]
+        [data, is_stepper]
     );
 
     // Textfield functions
@@ -40,13 +36,10 @@ export const F32InputCompUI: NFC<{
         if (is_stepper) return;
         setTextfieldValue(clamped.toString());
     }, [clamped, is_stepper]);
-    const onTextfieldChange = useCallback(
-        (event: unknown, newValue?: string) => {
-            if (newValue === undefined) return;
-            setTextfieldValue(newValue);
-        },
-        [editData.data.input]
-    );
+    const onTextfieldChange = useCallback((event: unknown, newValue?: string) => {
+        if (newValue === undefined) return;
+        setTextfieldValue(newValue);
+    }, []);
     const handleKeyDown = useCallback(
         (event: React.KeyboardEvent<HTMLInputElement>) => {
             if (event.key === "Enter")
@@ -58,7 +51,7 @@ export const F32InputCompUI: NFC<{
     // Stepper functions
     const step = useCallback(
         direction => {
-            const current = valData.clamped.get();
+            const current = data.get();
             if (isNaN(current)) return;
 
             const stepSize = data.step_size.get() ?? 1;
@@ -66,9 +59,9 @@ export const F32InputCompUI: NFC<{
             if (round_step) {
                 next = Math.round(next / stepSize) * stepSize;
             }
-            editData.data.input.set(next).commit();
+            data.set(next).commit();
         },
-        [data, editData, valData, is_stepper]
+        [data, is_stepper]
     );
     const onDecrement = useCallback(() => step(-1), [step]);
     const onIncrement = useCallback(() => step(1), [step]);
@@ -81,8 +74,6 @@ export const F32InputCompUI: NFC<{
                 aria-describedby={aria?.descriptionID}
                 aria-labelledby={aria?.labelID}
                 className={className}
-                min={min}
-                max={max}
                 onIncrement={onIncrement}
                 onDecrement={onDecrement}
                 disabled={disabled}
@@ -98,8 +89,6 @@ export const F32InputCompUI: NFC<{
             aria-labelledby={aria?.labelID}
             className={className}
             onChange={onTextfieldChange}
-            min={min}
-            max={max}
             disabled={disabled}
         />
     );

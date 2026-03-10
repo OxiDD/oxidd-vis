@@ -1,14 +1,22 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::util::watchables::{signaller::Signaller, IntoWatchable};
+use crate::util::watchables::{
+    signaller::{DynSignaller, Signaller},
+    DynWatchableSetter, IntoWatchable, IntoWatchableSetter, WatchableSetter,
+};
 
 use super::{
     trackers::Trackers,
     watchable::{DataState, Listener, Observer, Watchable, WatchableState},
 };
 
+pub trait Setter {
+    type Input;
+    /// Sets the field and returns a signaller which will signal about the change once dropped. In order to perform batching of setting fields, simply hold on to the signaller until the next field is set
+    fn set(&mut self, val: Self::Input) -> DynSignaller;
+}
 pub struct Field<X> {
     inner: Rc<RefCell<FieldInner<X>>>,
 }
@@ -35,6 +43,17 @@ impl<X> IntoWatchable<X> for Field<X> {
     type Output = Field<X>;
     fn into_watchable(self) -> Self::Output {
         self
+    }
+}
+impl<X: 'static> IntoWatchableSetter<X> for Field<X> {
+    type Output = Field<X>;
+    fn into_watchable_setter(self) -> Self::Output {
+        self
+    }
+}
+impl<X: 'static> Into<DynWatchableSetter<X>> for Field<X> {
+    fn into(self) -> DynWatchableSetter<X> {
+        DynWatchableSetter::new(self)
     }
 }
 
@@ -69,8 +88,15 @@ impl<X: 'static> Field<X> {
         Self::new(init.into())
     }
 
-    /// Sets the field and returns a signaller which will signal about the change once dropped. In order to perform batching of setting fields, simply hold on to the signaller until the next field is set
-    pub fn set(&mut self, val: X) -> Signaller {
+    /// Creates a readonly reference to this field data
+    pub fn read(&self) -> ReadonlyField<X> {
+        ReadonlyField(self.clone())
+    }
+}
+
+impl<X: 'static> Setter for Field<X> {
+    type Input = X;
+    fn set(&mut self, val: X) -> DynSignaller {
         let inner = self.inner.clone();
         inner
             .try_borrow()
@@ -78,18 +104,13 @@ impl<X: 'static> Field<X> {
             .dependents
             .change_state(DataState::Outdated);
         inner.try_borrow_mut().expect(LOOPMESSAGE).val = Rc::new(val);
-        Signaller::new(move || {
+        Box::new(Signaller::new(move || {
             inner
                 .try_borrow()
                 .expect(LOOPMESSAGE)
                 .dependents
                 .change_state(DataState::UpToDate);
-        })
-    }
-
-    /// Creates a readonly reference to this field data
-    pub fn read(&self) -> ReadonlyField<X> {
-        ReadonlyField(self.clone())
+        }))
     }
 }
 
@@ -151,14 +172,26 @@ impl<X: 'static> ControlledField<X> {
         Self::new(init.into())
     }
 
-    /// Sets the field and returns a signaller which will signal about the change once dropped. In order to perform batching of setting fields, simply hold on to the signaller until the next field is set
-    pub fn set(&mut self, val: X) -> Signaller {
-        self.0.set(val)
-    }
-
     /// Creates a readonly reference to this field data
     pub fn read(&self) -> ReadonlyField<X> {
         self.0.read()
+    }
+}
+impl<X: 'static> Setter for ControlledField<X> {
+    type Input = X;
+    fn set(&mut self, val: X) -> DynSignaller {
+        self.0.set(val)
+    }
+}
+impl<X: 'static> Into<DynWatchableSetter<X>> for ControlledField<X> {
+    fn into(self) -> DynWatchableSetter<X> {
+        DynWatchableSetter::new(self)
+    }
+}
+impl<X: 'static> IntoWatchableSetter<X> for ControlledField<X> {
+    type Output = ControlledField<X>;
+    fn into_watchable_setter(self) -> Self::Output {
+        self
     }
 }
 impl<X> IntoWatchable<X> for ControlledField<X> {

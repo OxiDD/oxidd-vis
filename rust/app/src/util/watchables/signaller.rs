@@ -1,3 +1,5 @@
+use std::any::Any;
+
 /// Signals value changes when explicitly called, or when dropped
 pub struct Signaller(Option<Box<dyn FnOnce() -> ()>>);
 
@@ -18,3 +20,6 @@ impl Drop for Signaller {
         }
     }
 }
+
+/// Represents a combined signaller that signals on drop
+pub type DynSignaller = Box<dyn Any>;

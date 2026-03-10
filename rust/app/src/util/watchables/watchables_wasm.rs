@@ -6,10 +6,12 @@ use wasm_bindgen::{
 };
 
 use crate::util::watchables::{
-    signaller::Signaller, DataState, DynWatchable, Field, IntoWatchable, Listener, Observer,
-    ReadonlyField, Watchable, WatchableState,
+    DataState, DynSignaller, DynWatchable, DynWatchableSetter, Field, IntoWatchable,
+    IntoWatchableSetter, Listener, Observer, ReadonlyField, Setter, Watchable, WatchableSetter,
+    WatchableState,
 };
 
+#[macro_export]
 macro_rules! impl_watchable {
     ($StructName:ident, $ValueType:ty) => {
         impl crate::util::watchables::WatchableState for $StructName {
@@ -27,6 +29,11 @@ macro_rules! impl_watchable {
             type Output = $ValueType;
             fn get(&self) -> std::rc::Rc<Self::Output> {
                 crate::util::watchables::Watchable::get(self.watchable())
+            }
+        }
+        impl Into<crate::util::watchables::DynWatchable<$ValueType>> for $StructName {
+            fn into(self) -> crate::util::watchables::DynWatchable<$ValueType> {
+                crate::util::watchables::DynWatchable::new(self)
             }
         }
         impl crate::util::watchables::IntoWatchable<$ValueType> for $StructName {
@@ -63,6 +70,44 @@ macro_rules! impl_watchable {
         }
     };
 }
+
+#[macro_export]
+macro_rules! impl_setter {
+    ($StructName:ident, $ValueType:ty) => {
+        impl Setter for $StructName {
+            type Input = $ValueType;
+            fn set(&mut self, val: $ValueType) -> crate::util::watchables::DynSignaller {
+                self.setter().set(val)
+            }
+        }
+        impl Into<crate::util::watchables::DynWatchableSetter<$ValueType>> for $StructName {
+            fn into(self) -> crate::util::watchables::DynWatchableSetter<$ValueType> {
+                crate::util::watchables::DynWatchableSetter::new(self)
+            }
+        }
+        impl crate::util::watchables::IntoWatchableSetter<$ValueType> for $StructName {
+            type Output = $StructName;
+            fn into_watchable_setter(self) -> Self::Output {
+                self
+            }
+        }
+        #[wasm_bindgen]
+        impl $StructName {
+            /// Creates a mutator that when committed changes the value, after committing the mutation, the state of this field is DataState::UpToDate again
+            #[must_use = "Only once the mutator is committed, will the field be changed"]
+            #[wasm_bindgen(js_name=set)]
+            pub fn set_js(&mut self, val: $ValueType) -> Mutator {
+                let mut field = self.setter().clone();
+                Mutator::exec(move || {
+                    crate::util::logging::console::log!("executed");
+                    Box::new(field.set(val))
+                })
+            }
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! make_typed_dyn_watchable {
     ($StructName:ident, $ValueType:ty) => {
         #[allow(non_camel_case_types)]
@@ -81,10 +126,11 @@ macro_rules! make_typed_dyn_watchable {
                 &*self.0
             }
         }
-        crate::util::watchables::impl_watchable!($StructName, $ValueType);
+        crate::impl_watchable!($StructName, $ValueType);
     };
 }
 
+#[macro_export]
 macro_rules! make_typed_field {
     ($StructName:ident, $WatchableStructName:ident, $ValueType:ty) => {
         #[allow(non_camel_case_types)]
@@ -101,26 +147,19 @@ macro_rules! make_typed_field {
             fn watchable(&self) -> &Field<$ValueType> {
                 &self.0
             }
-            /// Sets the value directly, and signals when dropping the signaller
-            pub fn set(&mut self, val: $ValueType) -> Signaller {
-                self.0.set(val)
+            fn setter(&mut self) -> &mut Field<$ValueType> {
+                &mut self.0
             }
         }
+        crate::impl_watchable!($StructName, $ValueType);
+        crate::impl_setter!($StructName, $ValueType);
         #[wasm_bindgen]
         impl $StructName {
-            /// Creates a mutator that when committed changes the value, after committing the mutation, the state of this field is DataState::UpToDate again
-            #[must_use = "Only once the mutator is committed, will the field be changed"]
-            #[wasm_bindgen(js_name=set)]
-            pub fn set_js(&mut self, val: $ValueType) -> Mutator {
-                let mut field = self.0.clone();
-                Mutator::exec(move || Box::new(field.set(val)))
-            }
             /// Creates a readonly reference to this field data
             pub fn read(&self) -> $WatchableStructName {
                 $WatchableStructName::new(self.0.read())
             }
         }
-        crate::util::watchables::impl_watchable!($StructName, $ValueType);
     };
 }
 
@@ -208,10 +247,20 @@ impl Mutator {
         }
     }
 }
+pub trait MutateSetter<T> {
+    fn mutate_set(&mut self, val: T) -> Mutator;
+}
+impl<S: Setter + Clone + 'static> MutateSetter<S::Input> for S {
+    fn mutate_set(&mut self, val: S::Input) -> Mutator {
+        let mut field = self.clone();
+        Mutator::exec(move || Box::new(field.set(val)))
+    }
+}
 
-pub(crate) use impl_watchable;
-pub(crate) use make_typed_dyn_watchable;
-pub(crate) use make_typed_field;
+// pub use impl_setter;
+// pub use impl_watchable;
+// pub use make_typed_dyn_watchable;
+// pub use make_typed_field;
 
 make_typed_dyn_watchable!(StringWatchable, String);
 make_typed_dyn_watchable!(OptionStringWatchable, Option<String>);

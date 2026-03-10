@@ -1,6 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::util::watchables::{Constant, DataState, Listener, Observer, WatchableState};
+use crate::util::watchables::{
+    Constant, DataState, Listener, Observer, WatchableSetter, WatchableState,
+};
 
 use super::{derived::Derived, watchable::Watchable};
 
@@ -54,6 +56,10 @@ impl<X: Clone, W: Watchable<Output = X> + 'static> ClonableWatchableUtils<X> for
 pub trait IntoWatchable<X> {
     type Output: Watchable<Output = X>;
     fn into_watchable(self) -> Self::Output;
+}
+pub trait IntoWatchableSetter<X> {
+    type Output: WatchableSetter<Input = X, Output = X>;
+    fn into_watchable_setter(self) -> Self::Output;
 }
 
 impl IntoWatchable<String> for &str {

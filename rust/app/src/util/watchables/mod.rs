@@ -1,6 +1,7 @@
 pub mod constant;
 pub mod derived;
 pub mod dyn_watchable;
+pub mod dyn_watchable_setter;
 pub mod field;
 pub mod signaller;
 pub mod tests;
@@ -12,7 +13,9 @@ pub mod watchables_wasm;
 pub use constant::*;
 pub use derived::*;
 pub use dyn_watchable::*;
+pub use dyn_watchable_setter::*;
 pub use field::*;
+pub use signaller::*;
 pub use watchable::*;
 pub use watchable_utils::*;
 pub use watchables_wasm::*;

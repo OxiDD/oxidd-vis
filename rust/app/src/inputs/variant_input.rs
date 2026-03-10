@@ -1,6 +1,6 @@
 use std::{cell::RefCell, ops::Index, rc::Rc};
 
-use app_macros::{wasm_getters, watchable_setters};
+use app_macros::{builder_into_comp, wasm_getters, watchable_setters};
 use bon::Builder;
 use itertools::Itertools;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -10,67 +10,40 @@ use crate::{
         composite_component::ComponentVecWatchable, Align, AlignMain, AlignMainWatchable,
         AlignWatchable,
     },
-    inputs::variant_input::variant_input_comp_builder::{Empty, SetData},
+    impl_setter, impl_watchable,
+    inputs::{
+        variant_input::variant_input_comp_builder::{SetOptions, SetWrapper},
+        wrapper::{CompWrapper, IdentityWrapper, InputWrapper},
+        InheritLabel, Inheritable, InheritedInput,
+    },
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
-        make_typed_dyn_watchable, signaller::Signaller, BoolWatchable, Constant, Derived,
-        DynWatchable, F32Watchable, Field, IntoWatchable, Mutator, OptionBoolWatchable,
-        U32Watchable, Watchable, Watching,
+        signaller::Signaller, BoolWatchable, ClonableWatchableUtils, Constant, DataState, Derived,
+        DynSignaller, DynWatchable, DynWatchableSetter, F32Watchable, Field, IntoWatchable,
+        IntoWatchableSetter, Listener, Mutator, Observer, OptionBoolWatchable, Setter,
+        U32Watchable, Watchable, WatchableState, Watching,
     },
 };
 
-/// A select field
-pub struct VariantInput<V: VariantOptions>(Field<V>);
-pub trait VariantOptions: Sized + Clone + Eq {
-    /// The first value is considered the default, and used as a fallback
-    fn get_variants() -> Vec<Self>;
-}
-impl<V: VariantOptions> Clone for VariantInput<V> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-impl<V: VariantOptions + 'static> VariantInput<V> {
-    pub fn new(val: V) -> Self {
-        Self(Field::new(val))
-    }
-    pub fn from(from: impl Into<V>) -> Self {
-        Self::new(from.into())
-    }
-    fn watchable(&self) -> &Field<V> {
-        &self.0
-    }
-    pub fn set(&mut self, val: V) -> Signaller {
-        self.0.set(val)
-    }
-    pub fn filtered(
-        &self,
-        options: impl IntoWatchable<Vec<V>> + 'static,
-    ) -> VariantInputFiltered<V> {
-        VariantInputFiltered::raw(self.0.clone(), options)
-    }
-}
-impl<V: VariantOptions + 'static> Into<VariantInputFiltered<V>> for VariantInput<V> {
-    fn into(self) -> VariantInputFiltered<V> {
-        self.filtered(Constant::new(V::get_variants()))
-    }
-}
-
-/// A select field with filtered options
-pub struct VariantInputFiltered<V: Sized + Clone + Eq + 'static> {
-    value: Field<V>,
+/// A variant input
+pub struct VariantInput<V: Sized + Clone + Eq + 'static> {
+    value: DynWatchableSetter<V>,
     options: DynWatchable<Vec<V>>,
     filtered: Derived<V>,
 }
-impl<V: Sized + Clone + Eq> VariantInputFiltered<V> {
-    fn raw(
-        value: Field<V>,
+impl<V: Sized + Clone + Eq> VariantInput<V> {
+    pub fn new_options(value: V, options: impl IntoWatchable<Vec<V>> + 'static) -> VariantInput<V> {
+        Self::from_options(Field::new(value), options)
+    }
+    fn from_options<F: Into<DynWatchableSetter<V>> + Clone>(
+        value: F,
         options: impl IntoWatchable<Vec<V>> + 'static,
-    ) -> VariantInputFiltered<V> {
+    ) -> VariantInput<V> {
+        let value = value.into();
         let value_clone = value.clone();
         let options = DynWatchable::new(options.into_watchable());
         let options_clone = options.clone();
-        VariantInputFiltered {
+        VariantInput {
             value,
             options,
             filtered: Derived::new(move |t| {
@@ -89,23 +62,23 @@ impl<V: Sized + Clone + Eq> VariantInputFiltered<V> {
             }),
         }
     }
-    pub fn new(value: V, options: impl IntoWatchable<Vec<V>> + 'static) -> VariantInputFiltered<V> {
-        Self::raw(Field::new(value), options)
-    }
-    pub fn from(
-        from: impl Into<V>,
-        options: impl IntoWatchable<Vec<V>> + 'static,
-    ) -> VariantInputFiltered<V> {
-        Self::new(from.into(), options)
-    }
-    pub fn set(&mut self, val: V) -> Signaller {
-        self.value.set(val)
-    }
-    pub fn comp(&self, map: impl Fn(&V) -> Component + 'static) -> VariantComponentMapper<V> {
-        VariantComponentMapper::new(self.clone(), map)
+    pub fn comp_builder<I: Into<Component>, M: Fn(&V) -> I + 'static>(
+        self,
+        map: M,
+    ) -> VariantInputCompBuilder<SetOptions> {
+        VariantComponentMapper::new(self, map).comp_builder()
     }
 }
-impl<V: Sized + Clone + Eq> Clone for VariantInputFiltered<V> {
+pub trait VariantOptions: Sized + Clone + Eq {
+    /// The first value is considered the default, and used as a fallback
+    fn get_variants() -> Vec<Self>;
+}
+impl<V: Sized + Clone + Eq + VariantOptions> VariantInput<V> {
+    pub fn new(value: V) -> VariantInput<V> {
+        Self::from_options(Field::new(value), V::get_variants())
+    }
+}
+impl<V: Sized + Clone + Eq> Clone for VariantInput<V> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -114,26 +87,90 @@ impl<V: Sized + Clone + Eq> Clone for VariantInputFiltered<V> {
         }
     }
 }
+impl<V: Sized + Clone + Eq + 'static> WatchableState for VariantInput<V> {
+    fn state(&self) -> DataState {
+        self.filtered.state()
+    }
+    fn observe(&self, listener: Box<dyn Listener>) -> Observer {
+        self.filtered.observe(listener)
+    }
+}
+impl<V: Sized + Clone + Eq + 'static> Watchable for VariantInput<V> {
+    type Output = V;
+    fn get(&self) -> Rc<Self::Output> {
+        self.filtered.get()
+    }
+}
+impl<V: Sized + Clone + Eq + 'static> Setter for VariantInput<V> {
+    type Input = V;
+    fn set(&mut self, val: V) -> DynSignaller {
+        self.value.set(val)
+    }
+}
+
+impl<V: Sized + Clone + Eq + 'static> Into<DynWatchable<V>> for VariantInput<V> {
+    fn into(self) -> DynWatchable<V> {
+        DynWatchable::new(self)
+    }
+}
+impl<V: Sized + Clone + Eq + 'static> Into<DynWatchableSetter<V>> for VariantInput<V> {
+    fn into(self) -> DynWatchableSetter<V> {
+        DynWatchableSetter::new(self)
+    }
+}
+
+impl<V: Sized + Clone + Eq + 'static> Inheritable for InheritedInput<VariantInput<V>> {
+    fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + 'static) -> Self {
+        let input = self.input();
+        InheritedInput::new(
+            VariantInput::from_options(Field::new((*input.get()).clone()), input.options.clone()),
+            DynWatchable::new(self.clone()),
+            self_name,
+        )
+    }
+}
+impl<V: Sized + Clone + Eq + VariantOptions + 'static> From<V> for VariantInput<V> {
+    fn from(value: V) -> Self {
+        VariantInput::from_options(Field::new(value.into()), V::get_variants())
+    }
+}
+impl<V: Sized + Clone + Eq + VariantOptions + 'static> From<V> for InheritedInput<VariantInput<V>> {
+    fn from(value: V) -> Self {
+        Self::from(VariantInput::from(value))
+    }
+}
+impl<V: Sized + Clone + Eq + 'static> From<(V, Vec<V>)> for VariantInput<V> {
+    fn from((value, options): (V, Vec<V>)) -> Self {
+        VariantInput::from_options(Field::new(value), options)
+    }
+}
+impl<V: Sized + Clone + Eq + VariantOptions + 'static> From<(V, Vec<V>)>
+    for InheritedInput<VariantInput<V>>
+{
+    fn from(value: (V, Vec<V>)) -> Self {
+        Self::from(VariantInput::from(value))
+    }
+}
 
 /// Maps variants to the components representing them
 pub struct VariantComponentMapper<V: Sized + Clone + Eq + 'static> {
-    data: VariantInputFiltered<V>,
+    data: VariantInput<V>,
     option_components: ComponentVecWatchable,
     selected_index: U32Watchable,
 }
 impl<V: Sized + Clone + Eq + 'static> VariantComponentMapper<V> {
-    pub fn new(
-        data: impl Into<VariantInputFiltered<V>>,
-        map: impl Fn(&V) -> Component + 'static,
+    pub fn new<I: Into<Component>, M: Fn(&V) -> I + 'static>(
+        data: impl Into<VariantInput<V>>,
+        map: M,
     ) -> Self {
         let data = data.into();
         let options = data.options.clone();
         let option_components = ComponentVecWatchable::new(Derived::new(move |t| {
             let options = options.watch(t);
-            (*options).iter().map(&map).collect::<Vec<_>>()
+            (*options).iter().map(|v| map(v).into()).collect::<Vec<_>>()
         }));
         let options = data.options.clone();
-        let selected = data.value.read();
+        let selected = data.value.clone();
         let selected_index = U32Watchable::new(Derived::new(move |t| {
             let options = options.watch(t);
             let val = selected.watch(t);
@@ -149,13 +186,55 @@ impl<V: Sized + Clone + Eq + 'static> VariantComponentMapper<V> {
             selected_index,
         }
     }
-    pub fn from(
-        data: impl Into<VariantInputFiltered<V>>,
-        map: impl Fn(&V) -> Component + 'static,
-    ) -> Self {
+    pub fn from(data: impl Into<VariantInput<V>>, map: impl Fn(&V) -> Component + 'static) -> Self {
         Self::new(data.into(), map)
     }
+    pub fn comp_builder(self) -> VariantInputCompBuilder<SetOptions> {
+        VariantInputComp::builder(self.clone()).options(self.option_components)
+    }
 }
+impl<V: Sized + Clone + Eq> Clone for VariantComponentMapper<V> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            option_components: self.option_components.clone(),
+            selected_index: self.selected_index.clone(),
+        }
+    }
+}
+impl<V: Sized + Clone + Eq + 'static> WatchableState for VariantComponentMapper<V> {
+    fn state(&self) -> DataState {
+        self.selected_index.state()
+    }
+    fn observe(&self, listener: Box<dyn Listener>) -> Observer {
+        self.selected_index.observe(listener)
+    }
+}
+impl<V: Sized + Clone + Eq + 'static> Watchable for VariantComponentMapper<V> {
+    type Output = u32;
+    fn get(&self) -> Rc<Self::Output> {
+        Watchable::get(&self.selected_index)
+    }
+}
+impl<V: Sized + Clone + Eq + 'static> Setter for VariantComponentMapper<V> {
+    type Input = u32;
+    fn set(&mut self, val: u32) -> DynSignaller {
+        let options = self.data.options.get();
+        let option = (*options).get(val as usize);
+        Box::new(option.map(|option| self.data.set(option.clone())))
+    }
+}
+impl<V: Sized + Clone + Eq + 'static> Into<DynWatchable<u32>> for VariantComponentMapper<V> {
+    fn into(self) -> DynWatchable<u32> {
+        DynWatchable::new(self)
+    }
+}
+impl<V: Sized + Clone + Eq + 'static> Into<DynWatchableSetter<u32>> for VariantComponentMapper<V> {
+    fn into(self) -> DynWatchableSetter<u32> {
+        DynWatchableSetter::new(self)
+    }
+}
+
 pub trait VariantComponentMapping {
     fn map(&self) -> Component;
 }
@@ -167,44 +246,20 @@ impl<V: Sized + Clone + Eq + VariantComponentMapping + VariantOptions>
     }
 }
 
-impl<V: Sized + Clone + Eq + VariantComponentMapping> Into<VariantComponentMapper<V>>
-    for VariantInputFiltered<V>
-{
-    fn into(self) -> VariantComponentMapper<V> {
-        VariantComponentMapper::new(self, |v| V::map(v))
-    }
-}
-
-impl<V: Sized + Clone + Eq + 'static> VariantOptionComponents for VariantComponentMapper<V> {
-    fn get_options(&self) -> &ComponentVecWatchable {
-        &self.option_components
-    }
-
-    fn select_option(&mut self, option: u32) -> Option<Signaller> {
-        let options = self.data.options.get();
-        let option = (*options).get(option as usize);
-        option.map(|option| self.data.set(option.clone()))
-    }
-
-    fn get_option(&self) -> &U32Watchable {
-        &self.selected_index
-    }
-}
-trait VariantOptionComponents {
-    fn get_options(&self) -> &ComponentVecWatchable;
-    fn select_option(&mut self, option: u32) -> Option<Signaller>;
-    fn get_option(&self) -> &U32Watchable;
-}
-
 /// Variant component.
 #[wasm_getters]
 #[wasm_bindgen]
+#[builder_into_comp]
 #[watchable_setters]
 #[derive(Builder, Clone)]
 pub struct VariantInputComp {
     /// The data of the component.
-    #[builder(setters(name=set_data, vis=""))]
-    data: Rc<RefCell<dyn VariantOptionComponents>>,
+    #[builder(start_fn, into)]
+    data: DynWatchableSetter<u32>,
+    /// The options of the dropdown
+    #[getter]
+    #[setter(Vec<Component>)]
+    options: ComponentVecWatchable,
     /// Whether the variants should display horizontally (if advanced).
     #[getter]
     #[setter(Option<bool>)]
@@ -225,78 +280,75 @@ pub struct VariantInputComp {
     #[getter]
     #[setter(bool, false)]
     disabled: BoolWatchable,
-    /// The current option components
-    #[getter]
-    #[builder(skip=VariantInputComp::get_options(data.clone()))]
-    options: ComponentVecWatchable,
-    /// The currently selected option index
-    #[getter]
-    #[builder(skip=VariantInputComp::get_selected(data.clone()))]
-    selected: U32Watchable,
+    /// Wraps the output component
+    #[builder(default=IdentityWrapper::new())]
+    wrapper: Rc<dyn CompWrapper>,
 }
-impl VariantInputCompBuilder {
-    pub fn data<V: Sized + Clone + Eq + 'static>(
-        self,
-        val: impl Into<VariantComponentMapper<V>>,
-    ) -> VariantInputCompBuilder<SetData<Empty>> {
-        self.set_data(Rc::new(RefCell::new(val.into())))
-    }
-}
-#[wasm_bindgen]
 impl VariantInputComp {
-    pub fn select(&mut self, option: u32) -> Mutator {
-        let value = self.data.clone();
-        Mutator::exec(move || Box::new(value.borrow_mut().select_option(option)))
+    pub fn wrap_builder_map<
+        V: Sized + Clone + Eq + 'static,
+        I: Into<VariantInput<V>>,
+        C: Into<Component>,
+        M: Fn(&V) -> C + 'static,
+    >(
+        wrapper: impl CompWrapper + InputWrapper<I> + Clone + 'static,
+        map: M,
+    ) -> VariantInputCompBuilder<SetWrapper<SetOptions>> {
+        let input = wrapper.get_input().into();
+        VariantComponentMapper::new(input, map)
+            .comp_builder()
+            .wrapper(Rc::new(wrapper))
     }
-    fn get_selected(data: Rc<RefCell<dyn VariantOptionComponents>>) -> U32Watchable {
-        (*data).borrow().get_option().clone()
+    pub fn wrap_builder<V: Sized + Clone + Eq + 'static, I: Into<VariantComponentMapper<V>>>(
+        wrapper: impl CompWrapper + InputWrapper<I> + Clone + 'static,
+    ) -> VariantInputCompBuilder<SetWrapper<SetOptions>> {
+        let input = wrapper.get_input().into();
+        Self::builder(input.clone())
+            .options(input.option_components.clone())
+            .wrapper(Rc::new(wrapper))
     }
-    fn get_options(data: Rc<RefCell<dyn VariantOptionComponents>>) -> ComponentVecWatchable {
-        (*data).borrow().get_options().clone()
+
+    fn watchable(&self) -> &DynWatchableSetter<u32> {
+        &self.data
+    }
+    fn setter(&mut self) -> &mut DynWatchableSetter<u32> {
+        &mut self.data
     }
 }
+impl_watchable!(VariantInputComp, u32);
+impl_setter!(VariantInputComp, u32);
 
+impl<V: Sized + Clone + Eq + VariantComponentMapping + VariantOptions> Into<VariantInputComp>
+    for VariantInput<V>
+{
+    fn into(self) -> VariantInputComp {
+        Into::<VariantComponentMapper<V>>::into(self).into()
+    }
+}
 impl<V: Sized + Clone + Eq + 'static> Into<VariantInputComp> for VariantComponentMapper<V> {
     fn into(self) -> VariantInputComp {
-        VariantInputComp::builder().data(self).build()
-    }
-}
-impl<V: Sized + Clone + Eq + VariantComponentMapping + VariantOptions + 'static>
-    Into<VariantInputComp> for VariantInput<V>
-{
-    fn into(self) -> VariantInputComp {
-        Into::<VariantComponentMapper<V>>::into(self).into()
-    }
-}
-impl<V: Sized + Clone + Eq + VariantComponentMapping> Into<VariantInputComp>
-    for VariantInputFiltered<V>
-{
-    fn into(self) -> VariantInputComp {
-        Into::<VariantComponentMapper<V>>::into(self).into()
+        VariantInputComp::builder(DynWatchableSetter::new(self.clone()))
+            .options(self.option_components)
+            .build()
     }
 }
 
-impl<V: Sized + Clone + Eq + VariantComponentMapping + VariantOptions + 'static> Into<Component>
+impl<V: Sized + Clone + Eq + VariantComponentMapping + VariantOptions> Into<Component>
     for VariantInput<V>
 {
     fn into(self) -> Component {
         Into::<VariantInputComp>::into(self).into()
     }
 }
-impl<V: Sized + Clone + Eq + VariantComponentMapping> Into<Component> for VariantInputFiltered<V> {
-    fn into(self) -> Component {
-        Into::<VariantInputComp>::into(self).into()
-    }
-}
-impl<V: Sized + Clone + Eq + VariantComponentMapping> Into<Component>
-    for VariantComponentMapper<V>
-{
+impl<V: Sized + Clone + Eq> Into<Component> for VariantComponentMapper<V> {
     fn into(self) -> Component {
         Into::<VariantInputComp>::into(self).into()
     }
 }
 impl Into<Component> for VariantInputComp {
     fn into(self) -> Component {
-        Component::new(ComponentOption::VariantInput(self))
+        let wrapper = self.wrapper.clone();
+        let comp = Component::new(ComponentOption::VariantInput(self));
+        wrapper.wrap(comp)
     }
 }

@@ -1,39 +1,52 @@
 use std::rc::Rc;
 
-use app_macros::{wasm_getters, watchable_setters};
+use app_macros::{builder_into_comp, wasm_getters, watchable_setters};
 use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::{new_wasm_interface::{Component, ComponentOption}, util::watchables::{
-     BoolWatchable, Constant, DataState, Derived, IntoWatchable, JsListener, Listener, Mutator, Observer, OptionBoolWatchable, OptionU32Watchable, U32Field, U32Watchable, Watchable, WatchableState, Watching, impl_watchable, signaller::Signaller
+use crate::{impl_setter, impl_watchable, inputs::{InheritLabel, Inheritable, InheritedInput, u32_input::u32_input_comp_builder::SetWrapper, wrapper::{CompWrapper, IdentityWrapper, InputWrapper}}, new_wasm_interface::{Component, ComponentOption}, util::watchables::{
+     BoolWatchable, Constant, DataState, Derived, DynSignaller, DynWatchable, DynWatchableSetter, IntoWatchable, IntoWatchableSetter, JsListener, Listener, MutateSetter, Mutator, Observer, OptionBoolWatchable, OptionU32Watchable, Setter, U32Field, U32Watchable, Watchable, WatchableState, Watching, signaller::Signaller
 }};
 
-/// u32 input data
+
+/// Number input data
 #[derive(Clone)]
 #[wasm_bindgen]
 pub struct U32Input(U32Field);
 impl U32Input {
     pub fn new(val: u32) -> Self {
-        U32Input(U32Field::new(val))
-    }
-    pub fn from<V: Into<u32>>(val: V) -> Self {
-        U32Input(U32Field::from(val))
+        U32Input(U32Field::new(val).into())
     }
     fn watchable(&self) -> &U32Field {
         &self.0
     }
-    pub fn set(&mut self, val: u32) -> Signaller {
-        self.0.set(val)
+    fn setter(&mut self) -> &mut U32Field {
+        &mut self.0
     }
 }
 impl_watchable!(U32Input, u32);
-#[wasm_bindgen]
-impl U32Input {
-    #[wasm_bindgen(js_name="set")]
-    pub fn set_js(&mut self, val: u32) -> Mutator {
-        self.0.set_js(val)
+impl_setter!(U32Input, u32);
+
+impl Inheritable for InheritedInput<U32Input> {
+    fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + 'static) -> Self {
+        InheritedInput::new(
+            U32Input::new(*self.get()),
+            DynWatchable::new(self.clone()),
+            self_name,
+        )
     }
 }
+impl<X: Into<u32>> From<X> for U32Input {
+    fn from(value: X) -> Self {
+        Self::new(value.into())
+    }
+}
+impl<X: Into<u32>> From<X> for InheritedInput<U32Input> {
+    fn from(value: X) -> Self {
+        Self::from(U32Input::from(value))
+    }
+}
+
 
 /// Clamped u32 input
 #[wasm_getters]
@@ -100,24 +113,38 @@ impl U32InputClamped {
         let precision = self.precision.clone();
         clamp(val, min, max, precision)
     }
-    pub fn set(&mut self, val: u32) -> Signaller {
-        self.input.set(val)
-    }
     fn watchable(&self) -> &U32Watchable {
         &self.clamped
     }
-}
-impl_watchable!(U32InputClamped, u32);
-#[wasm_bindgen]
-impl U32InputClamped {
-    #[wasm_bindgen(js_name="set")]
-    pub fn set_js(&mut self, val: u32) -> Mutator {
-        self.input.set_js(val)
+    fn setter(&mut self) -> &mut U32Input {
+        &mut self.input
     }
 }
-impl Into<U32InputClamped> for U32Input {
-    fn into(self) -> U32InputClamped {
-        U32InputClamped::builder(self).build()
+impl_watchable!(U32InputClamped, u32);
+impl_setter!(U32InputClamped, u32);
+
+impl Inheritable for InheritedInput<U32InputClamped> {
+    fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + 'static) -> Self {
+        let p = self.input();
+        InheritedInput::new(
+            U32InputClamped::builder(U32Input::new(p.get()))
+                .min(p.min.clone())
+                .max(p.max.clone())
+                .precision(p.precision.clone())
+                .build(),
+            DynWatchable::new(self.clone()),
+            self_name,
+        )
+    }
+}
+impl<X: Into<u32>> From<X> for U32InputClamped {
+    fn from(value: X) -> Self {
+        Self::builder(U32Input::from(value)).build()
+    }
+}
+impl<X: Into<u32>> From<X> for InheritedInput<U32InputClamped> {
+    fn from(value: X) -> Self {
+        Self::from(U32InputClamped::from(value))
     }
 }
 
@@ -125,13 +152,13 @@ impl Into<U32InputClamped> for U32Input {
 /// u32 input component
 #[wasm_getters]
 #[wasm_bindgen]
+#[builder_into_comp]
 #[watchable_setters]
 #[derive(Builder, Clone)]
 pub struct U32InputComp {
     /// The data of the component
-    #[getter]
     #[builder(start_fn, into)]
-    data: U32InputClamped,
+    data: DynWatchableSetter<u32>,
     /// Whether to supply step buttons
     #[getter]
     #[setter(Option<u32>)]
@@ -143,14 +170,26 @@ pub struct U32InputComp {
     /// Whether this input is disabled
     #[getter]
     #[setter(bool, false)]
-    disabled: BoolWatchable
+    disabled: BoolWatchable,
+    /// Wraps the output component
+    #[builder(default=IdentityWrapper::new())]
+    wrapper: Rc<dyn CompWrapper>,
 }
 impl U32InputComp {
-    fn watchable(&self) -> &U32InputClamped {
+    pub fn wrap_builder<I: Into<DynWatchableSetter<u32>>>(
+        wrapper: impl CompWrapper + InputWrapper<I> + Clone + 'static,
+    ) -> U32InputCompBuilder<SetWrapper> {
+        Self::builder(wrapper.get_input()).wrapper(Rc::new(wrapper))
+    }
+    fn watchable(&self) -> &DynWatchableSetter<u32> {
         &self.data
+    }
+    fn setter(&mut self) -> &mut DynWatchableSetter<u32> {
+        &mut self.data
     }
 }
 impl_watchable!(U32InputComp, u32);
+impl_setter!(U32InputComp, u32);
 
 impl Into<U32InputComp> for U32Input {
     fn into(self) -> U32InputComp {
@@ -175,6 +214,8 @@ impl Into<Component> for U32InputClamped {
 }
 impl Into<Component> for U32InputComp {
     fn into(self) -> Component {
-        Component::new(ComponentOption::U32Input(self))
+        let wrapper = self.wrapper.clone();
+        let comp = Component::new(ComponentOption::U32Input(self));
+        wrapper.wrap(comp)
     }
 }

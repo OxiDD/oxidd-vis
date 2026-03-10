@@ -9,10 +9,10 @@ use crate::{
         button_component::ButtonComp, dyn_component::DynComp,
         panel_component::panel_comp_builder::SetOpenCount,
     },
+    make_typed_dyn_watchable,
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
-        make_typed_dyn_watchable, BoolWatchable, F32Watchable, OptionU32Watchable, StringField,
-        StringWatchable, U32Watchable,
+        BoolWatchable, F32Watchable, OptionU32Watchable, StringField, StringWatchable, U32Watchable,
     },
 };
 

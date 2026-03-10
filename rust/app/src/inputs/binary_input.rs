@@ -1,83 +1,132 @@
-use app_macros::{wasm_getters, watchable_setters};
+use std::rc::Rc;
+
+use app_macros::{builder_into_comp, wasm_getters, watchable_setters};
 use bon::Builder;
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::prelude::*;
 
 use crate::{
+    impl_setter, impl_watchable,
+    inputs::{
+        binary_input::binary_input_comp_builder::SetWrapper,
+        wrapper::{CompWrapper, IdentityWrapper, InputWrapper},
+        InheritLabel, Inheritable, InheritedInput,
+    },
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
-        impl_watchable, signaller::Signaller, BoolWatchable, Field, Mutator, OptionStringField,
-        OptionStringWatchable, StringWatchable,
+        signaller::Signaller, BoolWatchable, DynSignaller, DynWatchable, DynWatchableSetter, Field,
+        IntoWatchable, Mutator, OptionStringField, OptionStringWatchable, Setter, StringWatchable,
     },
 };
 
-/// Binary input data
-#[wasm_getters]
 #[wasm_bindgen]
-#[watchable_setters]
-#[derive(Builder, Clone)]
-pub struct BinaryInput {
-    #[builder(start_fn, into)]
-    data: Field<Vec<u8>>,
-    #[getter]
-    #[builder(into)]
-    filename: OptionStringField,
+#[derive(Clone)]
+pub struct FileData {
+    data: Vec<u8>,
+    name: String,
 }
+#[wasm_bindgen]
+impl FileData {
+    #[wasm_bindgen(constructor)]
+    pub fn new(name: String, data: Vec<u8>) -> FileData {
+        FileData { name, data }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn data(&self) -> Vec<u8> {
+        self.data.clone()
+    }
+}
+
+/// Binary input data
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct BinaryInput(Field<Option<FileData>>);
 impl BinaryInput {
     pub fn new() -> Self {
-        BinaryInput {
-            data: Field::new(vec![]),
-            filename: OptionStringField::new(None),
-        }
+        BinaryInput(Field::new(None))
     }
-    fn watchable(&self) -> &Field<Vec<u8>> {
-        &self.data
+    fn watchable(&self) -> &Field<Option<FileData>> {
+        &self.0
     }
-    pub fn set(&mut self, val: Vec<u8>) -> Signaller {
-        self.data.set(val.into())
+    fn setter(&mut self) -> &mut Field<Option<FileData>> {
+        &mut self.0
     }
 }
-impl_watchable!(BinaryInput, Vec<u8>);
-#[wasm_bindgen]
-impl BinaryInput {
-    #[wasm_bindgen(js_name = "set")]
-    pub fn set_js(&mut self, val: Vec<u8>) -> Mutator {
-        let mut field = self.data.clone();
-        Mutator::exec(move || Box::new(field.set(val)))
+impl_watchable!(BinaryInput, Option<FileData>);
+impl_setter!(BinaryInput, Option<FileData>);
+
+impl Inheritable for InheritedInput<BinaryInput> {
+    fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + 'static) -> Self {
+        InheritedInput::new(
+            BinaryInput::new(),
+            DynWatchable::new(self.clone()),
+            self_name,
+        )
+    }
+}
+impl<X: Into<Option<FileData>>> From<X> for BinaryInput {
+    fn from(value: X) -> Self {
+        BinaryInput(Field::new(value.into()))
+    }
+}
+impl<X: Into<Option<FileData>>> From<X> for InheritedInput<BinaryInput> {
+    fn from(value: X) -> Self {
+        InheritedInput::from(BinaryInput::from(value))
     }
 }
 
 /// BinaryInput component
 #[wasm_getters]
 #[wasm_bindgen]
+#[builder_into_comp]
 #[watchable_setters]
 #[derive(Builder, Clone)]
 pub struct BinaryInputComp {
     /// The data of the component
-    #[getter]
     #[builder(start_fn, into)]
-    data: BinaryInput,
+    data: DynWatchableSetter<Option<FileData>>,
     /// A comma separated list of extensions
     #[getter]
     #[setter(Option<String>)]
     formats: OptionStringWatchable,
+    /// Whether the user should be able to remove the file
+    #[getter]
+    #[setter(bool, false)]
+    allow_unset: BoolWatchable,
     /// Whether this input is disabled
     #[getter]
     #[setter(bool, false)]
     disabled: BoolWatchable,
+    /// Wraps the output component
+    #[builder(default=IdentityWrapper::new())]
+    wrapper: Rc<dyn CompWrapper>,
 }
 impl BinaryInputComp {
-    fn watchable(&self) -> &BinaryInput {
+    pub fn wrap_builder<I: Into<DynWatchableSetter<Option<FileData>>>>(
+        wrapper: impl CompWrapper + InputWrapper<I> + Clone + 'static,
+    ) -> BinaryInputCompBuilder<SetWrapper> {
+        Self::builder(wrapper.get_input()).wrapper(Rc::new(wrapper))
+    }
+    fn watchable(&self) -> &DynWatchableSetter<Option<FileData>> {
         &self.data
     }
+    fn setter(&mut self) -> &mut DynWatchableSetter<Option<FileData>> {
+        &mut self.data
+    }
 }
-impl_watchable!(BinaryInputComp, Vec<u8>);
+impl_watchable!(BinaryInputComp, Option<FileData>);
+impl_setter!(BinaryInputComp, Option<FileData>);
 
 impl Into<BinaryInputComp> for BinaryInput {
     fn into(self) -> BinaryInputComp {
         BinaryInputComp::builder(self).build()
     }
 }
-
 impl Into<Component> for BinaryInput {
     fn into(self) -> Component {
         Into::<BinaryInputComp>::into(self).into()
@@ -85,6 +134,8 @@ impl Into<Component> for BinaryInput {
 }
 impl Into<Component> for BinaryInputComp {
     fn into(self) -> Component {
-        Component::new(ComponentOption::BinaryInput(self))
+        let wrapper = self.wrapper.clone();
+        let comp = Component::new(ComponentOption::BinaryInput(self));
+        wrapper.wrap(comp)
     }
 }

@@ -18,7 +18,7 @@ use crate::{
     inputs::{
         binary_input::BinaryInputComp, bool_input::BoolInputComp, f32_input::F32InputComp,
         i32_input::I32InputComp, string_input::StringInputComp, u32_input::U32InputComp,
-        variant_input::VariantInputComp,
+        variant_input::VariantInputComp, InheritedInputComp,
     },
     types::util::graph_structure::graph_manipulators::node_presence_adjuster::PresenceRemainder,
     util::rectangle::Rectangle,
@@ -64,6 +64,7 @@ pub enum ComponentOption {
     U32Input(U32InputComp),
     StringInput(StringInputComp),
     VariantInput(VariantInputComp),
+    InheritedInput(InheritedInputComp),
     Button(ButtonComp),
     Container(ContainerComp),
     Fill(FillComp),
@@ -86,6 +87,7 @@ impl_as_variant!(as_i32_input, I32Input, I32InputComp);
 impl_as_variant!(as_u32_input, U32Input, U32InputComp);
 impl_as_variant!(as_string_input, StringInput, StringInputComp);
 impl_as_variant!(as_variant_input, VariantInput, VariantInputComp);
+impl_as_variant!(as_inherited_input, InheritedInput, InheritedInputComp);
 impl_as_variant!(as_button, Button, ButtonComp);
 impl_as_variant!(as_container, Container, ContainerComp);
 impl_as_variant!(as_fill, Fill, FillComp);
