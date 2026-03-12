@@ -21,6 +21,7 @@ export const LabelCompUI: NFC<{
     const child = watch(data.input);
     const text = watch(data.label);
     const kind = watch(data.kind);
+    console.log(kind, LabelKind.Above);
 
     const theme = useTheme();
 
@@ -41,23 +42,23 @@ export const LabelCompUI: NFC<{
     }, [text]);
     if (kind == LabelKind.Category) {
         return (
-            <>
+            <div>
                 <Label
                     className={`${css({marginBottom: 10, fontSize: 20})} ${className}`}
                     id={id}>
                     {text}
                 </Label>
                 <ChildComp data={child} aria={addAriaLabel(id, aria)} />
-            </>
+            </div>
         );
     } else if (kind == LabelKind.Above) {
         return (
-            <>
+            <div>
                 <Label className={className} id={id}>
                     {text}
                 </Label>
                 <ChildComp data={child} aria={addAriaLabel(id, aria)} />
-            </>
+            </div>
         );
     } else {
         return (

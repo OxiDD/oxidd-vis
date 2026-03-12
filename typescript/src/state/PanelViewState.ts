@@ -37,7 +37,8 @@ export class PanelViewState extends ViewState {
      * @param ancestors The ancestors of the parent
      */
     public constructor(component: PanelComp, views: ViewManager, ancestors: ViewState[]) {
-        super(component.id);
+        const parent_ID = ancestors[ancestors.length - 1].ID;
+        super(parent_ID + "-" + component.id);
         this.content = component.content;
         this.children = dynPanels(component.content, views, [...ancestors, this]);
         this.ancestors = ancestors;

@@ -8,9 +8,9 @@ use crate::{
     components::text_component::TextComp,
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
-        signaller::Signaller, BoolWatchable, ClonableWatchableUtils, Constant, DataState,
+        signaller::Signaller, BoolWatchable, CloneableWatchableUtils, Constant, DataState,
         DynSignaller, DynWatchable, Field, IntoWatchable, JsListener, Listener, Mutator, Observer,
-        OptionBoolWatchable, OptionStringWatchable, ReadonlyField, Setter, StringWatchable,
+        OptionBoolWatchable, OptionStringWatchable, ReadonlyField, WatchableSetter, StringWatchable,
         U32Field, U32Watchable, Watchable, WatchableState,
     },
 };

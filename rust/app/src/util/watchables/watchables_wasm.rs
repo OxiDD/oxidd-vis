@@ -6,9 +6,7 @@ use wasm_bindgen::{
 };
 
 use crate::util::watchables::{
-    DataState, DynSignaller, DynWatchable, DynWatchableSetter, Field, IntoWatchable,
-    IntoWatchableSetter, Listener, Observer, ReadonlyField, Setter, Watchable, WatchableSetter,
-    WatchableState,
+    DataState, Field, IntoWatchable, Listener, Watchable, WatchableSetter, WatchableState,
 };
 
 #[macro_export]
@@ -74,8 +72,7 @@ macro_rules! impl_watchable {
 #[macro_export]
 macro_rules! impl_setter {
     ($StructName:ident, $ValueType:ty) => {
-        impl Setter for $StructName {
-            type Input = $ValueType;
+        impl WatchableSetter for $StructName {
             fn set(&mut self, val: $ValueType) -> crate::util::watchables::DynSignaller {
                 self.setter().set(val)
             }
@@ -250,8 +247,8 @@ impl Mutator {
 pub trait MutateSetter<T> {
     fn mutate_set(&mut self, val: T) -> Mutator;
 }
-impl<S: Setter + Clone + 'static> MutateSetter<S::Input> for S {
-    fn mutate_set(&mut self, val: S::Input) -> Mutator {
+impl<S: WatchableSetter + Clone + 'static> MutateSetter<S::Output> for S {
+    fn mutate_set(&mut self, val: S::Output) -> Mutator {
         let mut field = self.clone();
         Mutator::exec(move || Box::new(field.set(val)))
     }

@@ -1,12 +1,15 @@
+use std::marker::PhantomData;
+
 use app_macros::{wasm_getters, watchable_setters};
 use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
     components::dyn_component::DynComp,
+    inputs::{CompWrapper, ComponentInput, DefaultInputComp, DynWrappedInput},
     make_typed_dyn_watchable,
     new_wasm_interface::{Component, ComponentOption},
-    util::watchables::StringWatchable,
+    util::watchables::{IntoWatchable, StringWatchable, WatchableSetter},
 };
 
 #[wasm_bindgen]
@@ -44,5 +47,19 @@ pub struct LabelComp {
 impl Into<Component> for LabelComp {
     fn into(self) -> Component {
         Component::new(ComponentOption::Label(self))
+    }
+}
+
+// A helper to label inputs
+impl LabelComp {
+    pub fn wrapped<F: ComponentInput>(
+        name: impl IntoWatchable<String> + Clone + 'static,
+        input: F,
+    ) -> DynWrappedInput<F> {
+        DynWrappedInput::new(
+            input,
+            move |comp| LabelComp::builder().label(name.clone()).build(comp),
+            true,
+        )
     }
 }

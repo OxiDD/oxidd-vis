@@ -1,13 +1,17 @@
 use proc_macro::TokenStream;
 
 mod builder;
+mod component;
 mod component_vec;
+mod default;
 mod inheritable;
 mod wasm;
 
 use crate::{
     builder::{builder_into_comp_impl, watchable_setters_impl},
+    component::derive_component_impl,
     component_vec::gen_tuple_into_component_vec_watchables_impl,
+    default::derive_default_impl,
     inheritable::derive_inheritable_impl,
     wasm::wasm_getters_impl,
 };
@@ -35,4 +39,14 @@ pub fn gen_tuple_into_component_vec_watchables(data: TokenStream) -> TokenStream
 #[proc_macro_derive(Inheritable)]
 pub fn derive_inheritable(input: TokenStream) -> TokenStream {
     derive_inheritable_impl(input)
+}
+
+#[proc_macro_derive(InitDefault, attributes(init))]
+pub fn derive_default(input: TokenStream) -> TokenStream {
+    derive_default_impl(input)
+}
+
+#[proc_macro_derive(Component, attributes(comp, label))]
+pub fn derive_component(input: TokenStream) -> TokenStream {
+    derive_component_impl(input)
 }

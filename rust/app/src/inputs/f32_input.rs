@@ -4,8 +4,8 @@ use app_macros::{builder_into_comp, wasm_getters, watchable_setters};
 use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::{impl_setter, impl_watchable, inputs::{ InheritLabel, Inheritable, InheritedInput, f32_input::f32_input_comp_builder::SetWrapper, wrapper::{CompWrapper, IdentityWrapper, InputWrapper}}, new_wasm_interface::{Component, ComponentOption}, util::watchables::{
-    BoolWatchable, Constant, DataState, Derived, DynSignaller, DynWatchable, DynWatchableSetter, F32Field, F32Watchable, IntoWatchable, IntoWatchableSetter, JsListener, Listener, MutateSetter, Mutator, Observer, OptionBoolWatchable, OptionF32Watchable, Setter, Watchable, WatchableState, Watching, signaller::Signaller
+use crate::{impl_default, impl_default_input_comp, impl_inheritable, impl_inherited_input_from, impl_input_from, impl_into_comps, impl_setter, impl_watchable, inputs::{ GetDynWatchableSetter, InheritLabel, Inheritable, InheritedInput, WrapBuilder, f32_input::f32_input_comp_builder::SetWrapper, wrapper::{CompWrapper, IdentityWrapper, ComponentInput}}, new_wasm_interface::{Component, ComponentOption}, util::watchables::{
+    BoolWatchable, Derived, DynWatchable, DynWatchableSetter, F32Field, F32Watchable, IntoWatchable, Mutator, OptionF32Watchable, Watchable, WatchableSetter, Watching
 }};
 
 /// Number input data
@@ -25,26 +25,10 @@ impl F32Input {
 }
 impl_watchable!(F32Input, f32);
 impl_setter!(F32Input, f32);
-
-impl Inheritable for InheritedInput<F32Input> {
-    fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + 'static) -> Self {
-        InheritedInput::new(
-            F32Input::new(*self.get()),
-            DynWatchable::new(self.clone()),
-            self_name,
-        )
-    }
-}
-impl<X: Into<f32>> From<X> for F32Input {
-    fn from(value: X) -> Self {
-        Self::new(value.into())
-    }
-}
-impl<X: Into<f32>> From<X> for InheritedInput<F32Input> {
-    fn from(value: X) -> Self {
-        Self::from(F32Input::from(value))
-    }
-}
+impl_inheritable!(F32Input);
+impl_input_from!(F32Input, f32);
+impl_default!(F32Input);
+impl_default_input_comp!(f32, F32Input, F32InputComp);
 
 /// Clamped f32 input
 #[wasm_getters]
@@ -120,10 +104,12 @@ impl F32InputClamped {
 }
 impl_watchable!(F32InputClamped, f32);
 impl_setter!(F32InputClamped, f32);
+impl_inherited_input_from!(F32InputClamped, f32);
+impl_default_input_comp!(f32, F32InputClamped, F32InputComp);
 
 impl Inheritable for InheritedInput<F32InputClamped> {
     fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + 'static) -> Self {
-        let p = self.input();
+        let p = self.child_input();
         InheritedInput::new(
             F32InputClamped::builder(F32Input::new(p.get()))
                 .min(p.min.clone())
@@ -140,11 +126,6 @@ impl<X: Into<f32>> From<X> for F32InputClamped {
         Self::builder(F32Input::from(value)).build()
     }
 }
-impl<X: Into<f32>> From<X> for InheritedInput<F32InputClamped> {
-    fn from(value: X) -> Self {
-        Self::from(F32InputClamped::from(value))
-    }
-}
 
 /// f32 input component
 #[wasm_getters]
@@ -152,6 +133,7 @@ impl<X: Into<f32>> From<X> for InheritedInput<F32InputClamped> {
 #[builder_into_comp]
 #[watchable_setters]
 #[derive(Builder, Clone)]
+#[builder(start_fn(name=builder_raw, vis=""))]
 pub struct F32InputComp {
     /// The data of the component
     #[builder(start_fn, into)]
@@ -169,15 +151,19 @@ pub struct F32InputComp {
     #[setter(bool, false)]
     disabled: BoolWatchable,
     /// Wraps the output component
-    #[builder(default=IdentityWrapper::new())]
+    #[builder(overwritable)]
     wrapper: Rc<dyn CompWrapper>,
 }
-impl F32InputComp {
-    pub fn wrap_builder<I: Into<DynWatchableSetter<f32>>>(
-        wrapper: impl CompWrapper + InputWrapper<I> + Clone + 'static,
-    ) -> F32InputCompBuilder<SetWrapper> {
-        Self::builder(wrapper.get_input()).wrapper(Rc::new(wrapper))
+impl<I> WrapBuilder<I> for F32InputComp
+where
+    I: ComponentInput<Input = f32>,
+{
+    type Builder = F32InputCompBuilder<SetWrapper>;
+    fn builder(wrapper: I) -> Self::Builder {
+        Self::builder_raw(wrapper.dyn_input()).wrapper(Rc::new(wrapper))
     }
+}
+impl F32InputComp {
     fn watchable(&self) -> &DynWatchableSetter<f32> {
         &self.data
     }
@@ -187,27 +173,9 @@ impl F32InputComp {
 }
 impl_watchable!(F32InputComp, f32);
 impl_setter!(F32InputComp, f32);
+impl_into_comps!(F32Input, F32InputComp);
+impl_into_comps!(F32InputClamped, F32InputComp);
 
-impl Into<F32InputComp> for F32Input {
-    fn into(self) -> F32InputComp {
-        F32InputComp::builder(self).build()
-    }
-}
-impl Into<F32InputComp> for F32InputClamped {
-    fn into(self) -> F32InputComp {
-        F32InputComp::builder(self).build()
-    }
-}
-impl Into<Component> for F32Input {
-    fn into(self) -> Component {
-        Into::<F32InputComp>::into(self).into()
-    }
-}
-impl Into<Component> for F32InputClamped {
-    fn into(self) -> Component {
-        Into::<F32InputComp>::into(self).into()
-    }
-}
 impl Into<Component> for F32InputComp {
     fn into(self) -> Component {
         let wrapper = self.wrapper.clone();

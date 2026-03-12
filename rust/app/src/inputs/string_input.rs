@@ -5,20 +5,18 @@ use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
+    impl_default, impl_default_input_comp, impl_inheritable, impl_input_from, impl_into_comps,
     impl_setter, impl_watchable,
     inputs::{
         string_input::string_input_comp_builder::SetWrapper,
-        wrapper::{CompWrapper, IdentityWrapper, InputWrapper},
-        InheritLabel, Inheritable, InheritedInput,
+        wrapper::{CompWrapper, ComponentInput, IdentityWrapper},
+        DefaultInputComp, GetDynWatchableSetter, InheritLabel, Inheritable, InheritedInput,
+        WrapBuilder,
     },
     new_wasm_interface::{Component, ComponentOption},
-    util::{
-        logging::console,
-        watchables::{
-            signaller::Signaller, BoolWatchable, DynSignaller, DynWatchable, DynWatchableSetter,
-            IntoWatchable, IntoWatchableSetter, MutateSetter, Mutator, OptionBoolWatchable,
-            OptionU32Watchable, Setter, StringField, Watchable, WatchableSetter,
-        },
+    util::watchables::{
+        BoolWatchable, DynWatchable, DynWatchableSetter, IntoWatchable, Mutator,
+        OptionU32Watchable, StringField, Watchable, WatchableSetter,
     },
 };
 
@@ -39,25 +37,24 @@ impl StringInput {
 }
 impl_watchable!(StringInput, String);
 impl_setter!(StringInput, String);
-
-impl Inheritable for InheritedInput<StringInput> {
-    fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + 'static) -> Self {
-        InheritedInput::new(
-            StringInput::new((*self.get()).clone()),
-            DynWatchable::new(self.clone()),
-            self_name,
-        )
+impl_inheritable!(StringInput);
+impl_input_from!(StringInput, String);
+impl_default!(StringInput);
+// impl_default_input_comp!(String, StringInput, StringInputComp);
+impl CompWrapper for StringInput {
+    fn wrap(&self, comp: Component) -> Component {
+        comp
     }
 }
-impl<X: Into<String>> From<X> for StringInput {
-    fn from(value: X) -> Self {
-        Self::new(value.into())
+impl ComponentInput for StringInput {
+    type Input = String;
+    type Setter = StringInput;
+    fn input(&self) -> &Self::Setter {
+        self
     }
 }
-impl<X: Into<String>> From<X> for InheritedInput<StringInput> {
-    fn from(value: X) -> Self {
-        Self::from(StringInput::from(value))
-    }
+impl DefaultInputComp for StringInput {
+    type Comp = StringInputComp;
 }
 
 /// StringInput component
@@ -66,6 +63,7 @@ impl<X: Into<String>> From<X> for InheritedInput<StringInput> {
 #[builder_into_comp]
 #[watchable_setters]
 #[derive(Builder, Clone)]
+#[builder(start_fn(name=builder_raw, vis=""))]
 pub struct StringInputComp {
     /// The data of the component
     #[builder(start_fn, into)]
@@ -103,15 +101,19 @@ pub struct StringInputComp {
     #[setter(bool, false)]
     disabled: BoolWatchable,
     /// Wraps the output component
-    #[builder(default=IdentityWrapper::new())]
+    #[builder(overwritable)]
     wrapper: Rc<dyn CompWrapper>,
 }
-impl StringInputComp {
-    pub fn wrap_builder<I: Into<DynWatchableSetter<String>>>(
-        wrapper: impl CompWrapper + InputWrapper<I> + Clone + 'static,
-    ) -> StringInputCompBuilder<SetWrapper> {
-        Self::builder(wrapper.get_input()).wrapper(Rc::new(wrapper))
+impl<I> WrapBuilder<I> for StringInputComp
+where
+    I: ComponentInput<Input = String>,
+{
+    type Builder = StringInputCompBuilder<SetWrapper>;
+    fn builder(wrapper: I) -> Self::Builder {
+        Self::builder_raw(wrapper.dyn_input()).wrapper(Rc::new(wrapper))
     }
+}
+impl StringInputComp {
     fn watchable(&self) -> &DynWatchableSetter<String> {
         &self.data
     }
@@ -121,17 +123,7 @@ impl StringInputComp {
 }
 impl_watchable!(StringInputComp, String);
 impl_setter!(StringInputComp, String);
-
-impl Into<StringInputComp> for StringInput {
-    fn into(self) -> StringInputComp {
-        StringInputComp::builder(self).build()
-    }
-}
-impl Into<Component> for StringInput {
-    fn into(self) -> Component {
-        Into::<StringInputComp>::into(self).into()
-    }
-}
+impl_into_comps!(StringInput, StringInputComp);
 impl Into<Component> for StringInputComp {
     fn into(self) -> Component {
         self.wrapper

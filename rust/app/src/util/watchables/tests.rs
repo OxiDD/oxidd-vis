@@ -7,7 +7,7 @@ mod tests {
         field::Field,
         watchable::{DataState, Listener, Watchable, WatchableState},
         watchable_utils::{WatchableUtils, Watcher, Watching},
-        Setter,
+        WatchableSetter,
     };
 
     #[test]

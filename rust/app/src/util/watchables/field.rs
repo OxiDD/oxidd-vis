@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::util::watchables::{
     signaller::{DynSignaller, Signaller},
-    DynWatchableSetter, IntoWatchable, IntoWatchableSetter, WatchableSetter,
+    DynWatchableSetter, IntoWatchable, IntoWatchableSetter,
 };
 
 use super::{
@@ -12,10 +12,9 @@ use super::{
     watchable::{DataState, Listener, Observer, Watchable, WatchableState},
 };
 
-pub trait Setter {
-    type Input;
+pub trait WatchableSetter: Watchable {
     /// Sets the field and returns a signaller which will signal about the change once dropped. In order to perform batching of setting fields, simply hold on to the signaller until the next field is set
-    fn set(&mut self, val: Self::Input) -> DynSignaller;
+    fn set(&mut self, val: Self::Output) -> DynSignaller;
 }
 pub struct Field<X> {
     inner: Rc<RefCell<FieldInner<X>>>,
@@ -94,8 +93,7 @@ impl<X: 'static> Field<X> {
     }
 }
 
-impl<X: 'static> Setter for Field<X> {
-    type Input = X;
+impl<X: 'static> WatchableSetter for Field<X> {
     fn set(&mut self, val: X) -> DynSignaller {
         let inner = self.inner.clone();
         inner
@@ -177,8 +175,7 @@ impl<X: 'static> ControlledField<X> {
         self.0.read()
     }
 }
-impl<X: 'static> Setter for ControlledField<X> {
-    type Input = X;
+impl<X: 'static> WatchableSetter for ControlledField<X> {
     fn set(&mut self, val: X) -> DynSignaller {
         self.0.set(val)
     }

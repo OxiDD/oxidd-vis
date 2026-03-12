@@ -5,14 +5,17 @@ use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
-    components::DynComp,
-    inputs::wrapper::{CompWrapper, InputWrapper},
+    components::{DynComp, LabelComp},
+    inputs::{
+        wrapper::{CompWrapper, ComponentInput},
+        DefaultInputComp, StringInput, StringInputComp, WrapBuilder,
+    },
     make_typed_dyn_watchable,
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
         BoolWatchable, Constant, DataState, Derived, DynSignaller, DynWatchable,
         DynWatchableSetter, Field, IntoWatchable, Listener, MutateSetter, Mutator, Observer,
-        Setter, StringWatchable, Watchable, WatchableSetter, WatchableState, Watcher, Watching,
+        Watchable, WatchableSetter, WatchableState, Watcher, Watching,
     },
 };
 
@@ -43,25 +46,17 @@ pub trait Inheritable {
     /// Creates a new input that inherits from this input, and label this
     fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + Clone + 'static) -> Self;
 }
-impl<F: WatchableSetter + Clone> From<F> for InheritedInput<F>
-where
-    F::Input: Clone,
-{
-    fn from(value: F) -> Self {
-        InheritedInput::default(value)
-    }
-}
 
 /// Optionally inherited input data
 #[watchable_setters]
 #[derive(Builder)]
-pub struct InheritedInput<F: WatchableSetter + Clone + 'static> {
+pub struct InheritedInput<F: ComponentInput> {
     /// The data of the component
     #[builder(start_fn, into)]
     local: F,
     /// The inherited value
     #[builder(into)]
-    inherited: DynWatchable<F::Output>,
+    inherited: DynWatchable<F::Input>,
     /// Whether or not we are inheriting now
     #[builder(default=DynWatchableSetter::new(Field::new(true)))]
     inheriting: DynWatchableSetter<bool>,
@@ -70,19 +65,9 @@ pub struct InheritedInput<F: WatchableSetter + Clone + 'static> {
     inherited_from: InheritLabelWatchable,
     /// The final output
     #[builder(skip=InheritedInput::<F>::inherited(local.clone(), inherited.clone(), inheriting.clone()))]
-    output: Derived<F::Output>,
+    output: Derived<F::Input>,
 }
-impl<F: WatchableSetter + Clone + 'static> CompWrapper for InheritedInput<F> {
-    fn wrap(&self, comp: Component) -> Component {
-        InheritedInputComp::new(self.clone(), |_| comp).into()
-    }
-}
-impl<F: WatchableSetter + Clone + 'static> InputWrapper<InheritedInput<F>> for InheritedInput<F> {
-    fn get_input(&self) -> InheritedInput<F> {
-        self.clone()
-    }
-}
-impl<F: WatchableSetter + Clone + 'static> Clone for InheritedInput<F> {
+impl<F: ComponentInput> Clone for InheritedInput<F> {
     fn clone(&self) -> Self {
         Self {
             inherited: self.inherited.clone(),
@@ -93,12 +78,12 @@ impl<F: WatchableSetter + Clone + 'static> Clone for InheritedInput<F> {
         }
     }
 }
-impl<F: WatchableSetter + Clone + 'static> InheritedInput<F>
+impl<F: ComponentInput> InheritedInput<F>
 where
     F::Input: Clone,
 {
     pub fn default(local: F) -> Self {
-        let default = (*local.get()).clone();
+        let default = (*local.input().get()).clone();
         Self::builder(local)
             .inherited(DynWatchable::new(Constant::new(default)))
             .inherited_from(InheritLabel {
@@ -108,10 +93,10 @@ where
             .build()
     }
 }
-impl<F: WatchableSetter + Clone + 'static> InheritedInput<F> {
+impl<F: ComponentInput> InheritedInput<F> {
     pub fn new(
         local: F,
-        inherited: impl Into<DynWatchable<F::Output>>,
+        inherited: impl Into<DynWatchable<F::Input>>,
         inherited_from: impl IntoWatchable<InheritLabel> + 'static,
     ) -> Self {
         Self::builder(local)
@@ -121,19 +106,19 @@ impl<F: WatchableSetter + Clone + 'static> InheritedInput<F> {
     }
     fn inherited(
         local: F,
-        inherited: DynWatchable<F::Output>,
+        inherited: DynWatchable<F::Input>,
         inheriting: DynWatchableSetter<bool>,
-    ) -> Derived<F::Output> {
+    ) -> Derived<F::Input> {
         Derived::new_rc(move |t| {
             if *inheriting.watch(t) {
                 inherited.watch(t)
             } else {
-                local.watch(t)
+                local.input().watch(t)
             }
         })
     }
 
-    pub fn input(&self) -> &F {
+    pub fn child_input(&self) -> &F {
         &self.local
     }
     pub fn set_inherit(&mut self, inherit: bool) -> DynSignaller {
@@ -145,7 +130,9 @@ impl<F: WatchableSetter + Clone + 'static> InheritedInput<F> {
         InheritedInputComp::new(self.clone(), |val| map(self, val))
     }
 }
-impl<F: WatchableSetter + Clone + 'static> WatchableState for InheritedInput<F> {
+
+// Watchable setter behavior
+impl<F: ComponentInput> WatchableState for InheritedInput<F> {
     fn state(&self) -> DataState {
         self.output.state()
     }
@@ -153,24 +140,65 @@ impl<F: WatchableSetter + Clone + 'static> WatchableState for InheritedInput<F> 
         self.output.observe(listener)
     }
 }
-impl<F: WatchableSetter + Clone + 'static> Watchable for InheritedInput<F> {
-    type Output = F::Output;
+impl<F: ComponentInput> Watchable for InheritedInput<F> {
+    type Output = F::Input;
     fn get(&self) -> Rc<Self::Output> {
         self.output.get()
     }
 }
-impl<F: WatchableSetter + Clone + 'static> Setter for InheritedInput<F> {
-    type Input = F::Output;
-    fn set(&mut self, val: F::Output) -> DynSignaller {
-        Box::new((self.local.set(val), self.inheriting.set(false)))
+impl<F: ComponentInput> WatchableSetter for InheritedInput<F> {
+    fn set(&mut self, val: F::Input) -> DynSignaller {
+        Box::new((
+            self.local.input().clone().set(val),
+            self.inheriting.set(false),
+        ))
     }
 }
 
-impl<F: WatchableSetter + Clone + 'static> Into<DynWatchableSetter<F::Output>>
-    for InheritedInput<F>
-{
-    fn into(self) -> DynWatchableSetter<F::Output> {
+// Watchable setter conversion traits
+impl<F: ComponentInput> Into<DynWatchableSetter<F::Input>> for InheritedInput<F> {
+    fn into(self) -> DynWatchableSetter<F::Input> {
         DynWatchableSetter::new(self)
+    }
+}
+
+// Component input traits
+
+impl<F: ComponentInput> CompWrapper for InheritedInput<F> {
+    fn wrap(&self, comp: Component) -> Component {
+        InheritedInputComp::new(self.clone(), |_| comp).into()
+    }
+}
+impl<F: ComponentInput> ComponentInput for InheritedInput<F> {
+    type Input = F::Input;
+    type Setter = InheritedInput<F>;
+    fn input(&self) -> &Self {
+        self
+    }
+}
+impl<F> DefaultInputComp for InheritedInput<F>
+where
+    F: ComponentInput + DefaultInputComp,
+    F::Comp: WrapBuilder<Self>,
+{
+    type Comp = F::Comp;
+}
+
+// Wrapper traits
+impl<F: ComponentInput> From<F> for InheritedInput<F>
+where
+    F::Input: Clone,
+{
+    fn from(value: F) -> Self {
+        InheritedInput::default(value)
+    }
+}
+impl<F: ComponentInput + Default> Default for InheritedInput<F>
+where
+    F::Input: Clone,
+{
+    fn default() -> Self {
+        InheritedInput::default(F::default())
     }
 }
 
@@ -192,17 +220,7 @@ pub struct InheritedInputComp {
     inheriting_field: DynWatchableSetter<bool>,
 }
 impl InheritedInputComp {
-    pub fn from<F: Into<Component> + WatchableSetter + Clone + 'static>(
-        data: InheritedInput<F>,
-    ) -> Self {
-        Self {
-            input: DynComp::new(data.local.clone().into()),
-            inheriting_field: data.inheriting.clone(),
-            inheriting: BoolWatchable::new(data.inheriting.clone()),
-            inherited_from: data.inherited_from.clone(),
-        }
-    }
-    pub fn new<F: WatchableSetter + Clone + 'static, I: Into<Component>, M: FnOnce(&F) -> I>(
+    pub fn new<F: ComponentInput, I: Into<Component>, M: FnOnce(&F) -> I>(
         data: InheritedInput<F>,
         map: M,
     ) -> Self {
@@ -223,8 +241,49 @@ impl InheritedInputComp {
     }
 }
 
+impl<F> Into<Component> for InheritedInput<F>
+where
+    F: ComponentInput + DefaultInputComp,
+    F::Comp: WrapBuilder<Self>,
+    <F::Comp as WrapBuilder<Self>>::Builder: Into<Component>,
+{
+    fn into(self) -> Component {
+        F::Comp::builder(self).into()
+    }
+}
+
+// impl<T: WatchableSetter, I: WrapBuilder<T>, F: WatchableSetter<Output = I> + Clone + 'static>
+//     WrapBuilder<T> for InheritedInput<F>
+// {
+//     type Builder = I::Builder;
+//     fn builder(wrapper: impl ComponentInput<T>) -> Self::Builder {
+//         I::builder(wrapper)
+//     }
+// }
+
+// impl<I, F: WatchableSetter<Output = I> + Clone + DefaultInputComp + 'static> Into<Component>
+//     for InheritedInput<F>
+// where
+//     F::Comp: WrapBuilder<InheritedInput<F>>,
+//     <F::Comp as WrapBuilder<InheritedInput<F>>>::Builder: Into<Component>,
+// {
+//     fn into(self) -> Component {
+//         F::Comp::wrap_builder(self).into()
+//     }
+// }
+
 impl Into<Component> for InheritedInputComp {
     fn into(self) -> Component {
         Component::new(ComponentOption::InheritedInput(self))
     }
+}
+
+pub fn test() {
+    let p: InheritedInput<StringInput> = Default::default();
+    let c: Component = p.clone().into();
+    let d = StringInputComp::builder(p).build();
+    let k = StringInputComp::builder(StringInput::from("test"));
+    let d = LabelComp::wrapped("Hallo", InheritedInput::default(StringInput::from("hoi")));
+    let l: Component = d.clone().into();
+    let n = StringInputComp::builder(d).build();
 }

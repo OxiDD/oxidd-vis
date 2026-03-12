@@ -2,13 +2,10 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::util::watchables::{
     signaller::Signaller, DataState, DynSignaller, IntoWatchable, IntoWatchableSetter, Listener,
-    Observer, Setter, Watchable, WatchableState,
+    Observer, Watchable, WatchableSetter, WatchableState,
 };
 
-pub trait WatchableSetter: Setter<Input = Self::Output> + Watchable {}
-impl<S: Setter + Watchable<Output = S::Input>> WatchableSetter for S {}
-
-pub struct DynWatchableSetter<X>(Rc<RefCell<dyn WatchableSetter<Input = X, Output = X>>>);
+pub struct DynWatchableSetter<X>(Rc<RefCell<dyn WatchableSetter<Output = X>>>);
 impl<X> Clone for DynWatchableSetter<X> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
@@ -16,7 +13,7 @@ impl<X> Clone for DynWatchableSetter<X> {
 }
 
 impl<X> DynWatchableSetter<X> {
-    pub fn new<W: WatchableSetter<Input = X, Output = X> + 'static>(watchable: W) -> Self {
+    pub fn new<W: WatchableSetter<Output = X> + 'static>(watchable: W) -> Self {
         DynWatchableSetter(Rc::new(RefCell::new(watchable)))
     }
 }
@@ -36,8 +33,7 @@ impl<X> WatchableState for DynWatchableSetter<X> {
         self.0.borrow().observe(listener)
     }
 }
-impl<X> Setter for DynWatchableSetter<X> {
-    type Input = X;
+impl<X> WatchableSetter for DynWatchableSetter<X> {
     fn set(&mut self, val: X) -> DynSignaller {
         self.0.borrow_mut().set(val)
     }

@@ -5,17 +5,18 @@ use bon::Builder;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
+    impl_default, impl_default_input_comp, impl_inheritable, impl_input_from, impl_into_comps,
     impl_setter, impl_watchable,
     inputs::{
         bool_input::bool_input_comp_builder::SetWrapper,
-        wrapper::{CompWrapper, IdentityWrapper, InputWrapper},
-        InheritLabel, InheritLabelWatchable, Inheritable, InheritedInput,
+        wrapper::{CompWrapper, ComponentInput},
+        DefaultInputComp, GetDynWatchableSetter, InheritLabel, Inheritable, InheritedInput,
+        WrapBuilder,
     },
     new_wasm_interface::{Component, ComponentOption},
     util::watchables::{
-        signaller::Signaller, BoolField, BoolWatchable, DynSignaller, DynWatchable,
-        DynWatchableSetter, IntoWatchable, MutateSetter, Mutator, Setter, StringWatchable,
-        Watchable,
+        BoolField, BoolWatchable, DynSignaller, DynWatchable, DynWatchableSetter, IntoWatchable,
+        Mutator, Watchable, WatchableSetter,
     },
 };
 
@@ -39,26 +40,10 @@ impl BoolInput {
 }
 impl_watchable!(BoolInput, bool);
 impl_setter!(BoolInput, bool);
-
-impl Inheritable for InheritedInput<BoolInput> {
-    fn inherit(&self, self_name: impl IntoWatchable<InheritLabel> + 'static) -> Self {
-        InheritedInput::new(
-            BoolInput::new(*self.get()),
-            DynWatchable::new(self.clone()),
-            self_name,
-        )
-    }
-}
-impl<X: Into<bool>> From<X> for BoolInput {
-    fn from(value: X) -> Self {
-        Self::new(value.into())
-    }
-}
-impl<X: Into<bool>> From<X> for InheritedInput<BoolInput> {
-    fn from(value: X) -> Self {
-        Self::from(BoolInput::from(value))
-    }
-}
+impl_inheritable!(BoolInput);
+impl_input_from!(BoolInput, bool);
+impl_default!(BoolInput);
+impl_default_input_comp!(bool, BoolInput, BoolInputComp);
 
 /// BoolInput component
 #[wasm_getters]
@@ -66,6 +51,7 @@ impl<X: Into<bool>> From<X> for InheritedInput<BoolInput> {
 #[builder_into_comp]
 #[watchable_setters]
 #[derive(Builder, Clone)]
+#[builder(start_fn(name=builder_raw, vis=""))]
 pub struct BoolInputComp {
     /// The data of the component
     #[builder(start_fn, into)]
@@ -75,15 +61,19 @@ pub struct BoolInputComp {
     #[setter(bool, false)]
     disabled: BoolWatchable,
     /// Wraps the output component
-    #[builder(default=IdentityWrapper::new())]
+    #[builder(overwritable)]
     wrapper: Rc<dyn CompWrapper>,
 }
-impl BoolInputComp {
-    pub fn wrap_builder<I: Into<DynWatchableSetter<bool>>>(
-        wrapper: impl CompWrapper + InputWrapper<I> + Clone + 'static,
-    ) -> BoolInputCompBuilder<SetWrapper> {
-        Self::builder(wrapper.get_input()).wrapper(Rc::new(wrapper))
+impl<I> WrapBuilder<I> for BoolInputComp
+where
+    I: ComponentInput<Input = bool>,
+{
+    type Builder = BoolInputCompBuilder<SetWrapper>;
+    fn builder(wrapper: I) -> Self::Builder {
+        Self::builder_raw(wrapper.dyn_input()).wrapper(Rc::new(wrapper))
     }
+}
+impl BoolInputComp {
     fn watchable(&self) -> &DynWatchableSetter<bool> {
         &self.data
     }
@@ -93,18 +83,8 @@ impl BoolInputComp {
 }
 impl_watchable!(BoolInputComp, bool);
 impl_setter!(BoolInputComp, bool);
+impl_into_comps!(BoolInput, BoolInputComp);
 
-impl Into<BoolInputComp> for BoolInput {
-    fn into(self) -> BoolInputComp {
-        BoolInputComp::builder(self).build()
-    }
-}
-
-impl Into<Component> for BoolInput {
-    fn into(self) -> Component {
-        Into::<BoolInputComp>::into(self).into()
-    }
-}
 impl Into<Component> for BoolInputComp {
     fn into(self) -> Component {
         let wrapper = self.wrapper.clone();

@@ -7,14 +7,17 @@ pub fn derive_inheritable_impl(input: TokenStream) -> TokenStream {
 
     let name = input.ident;
 
+    let generics = &input.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
     let body = match input.data {
         Data::Struct(data) => inherit_struct(&data.fields),
         Data::Enum(data) => inherit_enum(&name, &data.variants),
-        _ => panic!("Can only derive inheritable for Structs and Enums"),
+        _ => panic!("Can only derive Inheritable for structs and enums"),
     };
 
     let expanded = quote! {
-        impl crate::inputs::inherited_input::Inheritable for #name {
+        impl #impl_generics crate::inputs::inherited_input::Inheritable for #name #ty_generics #where_clause {
             fn inherit(&self, self_name: impl crate::util::watchables::watchable_utils::IntoWatchable<crate::inputs::inherited_input::InheritLabel> + Clone + 'static) -> Self {
                 #body
             }
@@ -26,22 +29,22 @@ pub fn derive_inheritable_impl(input: TokenStream) -> TokenStream {
 fn inherit_struct(fields: &syn::Fields) -> proc_macro2::TokenStream {
     match fields {
         Fields::Named(fields) => {
-            let clones = fields.named.iter().map(|f| {
+            let inheritables = fields.named.iter().map(|f| {
                 let name = &f.ident;
                 quote! {
                     #name: crate::inputs::inherited_input::Inheritable::inherit(&self.#name, self_name.clone())
                 }
             });
-            quote! { Self { #(#clones),*} }
+            quote! { Self { #(#inheritables),*} }
         }
         Fields::Unnamed(fields) => {
-            let clones = fields.unnamed.iter().enumerate().map(|(i, _)| {
+            let inheritables = fields.unnamed.iter().enumerate().map(|(i, _)| {
                 let idx = syn::Index::from(i);
                 quote! {
                     crate::inputs::inherited_input::Inheritable::inherit(&self.#idx, self_name.clone())
                 }
             });
-            quote! { Self( #(#clones),* ) }
+            quote! { Self( #(#inheritables),* ) }
         }
         Fields::Unit => quote! { Self },
     }
@@ -60,13 +63,13 @@ fn inherit_enum(
                     .iter()
                     .map(|f| f.ident.as_ref().unwrap())
                     .collect();
-                let clones = names.iter().map(|n| {
+                let inheritables = names.iter().map(|n| {
                     quote! { #n: crate::inputs::inherited_input::Inheritable::inherit(&#n, self_name.clone()) }
                 });
                 quote! {
                     #name::#vname { #( ref #names ),* } => {
                         #name::#vname {
-                            #(#clones),*
+                            #(#inheritables),*
                         }
                     }
                 }
@@ -77,14 +80,14 @@ fn inherit_enum(
                     .map(|i| syn::Ident::new(&format!("f{i}"), proc_macro2::Span::call_site()))
                     .collect();
 
-                let clones = bindings.iter().map(|b| {
+                let inheritables = bindings.iter().map(|b| {
                     quote! { crate::inputs::inherited_input::Inheritable::inherit(&#b, self_name.clone()) }
                 });
 
                 quote! {
                     #name::#vname( #( ref #bindings ),* ) => {
                         #name::#vname(
-                            #(#clones),*
+                            #(#inheritables),*
                         )
                     }
                 }

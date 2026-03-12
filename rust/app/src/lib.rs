@@ -7,7 +7,7 @@ mod types;
 mod util;
 mod wasm_interface;
 
-use app_macros::Inheritable;
+use app_macros::{Component, Inheritable, InitDefault};
 use util::panic_hook::set_panic_hook;
 use wasm_bindgen::prelude::*;
 
@@ -24,12 +24,13 @@ use crate::{
         bool_input::{BoolInput, BoolInputComp},
         f32_input::{F32InputClamped, F32InputComp},
         string_input::{StringInput, StringInputComp},
-        variant_input::{VariantComponentMapper, VariantInput, VariantInputComp, VariantOptions},
-        F32Input, Inheritable, InheritedInput, U32Input,
+        variant_input::{VariantInput, VariantInputComp, VariantOptions},
+        ComponentInput, DefaultInputComp, DynWrappedInput, F32Input, Inheritable, InheritedInput,
+        U32Input, U32InputClamped, VariantComponentMapping, WrapBuilder,
     },
     new_wasm_interface::Component,
     util::watchables::{
-        ClonableWatchableUtils, DynWatchableSetter, F32Field, Field, Setter, StringField,
+        CloneableWatchableUtils, DynWatchableSetter, F32Field, Field, StringField, WatchableSetter,
         WatchableUtils,
     },
     wasm_interface::DiagramBox,
@@ -82,8 +83,8 @@ pub fn test_panel() -> PanelComp {
                 .build(reset_button),
         );
 
-    let text_ancestor_field = StringInputComp::wrap_builder(text_ancestor_clone).build();
-    let text_field = StringInputComp::wrap_builder(text_clone2)
+    let text_ancestor_field: Component = LabelComp::wrapped("label", text_ancestor_clone).into();
+    let text_field = StringInputComp::builder(LabelComp::wrapped("field", text_clone2))
         .multiline(true)
         .multiline_dynamic(true)
         .multiline_min(2);
@@ -100,12 +101,19 @@ pub fn test_panel() -> PanelComp {
             vec![Option::V1, Option::V2, Option::V3]
         }
     }
+    impl VariantComponentMapping for Option {
+        fn map(&self) -> Component {
+            (match self {
+                Option::V1 => "V1",
+                Option::V2 => "V2",
+                Option::V3 => "V3",
+            })
+            .into()
+        }
+    }
+
     let variant = VariantInput::new(Option::V1);
-    let variant_comp1 = variant.clone().comp_builder(|v| match v {
-        Option::V1 => "V1",
-        Option::V2 => "V2",
-        Option::V3 => "V3",
-    });
+    let variant_comp1 = variant.clone();
     let variant_comp2 = variant
         .clone()
         .comp_builder(|v| {
@@ -170,7 +178,7 @@ pub fn test_panel() -> PanelComp {
                 )),
         );
 
-    let binary_input = BinaryInputComp::builder(BinaryInput::new());
+    let binary_input = BinaryInputComp::builder(BinaryInput::new(None));
 
     let composite = (
         text_ancestor_field,
@@ -191,6 +199,7 @@ pub fn test_panel() -> PanelComp {
     let with_overlay = FillComp::new(ContainerComp::builder().padding(1.0).build(FillComp::new((
         composite,
         prompt,
+        settings_comp(),
         OverlayComp::bottom_right(ButtonComp::builder().icon("AlarmClock").build()),
     ))));
 
@@ -202,9 +211,44 @@ pub fn test_panel() -> PanelComp {
         .build(with_overlay)
 }
 
-#[derive(Inheritable)]
+#[derive(Inheritable, InitDefault, Component)]
+#[label(spaced, map=|l, c| LabelComp::builder().label(l).kind(LabelKind::Inline).build(c))]
 struct MySettings {
+    // Text input with custom label
+    #[label(text = "bob")]
     name: InheritedInput<StringInput>,
-    value: InheritedInput<U32Input>,
+
+    // Number input with initialization that contains constraints
+    #[init(U32InputClamped::builder(45u32).max(50).build())]
+    value: InheritedInput<U32InputClamped>,
+
+    // Number value with initialization
+    #[init(32.5)]
+    other_value: InheritedInput<F32Input>,
+
+    // Checkbox with custom label styling
+    #[label(map=|l, c| LabelComp::builder().label(l).kind(LabelKind::Above).build(c))]
     check: InheritedInput<BoolInput>,
+}
+
+fn settings_comp() -> Component {
+    let settings = MySettings::default();
+    let inherited_settings = settings.inherit("parent");
+    let inherited_inherited_settings = inherited_settings.inherit("parent's parent");
+
+    PanelButtonComp::builder()
+        .button(ButtonComp::builder().text("Open settings").build())
+        .panel(
+            PanelComp::builder()
+                .name(StringField::from("settings"))
+                .id("settings-panel"),
+        )
+        .build((
+            settings,
+            "Inherited:",
+            inherited_settings,
+            "Double inherited:",
+            inherited_inherited_settings,
+        ))
+        .into()
 }

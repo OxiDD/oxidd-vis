@@ -42,10 +42,10 @@ impl<X, W: Watchable<Output = X> + 'static> WatchableUtils<X> for W {
     }
 }
 
-pub trait ClonableWatchableUtils<X: Clone> {
+pub trait CloneableWatchableUtils<X: Clone> {
     fn option(self) -> Derived<Option<X>>;
 }
-impl<X: Clone, W: Watchable<Output = X> + 'static> ClonableWatchableUtils<X> for W {
+impl<X: Clone, W: Watchable<Output = X> + 'static> CloneableWatchableUtils<X> for W {
     fn option(self) -> Derived<Option<X>> {
         self.map(|v| Some((*v).clone()))
     }
@@ -58,7 +58,7 @@ pub trait IntoWatchable<X> {
     fn into_watchable(self) -> Self::Output;
 }
 pub trait IntoWatchableSetter<X> {
-    type Output: WatchableSetter<Input = X, Output = X>;
+    type Output: WatchableSetter<Output = X>;
     fn into_watchable_setter(self) -> Self::Output;
 }
 
