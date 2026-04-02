@@ -11,3 +11,4 @@ syn = { version = "2", features = ["full", "extra-traits"] }
 quote = "1"
 proc-macro2 = "1"
 heck = "0.5"                                                 # For snake case
+darling = "0.23.0"

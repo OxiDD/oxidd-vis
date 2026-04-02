@@ -25,8 +25,9 @@ use crate::{
         f32_input::{F32InputClamped, F32InputComp},
         string_input::{StringInput, StringInputComp},
         variant_input::{VariantInput, VariantInputComp, VariantOptions},
-        ComponentInput, DefaultInputComp, DynWrappedInput, F32Input, Inheritable, InheritedInput,
-        U32Input, U32InputClamped, VariantComponentMapping, WrapBuilder,
+        ComponentInput, DefaultInputComp, DynWrappedInput, F32Input, F32InputCompBuilder,
+        Inheritable, InheritedInput, U32Input, U32InputClamped, VariantComponentMapping,
+        WrapBuilder,
     },
     new_wasm_interface::Component,
     util::watchables::{
@@ -211,11 +212,13 @@ pub fn test_panel() -> PanelComp {
         .build(with_overlay)
 }
 
-#[derive(Inheritable, InitDefault, Component)]
+#[derive(Inheritable, InitDefault, Component, Clone)]
 #[label(spaced, map=|l, c| LabelComp::builder().label(l).kind(LabelKind::Inline).build(c))]
+#[comp(build=builder.gap(2.0).perpendicular_align(Align::Stretch))]
 struct MySettings {
     // Text input with custom label
     #[label(text = "bob")]
+    #[comp(map=|s| StringInputComp::builder(s).multiline(true))]
     name: InheritedInput<StringInput>,
 
     // Number input with initialization that contains constraints
@@ -224,6 +227,7 @@ struct MySettings {
 
     // Number value with initialization
     #[init(32.5)]
+    #[comp(build=builder.step_size(2.0))]
     other_value: InheritedInput<F32Input>,
 
     // Checkbox with custom label styling

@@ -42,10 +42,8 @@ export const LabelCompUI: NFC<{
     }, [text]);
     if (kind == LabelKind.Category) {
         return (
-            <div>
-                <Label
-                    className={`${css({marginBottom: 10, fontSize: 20})} ${className}`}
-                    id={id}>
+            <div className={className}>
+                <Label className={`${css({marginBottom: 10, fontSize: 20})}`} id={id}>
                     {text}
                 </Label>
                 <ChildComp data={child} aria={addAriaLabel(id, aria)} />
@@ -53,7 +51,7 @@ export const LabelCompUI: NFC<{
         );
     } else if (kind == LabelKind.Above) {
         return (
-            <div>
+            <div className={className}>
                 <Label className={className} id={id}>
                     {text}
                 </Label>
@@ -65,7 +63,7 @@ export const LabelCompUI: NFC<{
             <Stack
                 horizontal
                 tokens={{childrenGap: theme.spacing.s1}}
-                className={css({">:nth-child(3)": {flex: "1 1"}, flexWrap: "wrap"})}>
+                className={`${css({">:nth-child(3)": {flex: "1 1"}, flexWrap: "wrap"})} ${className}`}>
                 <Label
                     className={className}
                     style={{flex: "1 1", maxWidth: width}}

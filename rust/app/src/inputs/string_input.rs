@@ -40,22 +40,7 @@ impl_setter!(StringInput, String);
 impl_inheritable!(StringInput);
 impl_input_from!(StringInput, String);
 impl_default!(StringInput);
-// impl_default_input_comp!(String, StringInput, StringInputComp);
-impl CompWrapper for StringInput {
-    fn wrap(&self, comp: Component) -> Component {
-        comp
-    }
-}
-impl ComponentInput for StringInput {
-    type Input = String;
-    type Setter = StringInput;
-    fn input(&self) -> &Self::Setter {
-        self
-    }
-}
-impl DefaultInputComp for StringInput {
-    type Comp = StringInputComp;
-}
+impl_default_input_comp!(String, StringInput, StringInputComp);
 
 /// StringInput component
 #[wasm_getters]

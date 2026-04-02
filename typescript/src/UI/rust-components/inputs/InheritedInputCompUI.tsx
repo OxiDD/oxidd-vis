@@ -6,6 +6,7 @@ import {NFC} from "../../../utils/_types/NFC";
 import {IAriaRef} from "../_types/IAriaRef";
 import {ICompUI} from "../_types/ICompUI";
 import {StyledTooltipHost} from "../../components/StyledToolTipHost";
+import {css} from "@emotion/css";
 
 export const InheritedInputCompUI: NFC<{
     data: InheritedInputComp;
@@ -35,7 +36,7 @@ export const InheritedInputCompUI: NFC<{
                 />
             </StyledTooltipHost>
 
-            <ChildComp data={child} />
+            <ChildComp data={child} className={css({flex: 1})} />
         </Stack>
     );
 };
