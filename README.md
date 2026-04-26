@@ -131,7 +131,7 @@ To run this application, you both have to build the rust-code, and run a web-dev
 Install:
 
 - Rust + cargo: https://www.rust-lang.org/tools/install (tested version: 1.79.0)
-- Wasm-pack: https://rustwasm.github.io/wasm-pack/installer/ (tested version: 0.12.1)
+- Wasm-pack: https://wasm-bindgen.github.io/wasm-pack/installer/ (tested version: 0.12.1)
 <!-- - wasm2map: https://crates.io/crates/wasm2map (tested version 0.1.0) -->
 
 Build code using (run from inside the rust directory):
