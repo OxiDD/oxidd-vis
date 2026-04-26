@@ -34,8 +34,9 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: app
+          path: build
       - name: Deploy
-        working-directory: typescript/build
+        working-directory: build
         run: |
           mkdir -p ~/.ssh
           echo "$KNOWN_HOSTS" >> ~/.ssh/known_hosts
