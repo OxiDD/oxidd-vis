@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+    paths:
+      - .github/workflows/build.yml
+      - rust/**
+      - typescript/**
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v6
+      - run: npm install -g wasm-pack
+      - run: wasm-pack build --release
+        working-directory: rust
+      - run: npm ci
+        working-directory: typescript
+      - run: npm run build
+        working-directory: typescript
+      - name: Deploy
+        if: ${{ github.repository == 'OxiDD/oxidd-vis' && github.ref == 'refs/heads/release' }}
+        working-directory: typescript/build
+        run: |
+          mkdir -p ~/.ssh
+          echo "$KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          ssh-agent sh -c "echo '$KEY' | ssh-add - && tar -cvz . | ssh -l '$USER' -p '$PORT' '$HOST' /extract-vis.sh"
+        env:
+          HOST: ${{ secrets.WEBSITE_SSH_HOST }}
+          USER: ${{ secrets.WEBSITE_SSH_USER }}
+          PORT: ${{ secrets.WEBSITE_SSH_PORT }}
+          KEY: ${{ secrets.WEBSITE_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.WEBSITE_SSH_KNOWN_HOSTS }}
